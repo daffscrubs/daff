@@ -48,7 +48,15 @@ export function FormMovimiento({ materialId }: { materialId: string }) {
     <form onSubmit={enviar} className="grid grid-cols-1 gap-3 rounded-lg border p-4 sm:grid-cols-4 sm:items-end">
       <div className="space-y-2">
         <Label>Tipo</Label>
-        <Select value={tipo} onValueChange={(v) => setTipo((v ?? "entrada") as TipoMovimiento)}>
+        <Select
+          items={[
+            { value: "entrada", label: "Entrada" },
+            { value: "salida", label: "Salida" },
+            { value: "ajuste", label: "Ajuste" },
+          ]}
+          value={tipo}
+          onValueChange={(v) => setTipo((v ?? "entrada") as TipoMovimiento)}
+        >
           <SelectTrigger className="w-full">
             <SelectValue />
           </SelectTrigger>

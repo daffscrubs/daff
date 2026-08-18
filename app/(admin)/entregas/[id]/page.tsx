@@ -4,6 +4,7 @@ import { createClient } from "@/lib/supabase/server";
 import { FormEntregaReal } from "@/components/entregas/FormEntregaReal";
 import { Badge } from "@/components/ui/badge";
 import { ESTATUS_ENTREGA_LABEL } from "@/lib/labels";
+import { CLASE_ESTATUS_ENTREGA } from "@/lib/estatus-colores";
 
 export default async function EntregaDetallePage({
   params,
@@ -28,7 +29,7 @@ export default async function EntregaDetallePage({
           </h1>
           <p className="text-muted-foreground">Programada: {entrega.fecha_programada}</p>
         </div>
-        <Badge variant="secondary">{ESTATUS_ENTREGA_LABEL[entrega.estatus]}</Badge>
+        <Badge className={CLASE_ESTATUS_ENTREGA[entrega.estatus]}>{ESTATUS_ENTREGA_LABEL[entrega.estatus]}</Badge>
       </div>
 
       {entrega.estatus === "entregada" ? (

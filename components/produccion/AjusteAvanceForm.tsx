@@ -20,17 +20,24 @@ import type { Database } from "@/types/database.types";
 type LoteEtapa = Database["public"]["Tables"]["lote_etapas"]["Row"];
 type EtapaProceso = Database["public"]["Tables"]["etapas_proceso"]["Row"];
 type Perfil = Database["public"]["Tables"]["perfiles"]["Row"];
+type ItemOrden = Database["public"]["Tables"]["items_orden_produccion"]["Row"];
 
 export function AjusteAvanceForm({
   loteId,
   loteEtapas,
   etapasCatalogo,
   colaboradores,
+  items,
+  modelos,
+  tallas,
 }: {
   loteId: string;
   loteEtapas: LoteEtapa[];
   etapasCatalogo: EtapaProceso[];
   colaboradores: Perfil[];
+  items: ItemOrden[];
+  modelos: { id: string; nombre: string }[];
+  tallas: { id: string; codigo: string }[];
 }) {
   const [colaboradorId, setColaboradorId] = useState("");
   const [loteEtapaId, setLoteEtapaId] = useState("");
@@ -40,6 +47,12 @@ export function AjusteAvanceForm({
   const router = useRouter();
 
   const nombreEtapa = (id: string) => etapasCatalogo.find((e) => e.id === id)?.nombre ?? "—";
+  const etiquetaLoteEtapa = (le: LoteEtapa) => {
+    const item = items.find((i) => i.id === le.item_orden_id);
+    const nombreModelo = item ? modelos.find((m) => m.id === item.modelo_id)?.nombre : "";
+    const codigoTalla = item ? tallas.find((t) => t.id === item.talla_id)?.codigo : "";
+    return `${nombreModelo ?? ""} ${codigoTalla ?? ""} · ${nombreEtapa(le.etapa_id)}`.trim();
+  };
 
   function enviar(e: React.FormEvent) {
     e.preventDefault();
@@ -66,7 +79,11 @@ export function AjusteAvanceForm({
     <form onSubmit={enviar} className="grid grid-cols-1 gap-3 rounded-lg border p-4 sm:grid-cols-2">
       <div className="space-y-2">
         <Label>Colaborador</Label>
-        <Select value={colaboradorId} onValueChange={(v) => setColaboradorId(v ?? "")}>
+        <Select
+          items={colaboradores.map((c) => ({ value: c.id, label: c.nombre_completo }))}
+          value={colaboradorId}
+          onValueChange={(v) => setColaboradorId(v ?? "")}
+        >
           <SelectTrigger className="w-full">
             <SelectValue placeholder="Selecciona colaborador" />
           </SelectTrigger>
@@ -78,14 +95,18 @@ export function AjusteAvanceForm({
         </Select>
       </div>
       <div className="space-y-2">
-        <Label>Etapa</Label>
-        <Select value={loteEtapaId} onValueChange={(v) => setLoteEtapaId(v ?? "")}>
+        <Label>Proceso</Label>
+        <Select
+          items={loteEtapas.map((le) => ({ value: le.id, label: etiquetaLoteEtapa(le) }))}
+          value={loteEtapaId}
+          onValueChange={(v) => setLoteEtapaId(v ?? "")}
+        >
           <SelectTrigger className="w-full">
-            <SelectValue placeholder="Selecciona etapa" />
+            <SelectValue placeholder="Selecciona producto y etapa" />
           </SelectTrigger>
           <SelectContent>
             {loteEtapas.map((le) => (
-              <SelectItem key={le.id} value={le.id}>{nombreEtapa(le.etapa_id)}</SelectItem>
+              <SelectItem key={le.id} value={le.id}>{etiquetaLoteEtapa(le)}</SelectItem>
             ))}
           </SelectContent>
         </Select>

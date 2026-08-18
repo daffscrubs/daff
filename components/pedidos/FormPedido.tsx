@@ -15,6 +15,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { ComboboxField } from "@/components/ui/combobox-field";
 import {
   Table,
   TableBody,
@@ -185,22 +186,20 @@ export function FormPedido({
             {items.map((item, index) => (
               <TableRow key={index}>
                 <TableCell>
-                  <Select
+                  <ComboboxField
+                    className="w-40"
+                    items={modelos.map((m) => ({ value: m.id, label: m.nombre }))}
                     value={item.modeloId}
-                    onValueChange={(v) => actualizarItem(index, { modeloId: v ?? "", varianteId: null })}
-                  >
-                    <SelectTrigger className="w-40">
-                      <SelectValue placeholder="Modelo" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {modelos.map((m) => (
-                        <SelectItem key={m.id} value={m.id}>{m.nombre}</SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
+                    onValueChange={(v) => actualizarItem(index, { modeloId: v, varianteId: null })}
+                    placeholder="Buscar modelo..."
+                  />
                 </TableCell>
                 <TableCell>
-                  <Select value={item.tallaId} onValueChange={(v) => actualizarItem(index, { tallaId: v ?? "" })}>
+                  <Select
+                    items={tallas.map((t) => ({ value: t.id, label: t.codigo }))}
+                    value={item.tallaId}
+                    onValueChange={(v) => actualizarItem(index, { tallaId: v ?? "" })}
+                  >
                     <SelectTrigger className="w-24">
                       <SelectValue placeholder="Talla" />
                     </SelectTrigger>
@@ -213,6 +212,10 @@ export function FormPedido({
                 </TableCell>
                 <TableCell>
                   <Select
+                    items={variantesDe(item.modeloId).map((v) => ({
+                      value: v.id,
+                      label: [v.color, v.tela, v.diseno].filter(Boolean).join(" / ") || v.sku || "Variante",
+                    }))}
                     value={item.varianteId ?? ""}
                     onValueChange={(v) => actualizarItem(index, { varianteId: v || null })}
                   >

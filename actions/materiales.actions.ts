@@ -63,3 +63,19 @@ export async function guardarConsumoEstimado(input: ConsumoEstimadoInput) {
   if (error) throw new Error(error.message);
   revalidatePath(`/produccion/${datos.loteId}`);
 }
+
+export async function eliminarConsumoMaterial(id: string, loteId: string) {
+  await requerirPerfil(["admin", "supervisor"]);
+  const supabase = await createClient();
+  const { error } = await supabase.from("consumo_material_orden").delete().eq("id", id);
+  if (error) throw new Error(error.message);
+  revalidatePath(`/produccion/${loteId}`);
+}
+
+export async function registrarConsumoReal(id: string, loteId: string, cantidadReal: number) {
+  await requerirPerfil(["admin", "supervisor"]);
+  const supabase = await createClient();
+  const { error } = await supabase.from("consumo_material_orden").update({ cantidad_real: cantidadReal }).eq("id", id);
+  if (error) throw new Error(error.message);
+  revalidatePath(`/produccion/${loteId}`);
+}

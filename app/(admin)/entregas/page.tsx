@@ -11,6 +11,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { ESTATUS_ENTREGA_LABEL } from "@/lib/labels";
+import { CLASE_ESTATUS_ENTREGA } from "@/lib/estatus-colores";
 
 export default async function EntregasPage() {
   const supabase = await createClient();
@@ -54,7 +55,7 @@ export default async function EntregasPage() {
                 {e.fecha_real ? new Date(e.fecha_real).toLocaleDateString("es-MX") : "—"}
               </TableCell>
               <TableCell>
-                <Badge variant="secondary">{ESTATUS_ENTREGA_LABEL[e.estatus]}</Badge>
+                <Badge className={CLASE_ESTATUS_ENTREGA[e.estatus]}>{ESTATUS_ENTREGA_LABEL[e.estatus]}</Badge>
               </TableCell>
             </TableRow>
           ))}

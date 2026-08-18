@@ -5,6 +5,10 @@ import { requerirPerfil } from "@/lib/supabase/auth-helpers";
 import { TimelineEtapasLote } from "@/components/produccion/TimelineEtapasLote";
 import { IncidenciasLote } from "@/components/produccion/IncidenciasLote";
 import { AjusteAvanceForm } from "@/components/produccion/AjusteAvanceForm";
+import { NotasOrden } from "@/components/produccion/NotasOrden";
+import { InsumosOrden } from "@/components/produccion/InsumosOrden";
+import { HistorialOrden } from "@/components/produccion/HistorialOrden";
+import { construirHistorialOrden } from "@/lib/produccion/historial";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
@@ -16,6 +20,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { ESTATUS_ORDEN_LABEL } from "@/lib/labels";
+import { CLASE_ESTATUS_ORDEN } from "@/lib/estatus-colores";
 
 export default async function LoteDetallePage({
   params,
@@ -28,13 +33,19 @@ export default async function LoteDetallePage({
 
   const [
     { data: lote },
+    { data: items },
     { data: loteEtapas },
     { data: etapasCatalogo },
     { data: incidencias },
     { data: registros },
     { data: colaboradores },
+    { data: modelos },
+    { data: tallas },
+    { data: consumos },
+    { data: materiales },
   ] = await Promise.all([
-    supabase.from("lotes_produccion").select("*, modelos(nombre)").eq("id", loteId).single(),
+    supabase.from("lotes_produccion").select("*").eq("id", loteId).single(),
+    supabase.from("items_orden_produccion").select("*").eq("lote_id", loteId),
     supabase.from("lote_etapas").select("*").eq("lote_id", loteId),
     supabase.from("etapas_proceso").select("*"),
     supabase.from("incidencias_produccion").select("*").eq("lote_id", loteId).order("created_at", { ascending: false }),
@@ -44,12 +55,38 @@ export default async function LoteDetallePage({
       .eq("lote_id", loteId)
       .order("created_at", { ascending: false }),
     supabase.from("perfiles").select("*").eq("rol", "colaborador").eq("activo", true),
+    supabase.from("modelos").select("id, nombre"),
+    supabase.from("tallas").select("id, codigo"),
+    supabase.from("consumo_material_orden").select("*").eq("lote_id", loteId),
+    supabase.from("materiales").select("*"),
   ]);
 
   if (!lote) notFound();
 
+  const entregas = lote.pedido_id
+    ? (await supabase.from("entregas").select("*").eq("pedido_id", lote.pedido_id)).data ?? []
+    : [];
+
+  const itemsOrden = items ?? [];
   const nombreEtapa = (id: string) => etapasCatalogo?.find((e) => e.id === id)?.nombre ?? "—";
+  const nombreItem = (le: { item_orden_id: string }) => {
+    const item = itemsOrden.find((i) => i.id === le.item_orden_id);
+    if (!item) return "—";
+    const nombreModelo = modelos?.find((m) => m.id === item.modelo_id)?.nombre ?? "";
+    const codigoTalla = tallas?.find((t) => t.id === item.talla_id)?.codigo ?? "";
+    return `${nombreModelo} ${codigoTalla}`.trim();
+  };
   const puedeGestionar = perfil.rol === "admin" || perfil.rol === "supervisor";
+
+  const eventosHistorial = construirHistorialOrden({
+    lote,
+    registros: registros ?? [],
+    loteEtapas: loteEtapas ?? [],
+    etapasCatalogo: etapasCatalogo ?? [],
+    consumos: consumos ?? [],
+    materiales: materiales ?? [],
+    entregas,
+  });
 
   return (
     <div className="space-y-8">
@@ -57,26 +94,48 @@ export default async function LoteDetallePage({
         <div>
           <h1 className="text-2xl font-semibold">{lote.folio}</h1>
           <p className="text-muted-foreground">
-            {lote.modelos?.nombre ?? "Modelo"} · {lote.cantidad_planeada} piezas
+            {itemsOrden.length} producto(s) ·{" "}
+            {itemsOrden.reduce((acc, i) => acc + i.cantidad_planeada, 0)} piezas en total
           </p>
         </div>
         <div className="flex items-center gap-2">
-          <Badge variant="secondary">{ESTATUS_ORDEN_LABEL[lote.estatus]}</Badge>
+          <Badge className={CLASE_ESTATUS_ORDEN[lote.estatus]}>{ESTATUS_ORDEN_LABEL[lote.estatus]}</Badge>
           {puedeGestionar && (
             <Button variant="outline" size="sm" render={<Link href={`/produccion/${loteId}/etapas`} />} nativeButton={false}>
-              Configurar etapas
+              Configurar procesos
             </Button>
           )}
         </div>
       </div>
 
+      {puedeGestionar && (
+        <div>
+          <h2 className="mb-3 text-lg font-semibold">Notas</h2>
+          <NotasOrden loteId={loteId} notasIniciales={lote.notas ?? ""} />
+        </div>
+      )}
+
+      {puedeGestionar && (
+        <div>
+          <h2 className="mb-3 text-lg font-semibold">Insumos a utilizar</h2>
+          <InsumosOrden loteId={loteId} consumos={consumos ?? []} materiales={materiales ?? []} />
+        </div>
+      )}
+
       <div>
-        <h2 className="mb-3 text-lg font-semibold">Avance por etapa</h2>
+        <h2 className="mb-3 text-lg font-semibold">Avance por proceso</h2>
         <TimelineEtapasLote
+          items={itemsOrden}
           loteEtapas={loteEtapas ?? []}
           etapasCatalogo={etapasCatalogo ?? []}
-          cantidadPlaneada={lote.cantidad_planeada}
+          modelos={modelos ?? []}
+          tallas={tallas ?? []}
         />
+      </div>
+
+      <div>
+        <h2 className="mb-3 text-lg font-semibold">Cronología</h2>
+        <HistorialOrden eventos={eventosHistorial} />
       </div>
 
       <div>
@@ -86,26 +145,31 @@ export default async function LoteDetallePage({
             <TableRow>
               <TableHead>Fecha</TableHead>
               <TableHead>Colaborador</TableHead>
-              <TableHead>Etapa</TableHead>
+              <TableHead>Producto</TableHead>
+              <TableHead>Proceso</TableHead>
               <TableHead>Cantidad</TableHead>
               <TableHead>Origen</TableHead>
               <TableHead>Notas</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
-            {registros?.map((r) => (
-              <TableRow key={r.id}>
-                <TableCell className="text-muted-foreground">{r.fecha}</TableCell>
-                <TableCell>{r.perfiles?.nombre_completo ?? "—"}</TableCell>
-                <TableCell>{nombreEtapa(loteEtapas?.find((le) => le.id === r.lote_etapa_id)?.etapa_id ?? "")}</TableCell>
-                <TableCell className={r.cantidad < 0 ? "text-destructive" : ""}>{r.cantidad}</TableCell>
-                <TableCell>{r.origen === "ajuste_supervisor" ? "Ajuste" : "Colaborador"}</TableCell>
-                <TableCell className="text-muted-foreground">{r.observaciones ?? "—"}</TableCell>
-              </TableRow>
-            ))}
+            {registros?.map((r) => {
+              const le = loteEtapas?.find((le) => le.id === r.lote_etapa_id);
+              return (
+                <TableRow key={r.id}>
+                  <TableCell className="text-muted-foreground">{r.fecha}</TableCell>
+                  <TableCell>{r.perfiles?.nombre_completo ?? "—"}</TableCell>
+                  <TableCell>{le ? nombreItem(le) : "—"}</TableCell>
+                  <TableCell>{nombreEtapa(le?.etapa_id ?? "")}</TableCell>
+                  <TableCell className={r.cantidad < 0 ? "text-destructive" : ""}>{r.cantidad}</TableCell>
+                  <TableCell>{r.origen === "ajuste_supervisor" ? "Ajuste" : "Colaborador"}</TableCell>
+                  <TableCell className="text-muted-foreground">{r.observaciones ?? "—"}</TableCell>
+                </TableRow>
+              );
+            })}
             {!registros?.length && (
               <TableRow>
-                <TableCell colSpan={6} className="text-center text-muted-foreground">
+                <TableCell colSpan={7} className="text-center text-muted-foreground">
                   Sin registros de avance todavía.
                 </TableCell>
               </TableRow>
@@ -122,6 +186,9 @@ export default async function LoteDetallePage({
             loteEtapas={loteEtapas ?? []}
             etapasCatalogo={etapasCatalogo ?? []}
             colaboradores={colaboradores ?? []}
+            items={itemsOrden}
+            modelos={modelos ?? []}
+            tallas={tallas ?? []}
           />
         </div>
       )}

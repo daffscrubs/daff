@@ -65,7 +65,11 @@ export function NuevaEntregaDialog({ pedidosListos }: { pedidosListos: Pedido[] 
         <form className="space-y-4" onSubmit={crear}>
           <div className="space-y-2">
             <Label>Pedido listo para entregar</Label>
-            <Select value={pedidoId} onValueChange={(v) => setPedidoId(v ?? "")}>
+            <Select
+              items={pedidosListos.map((p) => ({ value: p.id, label: p.folio }))}
+              value={pedidoId}
+              onValueChange={(v) => setPedidoId(v ?? "")}
+            >
               <SelectTrigger className="w-full">
                 <SelectValue placeholder="Selecciona un pedido" />
               </SelectTrigger>

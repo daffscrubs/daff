@@ -2,30 +2,35 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { ListChecks, History } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 const ITEMS = [
-  { href: "/mi-dia", label: "Mi día" },
-  { href: "/mi-historial", label: "Mi historial" },
+  { href: "/mi-dia", label: "Mi día", icon: ListChecks },
+  { href: "/mi-historial", label: "Mi historial", icon: History },
 ];
 
 export function NavPiso() {
   const pathname = usePathname();
 
   return (
-    <nav className="fixed inset-x-0 bottom-0 z-10 flex border-t bg-background">
-      {ITEMS.map((item) => (
-        <Link
-          key={item.href}
-          href={item.href}
-          className={cn(
-            "flex-1 py-4 text-center text-sm font-medium",
-            pathname.startsWith(item.href) ? "text-primary" : "text-muted-foreground"
-          )}
-        >
-          {item.label}
-        </Link>
-      ))}
+    <nav className="fixed inset-x-0 bottom-0 z-10 flex border-t bg-background/95 backdrop-blur">
+      {ITEMS.map((item) => {
+        const activo = pathname.startsWith(item.href);
+        return (
+          <Link
+            key={item.href}
+            href={item.href}
+            className={cn(
+              "flex flex-1 flex-col items-center gap-1 py-3 text-xs font-medium",
+              activo ? "text-primary" : "text-muted-foreground"
+            )}
+          >
+            <item.icon className="size-5" strokeWidth={activo ? 2.5 : 2} />
+            {item.label}
+          </Link>
+        );
+      })}
     </nav>
   );
 }

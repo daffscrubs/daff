@@ -44,7 +44,7 @@ export default async function ReporteProductividadPage() {
         <TableHeader>
           <TableRow>
             <TableHead>Colaborador</TableHead>
-            <TableHead>Etapa</TableHead>
+            <TableHead>Proceso</TableHead>
             <TableHead>Total piezas</TableHead>
           </TableRow>
         </TableHeader>
@@ -73,7 +73,7 @@ export default async function ReporteProductividadPage() {
             <TableRow>
               <TableHead>Fecha</TableHead>
               <TableHead>Colaborador</TableHead>
-              <TableHead>Etapa</TableHead>
+              <TableHead>Proceso</TableHead>
               <TableHead>Cantidad</TableHead>
               <TableHead>Origen</TableHead>
             </TableRow>

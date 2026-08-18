@@ -11,6 +11,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { ESTATUS_PEDIDO_LABEL } from "@/lib/labels";
+import { CLASE_ESTATUS_PEDIDO } from "@/lib/estatus-colores";
 
 export default async function PedidosPage() {
   const supabase = await createClient();
@@ -52,7 +53,7 @@ export default async function PedidosPage() {
               <TableCell>{nombreCliente(pedido.cliente_id)}</TableCell>
               <TableCell className="text-muted-foreground">{pedido.fecha_compromiso}</TableCell>
               <TableCell>
-                <Badge variant="secondary">{ESTATUS_PEDIDO_LABEL[pedido.estatus]}</Badge>
+                <Badge className={CLASE_ESTATUS_PEDIDO[pedido.estatus]}>{ESTATUS_PEDIDO_LABEL[pedido.estatus]}</Badge>
               </TableCell>
             </TableRow>
           ))}

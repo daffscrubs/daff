@@ -12,6 +12,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { ESTATUS_PEDIDO_LABEL } from "@/lib/labels";
+import { CLASE_ESTATUS_PEDIDO } from "@/lib/estatus-colores";
 
 export default async function ClienteDetallePage({
   params,
@@ -77,7 +78,7 @@ export default async function ClienteDetallePage({
                 <TableCell className="text-muted-foreground">{pedido.fecha_pedido}</TableCell>
                 <TableCell className="text-muted-foreground">{pedido.fecha_compromiso}</TableCell>
                 <TableCell>
-                  <Badge variant="secondary">{ESTATUS_PEDIDO_LABEL[pedido.estatus]}</Badge>
+                  <Badge className={CLASE_ESTATUS_PEDIDO[pedido.estatus]}>{ESTATUS_PEDIDO_LABEL[pedido.estatus]}</Badge>
                 </TableCell>
               </TableRow>
             ))}

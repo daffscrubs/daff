@@ -74,7 +74,15 @@ export function IncidenciasLote({
             required
           />
         </div>
-        <Select value={gravedad} onValueChange={(v) => setGravedad((v ?? "baja") as typeof gravedad)}>
+        <Select
+          items={[
+            { value: "baja", label: "Baja" },
+            { value: "media", label: "Media" },
+            { value: "alta", label: "Alta" },
+          ]}
+          value={gravedad}
+          onValueChange={(v) => setGravedad((v ?? "baja") as typeof gravedad)}
+        >
           <SelectTrigger className="w-32">
             <SelectValue />
           </SelectTrigger>

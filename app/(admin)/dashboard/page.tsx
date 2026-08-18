@@ -1,6 +1,7 @@
 import Link from "next/link";
+import { ClipboardList, Factory, Truck, AlertTriangle, CalendarClock } from "lucide-react";
 import { createClient } from "@/lib/supabase/server";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import {
   Table,
@@ -42,6 +43,12 @@ export default async function DashboardPage() {
 
   const bajoStock = (materiales ?? []).filter((m) => m.stock_actual <= m.stock_minimo);
 
+  const kpis = [
+    { href: "/pedidos", label: "Pedidos activos", valor: pedidosActivos ?? 0, icon: ClipboardList, color: "text-blue-600 bg-blue-100 dark:bg-blue-950" },
+    { href: "/produccion", label: "Órdenes en producción", valor: lotesEnProceso ?? 0, icon: Factory, color: "text-amber-600 bg-amber-100 dark:bg-amber-950" },
+    { href: "/entregas", label: "Entregas esta semana", valor: entregasProximas?.length ?? 0, icon: Truck, color: "text-emerald-600 bg-emerald-100 dark:bg-emerald-950" },
+  ];
+
   return (
     <div className="space-y-8">
       <div>
@@ -50,29 +57,29 @@ export default async function DashboardPage() {
       </div>
 
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-sm text-muted-foreground">Pedidos activos</CardTitle>
-          </CardHeader>
-          <CardContent className="text-3xl font-semibold">{pedidosActivos ?? 0}</CardContent>
-        </Card>
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-sm text-muted-foreground">Lotes en producción</CardTitle>
-          </CardHeader>
-          <CardContent className="text-3xl font-semibold">{lotesEnProceso ?? 0}</CardContent>
-        </Card>
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-sm text-muted-foreground">Entregas esta semana</CardTitle>
-          </CardHeader>
-          <CardContent className="text-3xl font-semibold">{entregasProximas?.length ?? 0}</CardContent>
-        </Card>
+        {kpis.map((kpi) => (
+          <Link key={kpi.href} href={kpi.href}>
+            <Card className="transition-shadow hover:shadow-md">
+              <CardContent className="flex items-center gap-4">
+                <div className={`flex size-11 shrink-0 items-center justify-center rounded-xl ${kpi.color}`}>
+                  <kpi.icon className="size-5" />
+                </div>
+                <div>
+                  <p className="text-2xl font-semibold leading-none">{kpi.valor}</p>
+                  <p className="mt-1 text-sm text-muted-foreground">{kpi.label}</p>
+                </div>
+              </CardContent>
+            </Card>
+          </Link>
+        ))}
       </div>
 
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
         <div>
-          <h2 className="mb-3 text-lg font-semibold">Próximas entregas</h2>
+          <h2 className="mb-3 flex items-center gap-2 text-lg font-semibold">
+            <CalendarClock className="size-4 text-muted-foreground" />
+            Próximas entregas
+          </h2>
           <Table>
             <TableHeader>
               <TableRow>
@@ -103,7 +110,10 @@ export default async function DashboardPage() {
         </div>
 
         <div>
-          <h2 className="mb-3 text-lg font-semibold">Alertas de inventario</h2>
+          <h2 className="mb-3 flex items-center gap-2 text-lg font-semibold">
+            <AlertTriangle className="size-4 text-muted-foreground" />
+            Alertas de inventario
+          </h2>
           <Table>
             <TableHeader>
               <TableRow>

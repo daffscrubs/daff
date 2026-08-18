@@ -21,15 +21,20 @@ export default async function NuevoAvancePage({
 
   if (!loteEtapa) notFound();
 
-  const [{ data: lote }, { data: hermanas }] = await Promise.all([
-    supabase.from("lotes_produccion").select("folio, cantidad_planeada").eq("id", loteEtapa.lote_id).single(),
-    supabase.from("lote_etapas").select("*").eq("lote_id", loteEtapa.lote_id),
+  const [{ data: lote }, { data: item }, { data: hermanas }] = await Promise.all([
+    supabase.from("lotes_produccion").select("folio").eq("id", loteEtapa.lote_id).single(),
+    supabase
+      .from("items_orden_produccion")
+      .select("cantidad_planeada, modelos(nombre), tallas(codigo)")
+      .eq("id", loteEtapa.item_orden_id)
+      .single(),
+    supabase.from("lote_etapas").select("*").eq("item_orden_id", loteEtapa.item_orden_id),
   ]);
 
-  if (!lote) notFound();
+  if (!lote || !item) notFound();
 
   const ordenadas = (hermanas ?? []).slice().sort((a, b) => a.orden_secuencia - b.orden_secuencia);
-  const conDisponible = calcularDisponiblePorEtapa(ordenadas, lote.cantidad_planeada);
+  const conDisponible = calcularDisponiblePorEtapa(ordenadas, item.cantidad_planeada);
   const actual = conDisponible.find((e) => e.id === loteEtapaId);
 
   return (
@@ -37,7 +42,7 @@ export default async function NuevoAvancePage({
       loteId={loteEtapa.lote_id}
       loteEtapaId={loteEtapaId}
       nombreEtapa={loteEtapa.etapas_proceso?.nombre ?? "Etapa"}
-      folioLote={lote.folio}
+      folioLote={`${lote.folio} · ${item.modelos?.nombre ?? ""} · Talla ${item.tallas?.codigo ?? ""}`}
       disponible={actual?.disponible ?? 0}
     />
   );

@@ -1,0 +1,28 @@
+"use server";
+
+import { revalidatePath } from "next/cache";
+import { createClient } from "@/lib/supabase/server";
+import { requerirPerfil } from "@/lib/supabase/auth-helpers";
+import {
+  movimientoStockProductoSchema,
+  type MovimientoStockProductoInput,
+} from "@/lib/validaciones/stock-productos.schema";
+
+export async function crearMovimientoStockProducto(input: MovimientoStockProductoInput) {
+  const perfil = await requerirPerfil(["admin", "supervisor"]);
+  const datos = movimientoStockProductoSchema.parse(input);
+  const supabase = await createClient();
+
+  const { error } = await supabase.from("movimientos_stock_producto").insert({
+    modelo_id: datos.modeloId,
+    talla_id: datos.tallaId,
+    variante_id: datos.varianteId || null,
+    tipo: datos.tipo,
+    cantidad: datos.tipo === "ajuste" ? datos.cantidad : Math.abs(datos.cantidad),
+    motivo: datos.motivo || null,
+    registrado_por: perfil.id,
+  });
+
+  if (error) throw new Error(error.message);
+  revalidatePath("/materiales/productos");
+}

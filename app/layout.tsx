@@ -14,8 +14,8 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Taller de Ropa Médica",
-  description: "Gestión de pedidos, producción y entregas",
+  title: "daff",
+  description: "daff — gestión de pedidos, producción y entregas",
 };
 
 export default function RootLayout({ children }: LayoutProps<"/">) {

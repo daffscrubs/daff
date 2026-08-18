@@ -31,7 +31,12 @@ export function EstatusPedidoSelect({ id, estatus }: { id: string; estatus: Esta
   }
 
   return (
-    <Select value={estatus} onValueChange={cambiar} disabled={pendiente}>
+    <Select
+      items={Object.entries(ESTATUS_PEDIDO_LABEL).map(([valor, label]) => ({ value: valor, label }))}
+      value={estatus}
+      onValueChange={cambiar}
+      disabled={pendiente}
+    >
       <SelectTrigger className="w-48">
         <SelectValue />
       </SelectTrigger>

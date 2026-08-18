@@ -91,7 +91,11 @@ export function VariantesManager({ variantes, modelos }: { variantes: Variante[]
             <form className="space-y-4" onSubmit={crear}>
               <div className="space-y-2">
                 <Label>Modelo</Label>
-                <Select value={modeloId} onValueChange={(v) => setModeloId(v ?? "")}>
+                <Select
+                  items={modelos.map((m) => ({ value: m.id, label: m.nombre }))}
+                  value={modeloId}
+                  onValueChange={(v) => setModeloId(v ?? "")}
+                >
                   <SelectTrigger className="w-full">
                     <SelectValue placeholder="Selecciona un modelo" />
                   </SelectTrigger>

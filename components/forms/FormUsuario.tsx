@@ -61,7 +61,7 @@ export function FormUsuario({ onCreado }: { onCreado?: () => void }) {
     <form className="space-y-4" onSubmit={enviar}>
       <div className="space-y-2">
         <Label>Rol</Label>
-        <Select value={rol} onValueChange={(v) => setRol(v as RolUsuario)}>
+        <Select items={ROLES} value={rol} onValueChange={(v) => setRol(v as RolUsuario)}>
           <SelectTrigger className="w-full">
             <SelectValue />
           </SelectTrigger>

@@ -87,7 +87,11 @@ export function PlantillasManager({ plantillas, clientes }: { plantillas: Planti
               </div>
               <div className="space-y-2">
                 <Label>Cliente (opcional)</Label>
-                <Select value={clienteId} onValueChange={(v) => setClienteId(v ?? "")}>
+                <Select
+                  items={clientes.map((c) => ({ value: c.id, label: c.nombre_comercial }))}
+                  value={clienteId}
+                  onValueChange={(v) => setClienteId(v ?? "")}
+                >
                   <SelectTrigger className="w-full">
                     <SelectValue placeholder="Genérica (cualquier cliente)" />
                   </SelectTrigger>

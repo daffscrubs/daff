@@ -10,11 +10,15 @@ export default async function EtapasLotePage({
   const { loteId } = await params;
   const supabase = await createClient();
 
-  const [{ data: lote }, { data: loteEtapas }, { data: etapasCatalogo }] = await Promise.all([
-    supabase.from("lotes_produccion").select("folio, cantidad_planeada").eq("id", loteId).single(),
-    supabase.from("lote_etapas").select("*").eq("lote_id", loteId),
-    supabase.from("etapas_proceso").select("*").order("nombre"),
-  ]);
+  const [{ data: lote }, { data: items }, { data: loteEtapas }, { data: etapasCatalogo }, { data: modelos }, { data: tallas }] =
+    await Promise.all([
+      supabase.from("lotes_produccion").select("folio").eq("id", loteId).single(),
+      supabase.from("items_orden_produccion").select("*").eq("lote_id", loteId),
+      supabase.from("lote_etapas").select("*").eq("lote_id", loteId),
+      supabase.from("etapas_proceso").select("*").order("nombre"),
+      supabase.from("modelos").select("id, nombre"),
+      supabase.from("tallas").select("id, codigo"),
+    ]);
 
   if (!lote) notFound();
 
@@ -24,6 +28,9 @@ export default async function EtapasLotePage({
       lote={lote}
       loteEtapas={loteEtapas ?? []}
       etapasCatalogo={etapasCatalogo ?? []}
+      items={items ?? []}
+      modelos={modelos ?? []}
+      tallas={tallas ?? []}
     />
   );
 }

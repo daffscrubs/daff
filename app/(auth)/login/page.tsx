@@ -4,6 +4,7 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
+import Image from "next/image";
 import { createClient } from "@/lib/supabase/client";
 import {
   dominioColaborador,
@@ -48,10 +49,11 @@ export default function LoginPage() {
   }
 
   return (
-    <div className="flex min-h-screen items-center justify-center bg-muted/40 px-4">
+    <div className="flex min-h-screen items-center justify-center bg-muted/30 px-4">
       <Card className="w-full max-w-sm">
-        <CardHeader>
-          <CardTitle>Taller de Ropa Médica</CardTitle>
+        <CardHeader className="items-center text-center">
+          <Image src="/brand/logo-mark.png" alt="daff" width={56} height={56} className="mb-1" priority />
+          <CardTitle className="text-xl tracking-tight">daff</CardTitle>
           <CardDescription>Inicia sesión para continuar</CardDescription>
         </CardHeader>
         <CardContent>

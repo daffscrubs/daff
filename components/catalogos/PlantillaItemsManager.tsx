@@ -14,6 +14,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { ComboboxField } from "@/components/ui/combobox-field";
 import {
   Table,
   TableBody,
@@ -97,20 +98,20 @@ export function PlantillaItemsManager({
       <form onSubmit={agregar} className="grid grid-cols-1 gap-4 rounded-lg border p-4 sm:grid-cols-5 sm:items-end">
         <div className="space-y-2">
           <Label>Modelo</Label>
-          <Select value={modeloId} onValueChange={(v) => { setModeloId(v ?? ""); setVarianteId(""); }}>
-            <SelectTrigger className="w-full">
-              <SelectValue placeholder="Modelo" />
-            </SelectTrigger>
-            <SelectContent>
-              {modelos.map((m) => (
-                <SelectItem key={m.id} value={m.id}>{m.nombre}</SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
+          <ComboboxField
+            items={modelos.map((m) => ({ value: m.id, label: m.nombre }))}
+            value={modeloId}
+            onValueChange={(v) => { setModeloId(v); setVarianteId(""); }}
+            placeholder="Buscar modelo..."
+          />
         </div>
         <div className="space-y-2">
           <Label>Talla</Label>
-          <Select value={tallaId} onValueChange={(v) => setTallaId(v ?? "")}>
+          <Select
+            items={tallas.map((t) => ({ value: t.id, label: t.codigo }))}
+            value={tallaId}
+            onValueChange={(v) => setTallaId(v ?? "")}
+          >
             <SelectTrigger className="w-full">
               <SelectValue placeholder="Talla" />
             </SelectTrigger>
@@ -123,7 +124,14 @@ export function PlantillaItemsManager({
         </div>
         <div className="space-y-2">
           <Label>Variante (opcional)</Label>
-          <Select value={varianteId} onValueChange={(v) => setVarianteId(v ?? "")}>
+          <Select
+            items={variantesDelModelo.map((v) => ({
+              value: v.id,
+              label: [v.color, v.tela, v.diseno].filter(Boolean).join(" / ") || v.sku || "Variante",
+            }))}
+            value={varianteId}
+            onValueChange={(v) => setVarianteId(v ?? "")}
+          >
             <SelectTrigger className="w-full">
               <SelectValue placeholder="Sin variante" />
             </SelectTrigger>

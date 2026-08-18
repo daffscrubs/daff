@@ -5,11 +5,12 @@ import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import { crearRegistroAvance } from "@/actions/avance.actions";
 import { createClient } from "@/lib/supabase/client";
+import { visualEtapa } from "@/lib/produccion/etapa-visual";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent, CardHeader } from "@/components/ui/card";
 
 export function FormAvanceColaborador({
   loteId,
@@ -29,6 +30,7 @@ export function FormAvanceColaborador({
   const [foto, setFoto] = useState<File | null>(null);
   const [pendiente, startTransition] = useTransition();
   const router = useRouter();
+  const { icon: Icon, color } = visualEtapa(nombreEtapa);
 
   function enviar(e: React.FormEvent) {
     e.preventDefault();
@@ -74,23 +76,41 @@ export function FormAvanceColaborador({
   return (
     <Card>
       <CardHeader>
-        <CardTitle>{nombreEtapa}</CardTitle>
-        <p className="text-sm text-muted-foreground">{folioLote} · disponible: {disponible}</p>
+        <div className="flex items-center gap-3">
+          <div className={`flex size-11 shrink-0 items-center justify-center rounded-xl ${color}`}>
+            <Icon className="size-5" />
+          </div>
+          <div>
+            <p className="text-lg font-semibold leading-tight">{nombreEtapa}</p>
+            <p className="text-sm text-muted-foreground">{folioLote} · disponible: {disponible}</p>
+          </div>
+        </div>
       </CardHeader>
       <CardContent>
         <form className="space-y-4" onSubmit={enviar}>
           <div className="space-y-2">
             <Label htmlFor="cantidad">¿Cuántas piezas hiciste?</Label>
-            <Input
-              id="cantidad"
-              type="number"
-              inputMode="numeric"
-              min={1}
-              max={disponible}
-              value={cantidad}
-              onChange={(e) => setCantidad(e.target.value)}
-              required
-            />
+            <div className="flex items-center gap-2">
+              <Input
+                id="cantidad"
+                type="number"
+                inputMode="numeric"
+                min={1}
+                max={disponible}
+                value={cantidad}
+                onChange={(e) => setCantidad(e.target.value)}
+                className="h-12 text-center text-lg"
+                required
+              />
+              <Button
+                type="button"
+                variant="outline"
+                className="h-12 shrink-0 px-4"
+                onClick={() => setCantidad(String(disponible))}
+              >
+                Todo ({disponible})
+              </Button>
+            </div>
           </div>
           <div className="space-y-2">
             <Label htmlFor="foto">Foto (opcional)</Label>
@@ -106,7 +126,7 @@ export function FormAvanceColaborador({
             <Label htmlFor="observaciones">Observaciones (opcional)</Label>
             <Textarea id="observaciones" value={observaciones} onChange={(e) => setObservaciones(e.target.value)} />
           </div>
-          <Button type="submit" className="w-full" disabled={pendiente}>
+          <Button type="submit" className="h-12 w-full text-base" disabled={pendiente}>
             {pendiente ? "Guardando..." : "Registrar avance"}
           </Button>
         </form>
