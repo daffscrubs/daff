@@ -1,0 +1,11 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "dev",
+      "runtimeExecutable": "bash",
+      "runtimeArgs": ["-c", "export PATH=/Users/alegalicia/.nvm/versions/node/v24.19.0/bin:$PATH && npm run dev"],
+      "port": 3000
+    }
+  ]
+}
