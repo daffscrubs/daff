@@ -17,7 +17,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent, CardDescription, CardHeader } from "@/components/ui/card";
 
 export default function LoginPage() {
   const router = useRouter();
@@ -52,8 +52,7 @@ export default function LoginPage() {
     <div className="flex min-h-screen items-center justify-center bg-muted/30 px-4">
       <Card className="w-full max-w-sm">
         <CardHeader className="items-center text-center">
-          <Image src="/brand/logo-mark.png" alt="daff" width={56} height={56} className="mb-1" priority />
-          <CardTitle className="text-xl tracking-tight">daff</CardTitle>
+          <Image src="/brand/logo-full-trimmed.png" alt="daff" width={92} height={125} className="mb-1" priority />
           <CardDescription>Inicia sesión para continuar</CardDescription>
         </CardHeader>
         <CardContent>

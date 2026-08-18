@@ -23,10 +23,10 @@ export default async function AdminLayout({ children }: { children: React.ReactN
     <div className="flex min-h-screen bg-muted/30">
       <aside className="flex w-60 shrink-0 flex-col border-r bg-sidebar">
         <div className="flex items-center gap-2.5 border-b px-4 py-4">
-          <Image src="/brand/logo-mark.png" alt="daff" width={30} height={30} className="shrink-0" priority />
+          <Image src="/brand/logo-mark.png" alt="" width={28} height={27} className="shrink-0" priority />
           <div className="min-w-0">
-            <p className="truncate text-base font-semibold tracking-tight text-sidebar-foreground">daff</p>
-            <p className="text-xs text-sidebar-foreground/60">{ROL_LABEL[perfil.rol] ?? perfil.rol}</p>
+            <Image src="/brand/logo-wordmark.png" alt="daff" width={57} height={20} priority />
+            <p className="mt-0.5 text-xs text-sidebar-foreground/60">{ROL_LABEL[perfil.rol] ?? perfil.rol}</p>
           </div>
         </div>
         <SidebarAdmin rol={perfil.rol} />
