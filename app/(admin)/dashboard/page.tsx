@@ -11,6 +11,14 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import { MetricasFinancieras } from "@/components/dashboard/MetricasFinancieras";
+import { ActividadDiariaColaboradores } from "@/components/dashboard/ActividadDiariaColaboradores";
+import { PedidosPorEtapa } from "@/components/dashboard/PedidosPorEtapa";
+import { PiezasPorColaboradorSemana } from "@/components/dashboard/PiezasPorColaboradorSemana";
+import { totalesPorPedido } from "@/lib/pedidos/totales";
+import { construirRegistrosReporte } from "@/lib/produccion/registro-reporte";
+import { pedidosPorEtapa } from "@/lib/dashboard/pedidosPorEtapa";
+import { piezasPorColaboradorSemana } from "@/lib/dashboard/piezasPorColaborador";
 
 export default async function DashboardPage() {
   const supabase = await createClient();
@@ -23,6 +31,11 @@ export default async function DashboardPage() {
     { count: lotesEnProceso },
     { data: entregasProximas },
     { data: materiales },
+    { data: pedidos },
+    { data: itemsPedido },
+    { data: compras },
+    { data: gastos },
+    { data: avances },
   ] = await Promise.all([
     supabase
       .from("pedidos")
@@ -39,9 +52,66 @@ export default async function DashboardPage() {
       .lte("fecha_programada", enUnaSemana.toISOString().slice(0, 10))
       .order("fecha_programada"),
     supabase.from("materiales").select("*"),
+    supabase.from("pedidos").select("id, fecha_pedido, estatus"),
+    supabase.from("items_pedido").select("*"),
+    supabase.from("compras").select("fecha, total"),
+    supabase.from("gastos").select("fecha, monto"),
+    supabase.from("registros_avance_colaborador").select("fecha, cantidad").eq("origen", "colaborador"),
   ]);
 
+  const [
+    { data: registrosAvance },
+    { data: etapasCatalogo },
+    { data: loteEtapas },
+    { data: items },
+    { data: lotes },
+    { data: modelos },
+    { data: tallas },
+    { data: colaboradores },
+  ] = await Promise.all([
+    supabase
+      .from("registros_avance_colaborador")
+      .select("*, perfiles!registros_avance_colaborador_colaborador_id_fkey(nombre_completo)")
+      .order("created_at", { ascending: false }),
+    supabase.from("etapas_proceso").select("*"),
+    supabase.from("lote_etapas").select("*"),
+    supabase.from("items_orden_produccion").select("*"),
+    supabase.from("lotes_produccion").select("id, folio, pedido_id"),
+    supabase.from("modelos").select("id, nombre"),
+    supabase.from("tallas").select("id, codigo"),
+    supabase.from("perfiles").select("id, nombre_completo").eq("rol", "colaborador").eq("activo", true).order("nombre_completo"),
+  ]);
+
+  const actividadColaboradores = construirRegistrosReporte({
+    registros: registrosAvance ?? [],
+    etapasCatalogo: etapasCatalogo ?? [],
+    loteEtapas: loteEtapas ?? [],
+    items: items ?? [],
+    lotes: lotes ?? [],
+    modelos: modelos ?? [],
+    tallas: tallas ?? [],
+  });
+
+  const conteosPorEtapa = pedidosPorEtapa({
+    pedidos: pedidos ?? [],
+    lotes: lotes ?? [],
+    items: items ?? [],
+    loteEtapas: loteEtapas ?? [],
+    etapasCatalogo: etapasCatalogo ?? [],
+  });
+
+  const piezasSemana = piezasPorColaboradorSemana(actividadColaboradores);
+
   const bajoStock = (materiales ?? []).filter((m) => m.stock_actual <= m.stock_minimo);
+
+  const totalesPedidos = totalesPorPedido(itemsPedido ?? []);
+  const pedidosParaMetricas = (pedidos ?? []).map((p) => ({
+    fecha: p.fecha_pedido,
+    total: totalesPedidos[p.id] ?? 0,
+  }));
+  const comprasParaMetricas = (compras ?? []).map((c) => ({ fecha: c.fecha, monto: c.total }));
+  const gastosParaMetricas = (gastos ?? []).map((g) => ({ fecha: g.fecha, monto: g.monto }));
+  const avancesParaMetricas = (avances ?? []).map((a) => ({ fecha: a.fecha, monto: a.cantidad }));
 
   const kpis = [
     { href: "/pedidos", label: "Pedidos activos", valor: pedidosActivos ?? 0, icon: ClipboardList, color: "text-blue-600 bg-blue-100 dark:bg-blue-950" },
@@ -54,6 +124,18 @@ export default async function DashboardPage() {
       <div>
         <h1 className="text-2xl font-semibold">Dashboard</h1>
         <p className="text-muted-foreground">Resumen general del taller.</p>
+      </div>
+
+      <MetricasFinancieras
+        pedidos={pedidosParaMetricas}
+        compras={comprasParaMetricas}
+        gastos={gastosParaMetricas}
+        avances={avancesParaMetricas}
+      />
+
+      <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
+        <PedidosPorEtapa conteos={conteosPorEtapa} />
+        <PiezasPorColaboradorSemana datos={piezasSemana} />
       </div>
 
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
@@ -147,6 +229,11 @@ export default async function DashboardPage() {
           </Table>
         </div>
       </div>
+
+      <ActividadDiariaColaboradores
+        registros={actividadColaboradores}
+        colaboradores={(colaboradores ?? []).map((c) => ({ id: c.id, nombre: c.nombre_completo }))}
+      />
     </div>
   );
 }

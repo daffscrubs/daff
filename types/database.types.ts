@@ -78,6 +78,122 @@ export type Database = {
         }
         Relationships: []
       }
+      colaborador_etapas: {
+        Row: {
+          etapa_id: string
+          id: string
+          perfil_id: string
+        }
+        Insert: {
+          etapa_id: string
+          id?: string
+          perfil_id: string
+        }
+        Update: {
+          etapa_id?: string
+          id?: string
+          perfil_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "colaborador_etapas_etapa_id_fkey"
+            columns: ["etapa_id"]
+            isOneToOne: false
+            referencedRelation: "etapas_proceso"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "colaborador_etapas_perfil_id_fkey"
+            columns: ["perfil_id"]
+            isOneToOne: false
+            referencedRelation: "perfiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      compra_items: {
+        Row: {
+          cantidad: number
+          compra_id: string
+          costo_unitario: number
+          id: string
+          material_id: string
+          subtotal: number | null
+        }
+        Insert: {
+          cantidad: number
+          compra_id: string
+          costo_unitario: number
+          id?: string
+          material_id: string
+          subtotal?: number | null
+        }
+        Update: {
+          cantidad?: number
+          compra_id?: string
+          costo_unitario?: number
+          id?: string
+          material_id?: string
+          subtotal?: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "compra_items_compra_id_fkey"
+            columns: ["compra_id"]
+            isOneToOne: false
+            referencedRelation: "compras"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "compra_items_material_id_fkey"
+            columns: ["material_id"]
+            isOneToOne: false
+            referencedRelation: "materiales"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      compras: {
+        Row: {
+          created_at: string
+          fecha: string
+          folio: string
+          id: string
+          notas: string | null
+          proveedor: string
+          registrado_por: string | null
+          total: number
+        }
+        Insert: {
+          created_at?: string
+          fecha?: string
+          folio: string
+          id?: string
+          notas?: string | null
+          proveedor: string
+          registrado_por?: string | null
+          total?: number
+        }
+        Update: {
+          created_at?: string
+          fecha?: string
+          folio?: string
+          id?: string
+          notas?: string | null
+          proveedor?: string
+          registrado_por?: string | null
+          total?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "compras_registrado_por_fkey"
+            columns: ["registrado_por"]
+            isOneToOne: false
+            referencedRelation: "perfiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       consumo_material_orden: {
         Row: {
           cantidad_estimada: number | null
@@ -195,6 +311,47 @@ export type Database = {
         }
         Relationships: []
       }
+      gastos: {
+        Row: {
+          categoria: string
+          concepto: string
+          created_at: string
+          fecha: string
+          id: string
+          monto: number
+          notas: string | null
+          registrado_por: string | null
+        }
+        Insert: {
+          categoria: string
+          concepto: string
+          created_at?: string
+          fecha?: string
+          id?: string
+          monto: number
+          notas?: string | null
+          registrado_por?: string | null
+        }
+        Update: {
+          categoria?: string
+          concepto?: string
+          created_at?: string
+          fecha?: string
+          id?: string
+          monto?: number
+          notas?: string | null
+          registrado_por?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "gastos_registrado_por_fkey"
+            columns: ["registrado_por"]
+            isOneToOne: false
+            referencedRelation: "perfiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       incidencias_produccion: {
         Row: {
           created_at: string
@@ -260,7 +417,6 @@ export type Database = {
           lote_id: string
           modelo_id: string
           talla_id: string
-          variante_id: string | null
         }
         Insert: {
           cantidad_planeada: number
@@ -268,7 +424,6 @@ export type Database = {
           lote_id: string
           modelo_id: string
           talla_id: string
-          variante_id?: string | null
         }
         Update: {
           cantidad_planeada?: number
@@ -276,7 +431,6 @@ export type Database = {
           lote_id?: string
           modelo_id?: string
           talla_id?: string
-          variante_id?: string | null
         }
         Relationships: [
           {
@@ -300,13 +454,6 @@ export type Database = {
             referencedRelation: "tallas"
             referencedColumns: ["id"]
           },
-          {
-            foreignKeyName: "items_orden_produccion_variante_id_fkey"
-            columns: ["variante_id"]
-            isOneToOne: false
-            referencedRelation: "variantes"
-            referencedColumns: ["id"]
-          },
         ]
       }
       items_pedido: {
@@ -318,7 +465,6 @@ export type Database = {
           pedido_id: string
           precio_unitario: number | null
           talla_id: string
-          variante_id: string | null
         }
         Insert: {
           cantidad: number
@@ -328,7 +474,6 @@ export type Database = {
           pedido_id: string
           precio_unitario?: number | null
           talla_id: string
-          variante_id?: string | null
         }
         Update: {
           cantidad?: number
@@ -338,7 +483,6 @@ export type Database = {
           pedido_id?: string
           precio_unitario?: number | null
           talla_id?: string
-          variante_id?: string | null
         }
         Relationships: [
           {
@@ -360,13 +504,6 @@ export type Database = {
             columns: ["talla_id"]
             isOneToOne: false
             referencedRelation: "tallas"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "items_pedido_variante_id_fkey"
-            columns: ["variante_id"]
-            isOneToOne: false
-            referencedRelation: "variantes"
             referencedColumns: ["id"]
           },
         ]
@@ -510,30 +647,69 @@ export type Database = {
         }
         Relationships: []
       }
+      modelo_tallas: {
+        Row: {
+          id: string
+          modelo_id: string
+          talla_id: string
+        }
+        Insert: {
+          id?: string
+          modelo_id: string
+          talla_id: string
+        }
+        Update: {
+          id?: string
+          modelo_id?: string
+          talla_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "modelo_tallas_modelo_id_fkey"
+            columns: ["modelo_id"]
+            isOneToOne: false
+            referencedRelation: "modelos"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "modelo_tallas_talla_id_fkey"
+            columns: ["talla_id"]
+            isOneToOne: false
+            referencedRelation: "tallas"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       modelos: {
         Row: {
           activo: boolean
+          costo_unitario: number | null
           created_at: string
           descripcion: string | null
           id: string
           imagen_url: string | null
           nombre: string
+          precio_venta: number | null
         }
         Insert: {
           activo?: boolean
+          costo_unitario?: number | null
           created_at?: string
           descripcion?: string | null
           id?: string
           imagen_url?: string | null
           nombre: string
+          precio_venta?: number | null
         }
         Update: {
           activo?: boolean
+          costo_unitario?: number | null
           created_at?: string
           descripcion?: string | null
           id?: string
           imagen_url?: string | null
           nombre?: string
+          precio_venta?: number | null
         }
         Relationships: []
       }
@@ -603,7 +779,6 @@ export type Database = {
           registrado_por: string | null
           talla_id: string
           tipo: Database["public"]["Enums"]["tipo_movimiento"]
-          variante_id: string | null
         }
         Insert: {
           cantidad: number
@@ -615,7 +790,6 @@ export type Database = {
           registrado_por?: string | null
           talla_id: string
           tipo: Database["public"]["Enums"]["tipo_movimiento"]
-          variante_id?: string | null
         }
         Update: {
           cantidad?: number
@@ -627,7 +801,6 @@ export type Database = {
           registrado_por?: string | null
           talla_id?: string
           tipo?: Database["public"]["Enums"]["tipo_movimiento"]
-          variante_id?: string | null
         }
         Relationships: [
           {
@@ -656,13 +829,6 @@ export type Database = {
             columns: ["talla_id"]
             isOneToOne: false
             referencedRelation: "tallas"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "movimientos_stock_producto_variante_id_fkey"
-            columns: ["variante_id"]
-            isOneToOne: false
-            referencedRelation: "variantes"
             referencedColumns: ["id"]
           },
         ]
@@ -755,7 +921,6 @@ export type Database = {
           modelo_id: string
           plantilla_id: string
           talla_id: string
-          variante_id: string | null
         }
         Insert: {
           cantidad_sugerida?: number | null
@@ -763,7 +928,6 @@ export type Database = {
           modelo_id: string
           plantilla_id: string
           talla_id: string
-          variante_id?: string | null
         }
         Update: {
           cantidad_sugerida?: number | null
@@ -771,7 +935,6 @@ export type Database = {
           modelo_id?: string
           plantilla_id?: string
           talla_id?: string
-          variante_id?: string | null
         }
         Relationships: [
           {
@@ -793,13 +956,6 @@ export type Database = {
             columns: ["talla_id"]
             isOneToOne: false
             referencedRelation: "tallas"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "plantilla_items_variante_id_fkey"
-            columns: ["variante_id"]
-            isOneToOne: false
-            referencedRelation: "variantes"
             referencedColumns: ["id"]
           },
         ]
@@ -910,21 +1066,18 @@ export type Database = {
           id: string
           modelo_id: string
           talla_id: string
-          variante_id: string | null
         }
         Insert: {
           cantidad_actual?: number
           id?: string
           modelo_id: string
           talla_id: string
-          variante_id?: string | null
         }
         Update: {
           cantidad_actual?: number
           id?: string
           modelo_id?: string
           talla_id?: string
-          variante_id?: string | null
         }
         Relationships: [
           {
@@ -939,13 +1092,6 @@ export type Database = {
             columns: ["talla_id"]
             isOneToOne: false
             referencedRelation: "tallas"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "stock_productos_variante_id_fkey"
-            columns: ["variante_id"]
-            isOneToOne: false
-            referencedRelation: "variantes"
             referencedColumns: ["id"]
           },
         ]
@@ -967,44 +1113,6 @@ export type Database = {
           orden?: number
         }
         Relationships: []
-      }
-      variantes: {
-        Row: {
-          color: string | null
-          created_at: string
-          diseno: string | null
-          id: string
-          modelo_id: string
-          sku: string | null
-          tela: string | null
-        }
-        Insert: {
-          color?: string | null
-          created_at?: string
-          diseno?: string | null
-          id?: string
-          modelo_id: string
-          sku?: string | null
-          tela?: string | null
-        }
-        Update: {
-          color?: string | null
-          created_at?: string
-          diseno?: string | null
-          id?: string
-          modelo_id?: string
-          sku?: string | null
-          tela?: string | null
-        }
-        Relationships: [
-          {
-            foreignKeyName: "variantes_modelo_id_fkey"
-            columns: ["modelo_id"]
-            isOneToOne: false
-            referencedRelation: "modelos"
-            referencedColumns: ["id"]
-          },
-        ]
       }
     }
     Views: {

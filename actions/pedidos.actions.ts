@@ -44,7 +44,6 @@ export async function crearPedido(input: PedidoInput) {
       pedido_id: pedido.id,
       modelo_id: item.modeloId,
       talla_id: item.tallaId,
-      variante_id: item.varianteId || null,
       cantidad: item.cantidad,
       precio_unitario: item.precioUnitario ?? null,
       notas: item.notas || null,

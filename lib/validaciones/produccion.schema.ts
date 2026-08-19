@@ -3,7 +3,6 @@ import { z } from "zod";
 export const itemOrdenSchema = z.object({
   modeloId: z.string().uuid("Selecciona un modelo"),
   tallaId: z.string().uuid("Selecciona una talla"),
-  varianteId: z.string().uuid().optional().nullable(),
   cantidadPlaneada: z.coerce.number().int().min(1, "Mínimo 1"),
 });
 

@@ -1,27 +1,18 @@
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
-import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table";
-import { ESTATUS_PEDIDO_LABEL } from "@/lib/labels";
-import { CLASE_ESTATUS_PEDIDO } from "@/lib/estatus-colores";
+import { PedidosTable } from "@/components/pedidos/PedidosTable";
+import { totalesPorPedido } from "@/lib/pedidos/totales";
 
 export default async function PedidosPage() {
   const supabase = await createClient();
-  const [{ data: pedidos }, { data: clientes }] = await Promise.all([
+  const [{ data: pedidos }, { data: clientes }, { data: items }] = await Promise.all([
     supabase.from("pedidos").select("*").order("created_at", { ascending: false }),
     supabase.from("clientes").select("id, nombre_comercial"),
+    supabase.from("items_pedido").select("*"),
   ]);
 
-  const nombreCliente = (id: string) =>
-    clientes?.find((c) => c.id === id)?.nombre_comercial ?? "—";
+  const totales = totalesPorPedido(items ?? []);
 
   return (
     <div className="space-y-6">
@@ -33,39 +24,7 @@ export default async function PedidosPage() {
         <Button render={<Link href="/pedidos/nuevo" />} nativeButton={false}>Nuevo pedido</Button>
       </div>
 
-      <Table>
-        <TableHeader>
-          <TableRow>
-            <TableHead>Folio</TableHead>
-            <TableHead>Cliente</TableHead>
-            <TableHead>Compromiso</TableHead>
-            <TableHead>Estatus</TableHead>
-          </TableRow>
-        </TableHeader>
-        <TableBody>
-          {pedidos?.map((pedido) => (
-            <TableRow key={pedido.id}>
-              <TableCell>
-                <Link href={`/pedidos/${pedido.id}`} className="font-medium hover:underline">
-                  {pedido.folio}
-                </Link>
-              </TableCell>
-              <TableCell>{nombreCliente(pedido.cliente_id)}</TableCell>
-              <TableCell className="text-muted-foreground">{pedido.fecha_compromiso}</TableCell>
-              <TableCell>
-                <Badge className={CLASE_ESTATUS_PEDIDO[pedido.estatus]}>{ESTATUS_PEDIDO_LABEL[pedido.estatus]}</Badge>
-              </TableCell>
-            </TableRow>
-          ))}
-          {!pedidos?.length && (
-            <TableRow>
-              <TableCell colSpan={4} className="text-center text-muted-foreground">
-                Sin pedidos todavía.
-              </TableCell>
-            </TableRow>
-          )}
-        </TableBody>
-      </Table>
+      <PedidosTable pedidos={pedidos ?? []} clientes={clientes ?? []} totales={totales} />
     </div>
   );
 }

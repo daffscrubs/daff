@@ -1,0 +1,164 @@
+"use client";
+
+import { useState, useTransition } from "react";
+import { useRouter } from "next/navigation";
+import { toast } from "sonner";
+import { crearCompra } from "@/actions/compras.actions";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
+import { ComboboxField } from "@/components/ui/combobox-field";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
+import type { Database } from "@/types/database.types";
+import type { CompraItemInput } from "@/lib/validaciones/compras.schema";
+
+type Material = Database["public"]["Tables"]["materiales"]["Row"];
+
+export function FormCompra({ materiales }: { materiales: Material[] }) {
+  const [proveedor, setProveedor] = useState("");
+  const [fecha, setFecha] = useState(() => new Date().toISOString().slice(0, 10));
+  const [notas, setNotas] = useState("");
+  const [items, setItems] = useState<CompraItemInput[]>([]);
+  const [pendiente, startTransition] = useTransition();
+  const router = useRouter();
+
+  const unidadMaterial = (id: string) => materiales.find((m) => m.id === id)?.unidad_medida ?? "";
+
+  function agregarItem() {
+    setItems((prev) => [...prev, { materialId: "", cantidad: 1, costoUnitario: 0 }]);
+  }
+
+  function actualizarItem(index: number, cambios: Partial<CompraItemInput>) {
+    setItems((prev) => prev.map((item, i) => (i === index ? { ...item, ...cambios } : item)));
+  }
+
+  function quitarItem(index: number) {
+    setItems((prev) => prev.filter((_, i) => i !== index));
+  }
+
+  const total = items.reduce((acc, i) => acc + (Number(i.cantidad) || 0) * (Number(i.costoUnitario) || 0), 0);
+
+  function enviar(e: React.FormEvent) {
+    e.preventDefault();
+    if (!items.length) {
+      toast.error("Agrega al menos un material");
+      return;
+    }
+    startTransition(async () => {
+      try {
+        await crearCompra({ proveedor, fecha, notas, items });
+        toast.success("Compra registrada, se actualizó el inventario");
+        router.push("/compras");
+      } catch (err) {
+        toast.error(err instanceof Error ? err.message : "Error al registrar la compra");
+      }
+    });
+  }
+
+  return (
+    <form className="space-y-6" onSubmit={enviar}>
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+        <div className="space-y-2">
+          <Label htmlFor="proveedor">Proveedor</Label>
+          <Input id="proveedor" value={proveedor} onChange={(e) => setProveedor(e.target.value)} required />
+        </div>
+        <div className="space-y-2">
+          <Label htmlFor="fecha">Fecha</Label>
+          <Input id="fecha" type="date" value={fecha} onChange={(e) => setFecha(e.target.value)} required />
+        </div>
+      </div>
+
+      <div className="space-y-2">
+        <Label htmlFor="notas">Notas</Label>
+        <Textarea id="notas" value={notas} onChange={(e) => setNotas(e.target.value)} />
+      </div>
+
+      <div className="space-y-3">
+        <div className="flex items-center justify-between">
+          <Label>Materiales comprados</Label>
+          <Button type="button" variant="outline" size="sm" onClick={agregarItem}>
+            Agregar material
+          </Button>
+        </div>
+
+        <Table>
+          <TableHeader>
+            <TableRow>
+              <TableHead>Material</TableHead>
+              <TableHead>Cantidad</TableHead>
+              <TableHead>Costo unitario</TableHead>
+              <TableHead>Subtotal</TableHead>
+              <TableHead />
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {items.map((item, index) => (
+              <TableRow key={index}>
+                <TableCell className="min-w-48">
+                  <ComboboxField
+                    items={materiales.map((m) => ({ value: m.id, label: `${m.nombre} (${m.unidad_medida})` }))}
+                    value={item.materialId}
+                    onValueChange={(v) => actualizarItem(index, { materialId: v })}
+                    placeholder="Buscar material..."
+                  />
+                </TableCell>
+                <TableCell>
+                  <Input
+                    type="number"
+                    min={0.01}
+                    step="0.01"
+                    className="w-24"
+                    value={item.cantidad}
+                    onChange={(e) => actualizarItem(index, { cantidad: Number(e.target.value) })}
+                  />
+                  <span className="ml-1 text-xs text-muted-foreground">{unidadMaterial(item.materialId)}</span>
+                </TableCell>
+                <TableCell>
+                  <Input
+                    type="number"
+                    min={0}
+                    step="0.01"
+                    className="w-24"
+                    value={item.costoUnitario}
+                    onChange={(e) => actualizarItem(index, { costoUnitario: Number(e.target.value) })}
+                  />
+                </TableCell>
+                <TableCell>${((Number(item.cantidad) || 0) * (Number(item.costoUnitario) || 0)).toFixed(2)}</TableCell>
+                <TableCell>
+                  <Button type="button" variant="ghost" size="sm" onClick={() => quitarItem(index)}>
+                    Quitar
+                  </Button>
+                </TableCell>
+              </TableRow>
+            ))}
+            {!items.length && (
+              <TableRow>
+                <TableCell colSpan={5} className="text-center text-muted-foreground">
+                  Agrega al menos un material.
+                </TableCell>
+              </TableRow>
+            )}
+          </TableBody>
+        </Table>
+
+        {!!items.length && (
+          <p className="text-right text-sm font-medium">
+            Total: ${total.toFixed(2)}
+          </p>
+        )}
+      </div>
+
+      <Button type="submit" disabled={pendiente}>
+        {pendiente ? "Registrando..." : "Registrar compra"}
+      </Button>
+    </form>
+  );
+}

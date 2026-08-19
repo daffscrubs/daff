@@ -3,9 +3,8 @@ import { z } from "zod";
 export const itemPedidoSchema = z.object({
   modeloId: z.string().uuid("Selecciona un modelo"),
   tallaId: z.string().uuid("Selecciona una talla"),
-  varianteId: z.string().uuid().optional().nullable(),
   cantidad: z.coerce.number().int().min(1, "Mínimo 1"),
-  precioUnitario: z.coerce.number().min(0).optional(),
+  precioUnitario: z.coerce.number().min(0.01, "El precio es obligatorio"),
   notas: z.string().optional(),
 });
 

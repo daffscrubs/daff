@@ -30,7 +30,7 @@ import type { ItemPedidoInput } from "@/lib/validaciones/pedidos.schema";
 type Cliente = Database["public"]["Tables"]["clientes"]["Row"];
 type Modelo = Database["public"]["Tables"]["modelos"]["Row"];
 type Talla = Database["public"]["Tables"]["tallas"]["Row"];
-type Variante = Database["public"]["Tables"]["variantes"]["Row"];
+type ModeloTalla = Database["public"]["Tables"]["modelo_tallas"]["Row"];
 type Plantilla = Database["public"]["Tables"]["plantillas_pedido"]["Row"];
 type PlantillaItem = Database["public"]["Tables"]["plantilla_items"]["Row"];
 
@@ -38,14 +38,14 @@ export function FormPedido({
   clientes,
   modelos,
   tallas,
-  variantes,
+  modeloTallas,
   plantillas,
   plantillaItems,
 }: {
   clientes: Cliente[];
   modelos: Modelo[];
   tallas: Talla[];
-  variantes: Variante[];
+  modeloTallas: ModeloTalla[];
   plantillas: Plantilla[];
   plantillaItems: PlantillaItem[];
 }) {
@@ -56,8 +56,14 @@ export function FormPedido({
   const [pendiente, startTransition] = useTransition();
   const router = useRouter();
 
+  function tallasDeModelo(modeloId: string) {
+    const asignadas = modeloTallas.filter((mt) => mt.modelo_id === modeloId).map((mt) => mt.talla_id);
+    if (!asignadas.length) return tallas;
+    return tallas.filter((t) => asignadas.includes(t.id));
+  }
+
   function agregarItem() {
-    setItems((prev) => [...prev, { modeloId: "", tallaId: "", varianteId: null, cantidad: 1 }]);
+    setItems((prev) => [...prev, { modeloId: "", tallaId: "", cantidad: 1, precioUnitario: 0 }]);
   }
 
   function actualizarItem(index: number, cambios: Partial<ItemPedidoInput>) {
@@ -74,16 +80,12 @@ export function FormPedido({
       itemsPlantilla.map((pi) => ({
         modeloId: pi.modelo_id,
         tallaId: pi.talla_id,
-        varianteId: pi.variante_id,
         cantidad: pi.cantidad_sugerida ?? 1,
+        precioUnitario: 0,
       }))
     );
     const plantilla = plantillas.find((p) => p.id === plantillaId);
     if (plantilla?.cliente_id) setClienteId(plantilla.cliente_id);
-  }
-
-  function variantesDe(modeloId: string) {
-    return variantes.filter((v) => v.modelo_id === modeloId);
   }
 
   function enviar(e: React.FormEvent) {
@@ -94,6 +96,10 @@ export function FormPedido({
     }
     if (!items.length) {
       toast.error("Agrega al menos un producto");
+      return;
+    }
+    if (items.some((item) => !item.precioUnitario || item.precioUnitario <= 0)) {
+      toast.error("Todos los productos deben tener un precio unitario");
       return;
     }
     startTransition(async () => {
@@ -176,9 +182,8 @@ export function FormPedido({
             <TableRow>
               <TableHead>Modelo</TableHead>
               <TableHead>Talla</TableHead>
-              <TableHead>Variante</TableHead>
               <TableHead>Cantidad</TableHead>
-              <TableHead>Precio unit.</TableHead>
+              <TableHead>Precio unit. *</TableHead>
               <TableHead />
             </TableRow>
           </TableHeader>
@@ -190,43 +195,23 @@ export function FormPedido({
                     className="w-40"
                     items={modelos.map((m) => ({ value: m.id, label: m.nombre }))}
                     value={item.modeloId}
-                    onValueChange={(v) => actualizarItem(index, { modeloId: v, varianteId: null })}
+                    onValueChange={(v) => actualizarItem(index, { modeloId: v, tallaId: "" })}
                     placeholder="Buscar modelo..."
                   />
                 </TableCell>
                 <TableCell>
                   <Select
-                    items={tallas.map((t) => ({ value: t.id, label: t.codigo }))}
+                    items={tallasDeModelo(item.modeloId).map((t) => ({ value: t.id, label: t.codigo }))}
                     value={item.tallaId}
                     onValueChange={(v) => actualizarItem(index, { tallaId: v ?? "" })}
+                    disabled={!item.modeloId}
                   >
                     <SelectTrigger className="w-24">
                       <SelectValue placeholder="Talla" />
                     </SelectTrigger>
                     <SelectContent>
-                      {tallas.map((t) => (
+                      {tallasDeModelo(item.modeloId).map((t) => (
                         <SelectItem key={t.id} value={t.id}>{t.codigo}</SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </TableCell>
-                <TableCell>
-                  <Select
-                    items={variantesDe(item.modeloId).map((v) => ({
-                      value: v.id,
-                      label: [v.color, v.tela, v.diseno].filter(Boolean).join(" / ") || v.sku || "Variante",
-                    }))}
-                    value={item.varianteId ?? ""}
-                    onValueChange={(v) => actualizarItem(index, { varianteId: v || null })}
-                  >
-                    <SelectTrigger className="w-36">
-                      <SelectValue placeholder="Sin variante" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {variantesDe(item.modeloId).map((v) => (
-                        <SelectItem key={v.id} value={v.id}>
-                          {[v.color, v.tela, v.diseno].filter(Boolean).join(" / ") || v.sku || "Variante"}
-                        </SelectItem>
                       ))}
                     </SelectContent>
                   </Select>
@@ -243,15 +228,16 @@ export function FormPedido({
                 <TableCell>
                   <Input
                     type="number"
-                    min={0}
+                    min={0.01}
                     step="0.01"
                     className="w-24"
-                    value={item.precioUnitario ?? ""}
+                    value={item.precioUnitario || ""}
                     onChange={(e) =>
                       actualizarItem(index, {
-                        precioUnitario: e.target.value ? Number(e.target.value) : undefined,
+                        precioUnitario: e.target.value ? Number(e.target.value) : 0,
                       })
                     }
+                    required
                   />
                 </TableCell>
                 <TableCell>
@@ -263,7 +249,7 @@ export function FormPedido({
             ))}
             {!items.length && (
               <TableRow>
-                <TableCell colSpan={6} className="text-center text-muted-foreground">
+                <TableCell colSpan={5} className="text-center text-muted-foreground">
                   Agrega al menos un producto.
                 </TableCell>
               </TableRow>

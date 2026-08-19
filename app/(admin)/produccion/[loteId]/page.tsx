@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
+import { Download } from "lucide-react";
 import { createClient } from "@/lib/supabase/server";
 import { requerirPerfil } from "@/lib/supabase/auth-helpers";
 import { TimelineEtapasLote } from "@/components/produccion/TimelineEtapasLote";
@@ -100,6 +101,15 @@ export default async function LoteDetallePage({
         </div>
         <div className="flex items-center gap-2">
           <Badge className={CLASE_ESTATUS_ORDEN[lote.estatus]}>{ESTATUS_ORDEN_LABEL[lote.estatus]}</Badge>
+          <Button
+            variant="outline"
+            size="sm"
+            render={<a href={`/api/pdf/produccion/${loteId}`} target="_blank" rel="noopener noreferrer" />}
+            nativeButton={false}
+          >
+            <Download className="size-4" />
+            Descargar PDF
+          </Button>
           {puedeGestionar && (
             <Button variant="outline" size="sm" render={<Link href={`/produccion/${loteId}/etapas`} />} nativeButton={false}>
               Configurar procesos

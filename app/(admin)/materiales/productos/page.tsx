@@ -13,15 +13,11 @@ import {
 export default async function ProductosTerminadosPage() {
   const supabase = await createClient();
 
-  const [{ data: stock }, { data: modelos }, { data: tallas }, { data: variantes }] = await Promise.all([
-    supabase.from("stock_productos").select("*, modelos(nombre), tallas(codigo), variantes(color, tela, diseno, sku)"),
+  const [{ data: stock }, { data: modelos }, { data: tallas }] = await Promise.all([
+    supabase.from("stock_productos").select("*, modelos(nombre), tallas(codigo)"),
     supabase.from("modelos").select("*").eq("activo", true).order("nombre"),
     supabase.from("tallas").select("*").order("orden"),
-    supabase.from("variantes").select("*"),
   ]);
-
-  const etiquetaVariante = (v: { color: string | null; tela: string | null; diseno: string | null; sku: string | null } | null) =>
-    v ? [v.color, v.tela, v.diseno].filter(Boolean).join(" / ") || v.sku || "Variante" : "—";
 
   return (
     <div className="space-y-6">
@@ -30,7 +26,7 @@ export default async function ProductosTerminadosPage() {
           <h1 className="text-2xl font-semibold">Productos terminados</h1>
           <p className="text-muted-foreground">Inventario de prendas ya producidas, listas en bodega.</p>
         </div>
-        <NuevoMovimientoStockDialog modelos={modelos ?? []} tallas={tallas ?? []} variantes={variantes ?? []} />
+        <NuevoMovimientoStockDialog modelos={modelos ?? []} tallas={tallas ?? []} />
       </div>
 
       <Table>
@@ -38,7 +34,6 @@ export default async function ProductosTerminadosPage() {
           <TableRow>
             <TableHead>Modelo</TableHead>
             <TableHead>Talla</TableHead>
-            <TableHead>Variante</TableHead>
             <TableHead>Stock</TableHead>
           </TableRow>
         </TableHeader>
@@ -51,13 +46,12 @@ export default async function ProductosTerminadosPage() {
                 </Link>
               </TableCell>
               <TableCell>{s.tallas?.codigo ?? "—"}</TableCell>
-              <TableCell className="text-muted-foreground">{etiquetaVariante(s.variantes)}</TableCell>
               <TableCell>{s.cantidad_actual}</TableCell>
             </TableRow>
           ))}
           {!stock?.length && (
             <TableRow>
-              <TableCell colSpan={4} className="text-center text-muted-foreground">
+              <TableCell colSpan={3} className="text-center text-muted-foreground">
                 Sin stock de productos todavía. Se genera automáticamente al completar una orden de producción, o puedes registrar uno manual.
               </TableCell>
             </TableRow>

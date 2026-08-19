@@ -25,21 +25,17 @@ import type { Database, TipoMovimiento } from "@/types/database.types";
 
 type Modelo = Database["public"]["Tables"]["modelos"]["Row"];
 type Talla = Database["public"]["Tables"]["tallas"]["Row"];
-type Variante = Database["public"]["Tables"]["variantes"]["Row"];
 
 export function NuevoMovimientoStockDialog({
   modelos,
   tallas,
-  variantes,
 }: {
   modelos: Modelo[];
   tallas: Talla[];
-  variantes: Variante[];
 }) {
   const [abierto, setAbierto] = useState(false);
   const [modeloId, setModeloId] = useState("");
   const [tallaId, setTallaId] = useState("");
-  const [varianteId, setVarianteId] = useState("");
   const [tipo, setTipo] = useState<TipoMovimiento>("entrada");
   const [cantidad, setCantidad] = useState("");
   const [motivo, setMotivo] = useState("");
@@ -57,7 +53,6 @@ export function NuevoMovimientoStockDialog({
         await crearMovimientoStockProducto({
           modeloId,
           tallaId,
-          varianteId: varianteId || null,
           tipo,
           cantidad: Number(cantidad),
           motivo,
@@ -65,7 +60,6 @@ export function NuevoMovimientoStockDialog({
         toast.success("Movimiento registrado");
         setModeloId("");
         setTallaId("");
-        setVarianteId("");
         setCantidad("");
         setMotivo("");
         setAbierto(false);
@@ -89,7 +83,7 @@ export function NuevoMovimientoStockDialog({
             <Select
               items={modelos.map((m) => ({ value: m.id, label: m.nombre }))}
               value={modeloId}
-              onValueChange={(v) => { setModeloId(v ?? ""); setVarianteId(""); }}
+              onValueChange={(v) => setModeloId(v ?? "")}
             >
               <SelectTrigger className="w-full">
                 <SelectValue placeholder="Selecciona un modelo" />
@@ -114,30 +108,6 @@ export function NuevoMovimientoStockDialog({
               <SelectContent>
                 {tallas.map((t) => (
                   <SelectItem key={t.id} value={t.id}>{t.codigo}</SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
-          <div className="space-y-2">
-            <Label>Variante (opcional)</Label>
-            <Select
-              items={variantes
-                .filter((v) => v.modelo_id === modeloId)
-                .map((v) => ({
-                  value: v.id,
-                  label: [v.color, v.tela, v.diseno].filter(Boolean).join(" / ") || v.sku || "Variante",
-                }))}
-              value={varianteId}
-              onValueChange={(v) => setVarianteId(v ?? "")}
-            >
-              <SelectTrigger className="w-full">
-                <SelectValue placeholder="Sin variante" />
-              </SelectTrigger>
-              <SelectContent>
-                {variantes.filter((v) => v.modelo_id === modeloId).map((v) => (
-                  <SelectItem key={v.id} value={v.id}>
-                    {[v.color, v.tela, v.diseno].filter(Boolean).join(" / ") || v.sku || "Variante"}
-                  </SelectItem>
                 ))}
               </SelectContent>
             </Select>

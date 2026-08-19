@@ -1,15 +1,17 @@
 import Link from "next/link";
 import { PackageSearch } from "lucide-react";
 import { createClient } from "@/lib/supabase/server";
+import { requerirPerfil } from "@/lib/supabase/auth-helpers";
 import { calcularDisponiblePorEtapa } from "@/lib/produccion/avance";
 import { visualEtapa } from "@/lib/produccion/etapa-visual";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 
 export default async function MiDiaPage() {
+  const perfil = await requerirPerfil();
   const supabase = await createClient();
 
-  const [{ data: lotes }, { data: items }, { data: loteEtapas }, { data: etapasCatalogo }, { data: modelos }, { data: tallas }] =
+  const [{ data: lotes }, { data: items }, { data: loteEtapas }, { data: etapasCatalogo }, { data: modelos }, { data: tallas }, { data: funciones }] =
     await Promise.all([
       supabase.from("lotes_produccion").select("*").in("estatus", ["planeada", "en_proceso"]),
       supabase.from("items_orden_produccion").select("*"),
@@ -17,8 +19,10 @@ export default async function MiDiaPage() {
       supabase.from("etapas_proceso").select("*"),
       supabase.from("modelos").select("id, nombre"),
       supabase.from("tallas").select("id, codigo"),
+      supabase.from("colaborador_etapas").select("etapa_id").eq("perfil_id", perfil.id),
     ]);
 
+  const etapasPermitidas = (funciones ?? []).map((f) => f.etapa_id);
   const nombreEtapa = (id: string) => etapasCatalogo?.find((e) => e.id === id)?.nombre ?? "—";
   const loteDe = (loteId: string) => lotes?.find((l) => l.id === loteId);
 
@@ -31,6 +35,7 @@ export default async function MiDiaPage() {
     const conDisponible = calcularDisponiblePorEtapa(etapasDelItem, item.cantidad_planeada);
     return conDisponible
       .filter((e) => e.disponible > 0)
+      .filter((e) => !etapasPermitidas.length || etapasPermitidas.includes(e.etapa_id))
       .map((e) => ({ lote, item, etapa: e }));
   });
 

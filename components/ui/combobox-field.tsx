@@ -31,18 +31,21 @@ export function ComboboxField({
   className?: string;
   disabled?: boolean;
 }) {
+  const selected = items.find((item) => item.value === value) ?? null;
+
   return (
     <Combobox
       items={items}
-      value={value || null}
-      onValueChange={(v) => onValueChange((v as string | null) ?? "")}
+      value={selected}
+      onValueChange={(v) => onValueChange((v as ComboboxFieldItem | null)?.value ?? "")}
+      isItemEqualToValue={(a: ComboboxFieldItem, b: ComboboxFieldItem) => a.value === b.value}
       disabled={disabled}
     >
       <ComboboxInput placeholder={placeholder} className={className} showClear />
       <ComboboxContent>
         <ComboboxList>
           {(item: ComboboxFieldItem) => (
-            <ComboboxItem key={item.value} value={item.value}>
+            <ComboboxItem key={item.value} value={item}>
               {item.label}
             </ComboboxItem>
           )}

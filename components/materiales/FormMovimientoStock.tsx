@@ -19,11 +19,9 @@ import type { TipoMovimiento } from "@/types/database.types";
 export function FormMovimientoStock({
   modeloId,
   tallaId,
-  varianteId,
 }: {
   modeloId: string;
   tallaId: string;
-  varianteId: string | null;
 }) {
   const [tipo, setTipo] = useState<TipoMovimiento>("entrada");
   const [cantidad, setCantidad] = useState("");
@@ -38,7 +36,6 @@ export function FormMovimientoStock({
         await crearMovimientoStockProducto({
           modeloId,
           tallaId,
-          varianteId,
           tipo,
           cantidad: Number(cantidad),
           motivo,

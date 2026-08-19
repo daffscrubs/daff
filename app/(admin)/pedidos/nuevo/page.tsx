@@ -8,14 +8,14 @@ export default async function NuevoPedidoPage() {
     { data: clientes },
     { data: modelos },
     { data: tallas },
-    { data: variantes },
+    { data: modeloTallas },
     { data: plantillas },
     { data: plantillaItems },
   ] = await Promise.all([
     supabase.from("clientes").select("*").order("nombre_comercial"),
     supabase.from("modelos").select("*").eq("activo", true).order("nombre"),
     supabase.from("tallas").select("*").order("orden"),
-    supabase.from("variantes").select("*"),
+    supabase.from("modelo_tallas").select("*"),
     supabase.from("plantillas_pedido").select("*").order("nombre"),
     supabase.from("plantilla_items").select("*"),
   ]);
@@ -30,7 +30,7 @@ export default async function NuevoPedidoPage() {
         clientes={clientes ?? []}
         modelos={modelos ?? []}
         tallas={tallas ?? []}
-        variantes={variantes ?? []}
+        modeloTallas={modeloTallas ?? []}
         plantillas={plantillas ?? []}
         plantillaItems={plantillaItems ?? []}
       />

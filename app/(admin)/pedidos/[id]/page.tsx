@@ -1,7 +1,9 @@
 import { notFound } from "next/navigation";
 import Link from "next/link";
+import { Download } from "lucide-react";
 import { createClient } from "@/lib/supabase/server";
 import { EstatusPedidoSelect } from "@/components/pedidos/EstatusPedidoSelect";
+import { Button } from "@/components/ui/button";
 import {
   Table,
   TableBody,
@@ -19,13 +21,12 @@ export default async function PedidoDetallePage({
   const { id } = await params;
   const supabase = await createClient();
 
-  const [{ data: pedido }, { data: items }, { data: modelos }, { data: tallas }, { data: variantes }] =
+  const [{ data: pedido }, { data: items }, { data: modelos }, { data: tallas }] =
     await Promise.all([
       supabase.from("pedidos").select("*, clientes(nombre_comercial)").eq("id", id).single(),
       supabase.from("items_pedido").select("*").eq("pedido_id", id),
       supabase.from("modelos").select("*"),
       supabase.from("tallas").select("*"),
-      supabase.from("variantes").select("*"),
     ]);
 
   if (!pedido) notFound();
@@ -47,7 +48,18 @@ export default async function PedidoDetallePage({
             {" · "}Compromiso: {pedido.fecha_compromiso}
           </p>
         </div>
-        <EstatusPedidoSelect id={id} estatus={pedido.estatus} />
+        <div className="flex items-center gap-2">
+          <Button
+            variant="outline"
+            size="sm"
+            render={<a href={`/api/pdf/pedidos/${id}`} target="_blank" rel="noopener noreferrer" />}
+            nativeButton={false}
+          >
+            <Download className="size-4" />
+            Descargar PDF
+          </Button>
+          <EstatusPedidoSelect id={id} estatus={pedido.estatus} />
+        </div>
       </div>
 
       {pedido.notas && <p className="text-sm text-muted-foreground">{pedido.notas}</p>}
@@ -59,9 +71,9 @@ export default async function PedidoDetallePage({
             <TableRow>
               <TableHead>Modelo</TableHead>
               <TableHead>Talla</TableHead>
-              <TableHead>Variante</TableHead>
               <TableHead>Cantidad</TableHead>
               <TableHead>Precio unit.</TableHead>
+              <TableHead>Subtotal</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
@@ -69,17 +81,21 @@ export default async function PedidoDetallePage({
               <TableRow key={item.id}>
                 <TableCell>{nombre(item.modelo_id, modelos ?? [])}</TableCell>
                 <TableCell>{nombre(item.talla_id, tallas ?? [])}</TableCell>
-                <TableCell>
-                  {item.variante_id
-                    ? (variantes ?? []).find((v) => v.id === item.variante_id)?.color ?? "—"
-                    : "—"}
-                </TableCell>
                 <TableCell>{item.cantidad}</TableCell>
-                <TableCell>{item.precio_unitario ?? "—"}</TableCell>
+                <TableCell>{item.precio_unitario != null ? `$${item.precio_unitario.toFixed(2)}` : "—"}</TableCell>
+                <TableCell>
+                  {item.precio_unitario != null ? `$${(item.cantidad * item.precio_unitario).toFixed(2)}` : "—"}
+                </TableCell>
               </TableRow>
             ))}
           </TableBody>
         </Table>
+        {!!items?.some((i) => i.precio_unitario != null) && (
+          <p className="mt-2 text-right text-sm font-medium">
+            Total: $
+            {items!.reduce((acc, i) => acc + i.cantidad * (i.precio_unitario ?? 0), 0).toFixed(2)}
+          </p>
+        )}
       </div>
     </div>
   );

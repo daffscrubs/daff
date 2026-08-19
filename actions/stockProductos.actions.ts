@@ -16,7 +16,6 @@ export async function crearMovimientoStockProducto(input: MovimientoStockProduct
   const { error } = await supabase.from("movimientos_stock_producto").insert({
     modelo_id: datos.modeloId,
     talla_id: datos.tallaId,
-    variante_id: datos.varianteId || null,
     tipo: datos.tipo,
     cantidad: datos.tipo === "ajuste" ? datos.cantidad : Math.abs(datos.cantidad),
     motivo: datos.motivo || null,

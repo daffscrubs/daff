@@ -9,13 +9,11 @@ import {
   plantillaItemSchema,
   plantillaSchema,
   tallaSchema,
-  varianteSchema,
   type EtapaInput,
   type ModeloInput,
   type PlantillaInput,
   type PlantillaItemInput,
   type TallaInput,
-  type VarianteInput,
 } from "@/lib/validaciones/catalogos.schema";
 
 // ---------- Modelos ----------
@@ -23,11 +21,53 @@ export async function crearModelo(input: ModeloInput) {
   await requerirPerfil(["admin", "supervisor"]);
   const datos = modeloSchema.parse(input);
   const supabase = await createClient();
-  const { error } = await supabase.from("modelos").insert({
-    nombre: datos.nombre,
-    descripcion: datos.descripcion || null,
-  });
+  const { data: modelo, error } = await supabase
+    .from("modelos")
+    .insert({
+      nombre: datos.nombre,
+      descripcion: datos.descripcion || null,
+      costo_unitario: datos.costoUnitario ?? null,
+      precio_venta: datos.precioVenta ?? null,
+    })
+    .select("id")
+    .single();
   if (error) throw new Error(error.message);
+
+  if (datos.tallaIds?.length) {
+    const { error: errorTallas } = await supabase
+      .from("modelo_tallas")
+      .insert(datos.tallaIds.map((tallaId) => ({ modelo_id: modelo.id, talla_id: tallaId })));
+    if (errorTallas) throw new Error(errorTallas.message);
+  }
+
+  revalidatePath("/catalogos/modelos");
+}
+
+export async function actualizarCostoModelo(id: string, costoUnitario: number, precioVenta: number) {
+  await requerirPerfil(["admin", "supervisor"]);
+  const supabase = await createClient();
+  const { error } = await supabase
+    .from("modelos")
+    .update({ costo_unitario: costoUnitario, precio_venta: precioVenta })
+    .eq("id", id);
+  if (error) throw new Error(error.message);
+  revalidatePath("/catalogos/modelos");
+}
+
+export async function guardarTallasModelo(modeloId: string, tallaIds: string[]) {
+  await requerirPerfil(["admin", "supervisor"]);
+  const supabase = await createClient();
+
+  const { error: errorEliminar } = await supabase.from("modelo_tallas").delete().eq("modelo_id", modeloId);
+  if (errorEliminar) throw new Error(errorEliminar.message);
+
+  if (tallaIds.length) {
+    const { error: errorInsertar } = await supabase
+      .from("modelo_tallas")
+      .insert(tallaIds.map((tallaId) => ({ modelo_id: modeloId, talla_id: tallaId })));
+    if (errorInsertar) throw new Error(errorInsertar.message);
+  }
+
   revalidatePath("/catalogos/modelos");
 }
 
@@ -55,30 +95,6 @@ export async function eliminarTalla(id: string) {
   const { error } = await supabase.from("tallas").delete().eq("id", id);
   if (error) throw new Error("No se puede eliminar: la talla ya está en uso.");
   revalidatePath("/catalogos/tallas");
-}
-
-// ---------- Variantes ----------
-export async function crearVariante(input: VarianteInput) {
-  await requerirPerfil(["admin", "supervisor"]);
-  const datos = varianteSchema.parse(input);
-  const supabase = await createClient();
-  const { error } = await supabase.from("variantes").insert({
-    modelo_id: datos.modeloId,
-    color: datos.color || null,
-    tela: datos.tela || null,
-    diseno: datos.diseno || null,
-    sku: datos.sku || null,
-  });
-  if (error) throw new Error(error.message);
-  revalidatePath("/catalogos/variantes");
-}
-
-export async function eliminarVariante(id: string) {
-  await requerirPerfil(["admin", "supervisor"]);
-  const supabase = await createClient();
-  const { error } = await supabase.from("variantes").delete().eq("id", id);
-  if (error) throw new Error("No se puede eliminar: la variante ya está en uso.");
-  revalidatePath("/catalogos/variantes");
 }
 
 // ---------- Etapas de proceso ----------
@@ -133,7 +149,6 @@ export async function agregarPlantillaItem(input: PlantillaItemInput) {
     plantilla_id: datos.plantillaId,
     modelo_id: datos.modeloId,
     talla_id: datos.tallaId,
-    variante_id: datos.varianteId ?? null,
     cantidad_sugerida: datos.cantidadSugerida ?? null,
   });
   if (error) throw new Error(error.message);

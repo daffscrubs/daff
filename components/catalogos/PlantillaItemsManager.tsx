@@ -28,24 +28,23 @@ import type { Database } from "@/types/database.types";
 type PlantillaItem = Database["public"]["Tables"]["plantilla_items"]["Row"];
 type Modelo = Database["public"]["Tables"]["modelos"]["Row"];
 type Talla = Database["public"]["Tables"]["tallas"]["Row"];
-type Variante = Database["public"]["Tables"]["variantes"]["Row"];
+type ModeloTalla = Database["public"]["Tables"]["modelo_tallas"]["Row"];
 
 export function PlantillaItemsManager({
   plantillaId,
   items,
   modelos,
   tallas,
-  variantes,
+  modeloTallas,
 }: {
   plantillaId: string;
   items: PlantillaItem[];
   modelos: Modelo[];
   tallas: Talla[];
-  variantes: Variante[];
+  modeloTallas: ModeloTalla[];
 }) {
   const [modeloId, setModeloId] = useState("");
   const [tallaId, setTallaId] = useState("");
-  const [varianteId, setVarianteId] = useState("");
   const [cantidad, setCantidad] = useState("");
   const [pendiente, startTransition] = useTransition();
   const router = useRouter();
@@ -53,7 +52,11 @@ export function PlantillaItemsManager({
   const nombre = (id: string, lista: { id: string; nombre?: string; codigo?: string }[]) =>
     lista.find((x) => x.id === id)?.nombre ?? lista.find((x) => x.id === id)?.codigo ?? "—";
 
-  const variantesDelModelo = variantes.filter((v) => v.modelo_id === modeloId);
+  const tallasDisponibles = (() => {
+    const asignadas = modeloTallas.filter((mt) => mt.modelo_id === modeloId).map((mt) => mt.talla_id);
+    if (!asignadas.length) return tallas;
+    return tallas.filter((t) => asignadas.includes(t.id));
+  })();
 
   function agregar(e: React.FormEvent) {
     e.preventDefault();
@@ -67,13 +70,11 @@ export function PlantillaItemsManager({
           plantillaId,
           modeloId,
           tallaId,
-          varianteId: varianteId || null,
           cantidadSugerida: cantidad ? Number(cantidad) : undefined,
         });
         toast.success("Ítem agregado");
         setModeloId("");
         setTallaId("");
-        setVarianteId("");
         setCantidad("");
         router.refresh();
       } catch (err) {
@@ -95,51 +96,30 @@ export function PlantillaItemsManager({
 
   return (
     <div className="space-y-6">
-      <form onSubmit={agregar} className="grid grid-cols-1 gap-4 rounded-lg border p-4 sm:grid-cols-5 sm:items-end">
+      <form onSubmit={agregar} className="grid grid-cols-1 gap-4 rounded-lg border p-4 sm:grid-cols-4 sm:items-end">
         <div className="space-y-2">
           <Label>Modelo</Label>
           <ComboboxField
             items={modelos.map((m) => ({ value: m.id, label: m.nombre }))}
             value={modeloId}
-            onValueChange={(v) => { setModeloId(v); setVarianteId(""); }}
+            onValueChange={(v) => { setModeloId(v); setTallaId(""); }}
             placeholder="Buscar modelo..."
           />
         </div>
         <div className="space-y-2">
           <Label>Talla</Label>
           <Select
-            items={tallas.map((t) => ({ value: t.id, label: t.codigo }))}
+            items={tallasDisponibles.map((t) => ({ value: t.id, label: t.codigo }))}
             value={tallaId}
             onValueChange={(v) => setTallaId(v ?? "")}
+            disabled={!modeloId}
           >
             <SelectTrigger className="w-full">
               <SelectValue placeholder="Talla" />
             </SelectTrigger>
             <SelectContent>
-              {tallas.map((t) => (
+              {tallasDisponibles.map((t) => (
                 <SelectItem key={t.id} value={t.id}>{t.codigo}</SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        </div>
-        <div className="space-y-2">
-          <Label>Variante (opcional)</Label>
-          <Select
-            items={variantesDelModelo.map((v) => ({
-              value: v.id,
-              label: [v.color, v.tela, v.diseno].filter(Boolean).join(" / ") || v.sku || "Variante",
-            }))}
-            value={varianteId}
-            onValueChange={(v) => setVarianteId(v ?? "")}
-          >
-            <SelectTrigger className="w-full">
-              <SelectValue placeholder="Sin variante" />
-            </SelectTrigger>
-            <SelectContent>
-              {variantesDelModelo.map((v) => (
-                <SelectItem key={v.id} value={v.id}>
-                  {[v.color, v.tela, v.diseno].filter(Boolean).join(" / ") || v.sku || "Variante"}
-                </SelectItem>
               ))}
             </SelectContent>
           </Select>
@@ -158,7 +138,6 @@ export function PlantillaItemsManager({
           <TableRow>
             <TableHead>Modelo</TableHead>
             <TableHead>Talla</TableHead>
-            <TableHead>Variante</TableHead>
             <TableHead>Cantidad sugerida</TableHead>
             <TableHead />
           </TableRow>
@@ -168,11 +147,6 @@ export function PlantillaItemsManager({
             <TableRow key={item.id}>
               <TableCell>{nombre(item.modelo_id, modelos)}</TableCell>
               <TableCell>{nombre(item.talla_id, tallas)}</TableCell>
-              <TableCell>
-                {item.variante_id
-                  ? variantes.find((v) => v.id === item.variante_id)?.color ?? "—"
-                  : "—"}
-              </TableCell>
               <TableCell>{item.cantidad_sugerida ?? "—"}</TableCell>
               <TableCell className="text-right">
                 <Button variant="ghost" size="sm" disabled={pendiente} onClick={() => eliminar(item.id)}>
@@ -183,7 +157,7 @@ export function PlantillaItemsManager({
           ))}
           {!items.length && (
             <TableRow>
-              <TableCell colSpan={5} className="text-center text-muted-foreground">
+              <TableCell colSpan={4} className="text-center text-muted-foreground">
                 Sin ítems todavía.
               </TableCell>
             </TableRow>

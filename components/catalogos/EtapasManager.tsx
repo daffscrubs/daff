@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import { alternarEtapaActiva, crearEtapa } from "@/actions/catalogos.actions";
 import { Button } from "@/components/ui/button";
+import { BotonEliminarActivo } from "@/components/forms/BotonEliminarActivo";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
@@ -47,17 +48,6 @@ export function EtapasManager({ etapas, esAdmin }: { etapas: Etapa[]; esAdmin: b
         router.refresh();
       } catch (err) {
         toast.error(err instanceof Error ? err.message : "Error al crear la etapa");
-      }
-    });
-  }
-
-  function alternar(id: string, activo: boolean) {
-    startTransition(async () => {
-      try {
-        await alternarEtapaActiva(id, !activo);
-        router.refresh();
-      } catch (err) {
-        toast.error(err instanceof Error ? err.message : "Error al actualizar");
       }
     });
   }
@@ -111,9 +101,11 @@ export function EtapasManager({ etapas, esAdmin }: { etapas: Etapa[]; esAdmin: b
               </TableCell>
               {esAdmin && (
                 <TableCell className="text-right">
-                  <Button variant="ghost" size="sm" disabled={pendiente} onClick={() => alternar(etapa.id, etapa.activo)}>
-                    {etapa.activo ? "Desactivar" : "Activar"}
-                  </Button>
+                  <BotonEliminarActivo
+                    activo={etapa.activo}
+                    entidad="etapa"
+                    onCambiarEstado={(nuevoEstado) => alternarEtapaActiva(etapa.id, nuevoEstado)}
+                  />
                 </TableCell>
               )}
             </TableRow>

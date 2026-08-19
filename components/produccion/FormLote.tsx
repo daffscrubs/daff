@@ -30,7 +30,7 @@ type Pedido = Database["public"]["Tables"]["pedidos"]["Row"];
 type ItemPedido = Database["public"]["Tables"]["items_pedido"]["Row"];
 type Modelo = Database["public"]["Tables"]["modelos"]["Row"];
 type Talla = Database["public"]["Tables"]["tallas"]["Row"];
-type Variante = Database["public"]["Tables"]["variantes"]["Row"];
+type ModeloTalla = Database["public"]["Tables"]["modelo_tallas"]["Row"];
 type Material = Database["public"]["Tables"]["materiales"]["Row"];
 
 export function FormLote({
@@ -39,7 +39,7 @@ export function FormLote({
   itemsPedido,
   modelos,
   tallas,
-  variantes,
+  modeloTallas,
   materiales,
 }: {
   folioSugerido: string;
@@ -47,7 +47,7 @@ export function FormLote({
   itemsPedido: ItemPedido[];
   modelos: Modelo[];
   tallas: Talla[];
-  variantes: Variante[];
+  modeloTallas: ModeloTalla[];
   materiales: Material[];
 }) {
   const [folio, setFolio] = useState(folioSugerido);
@@ -60,8 +60,14 @@ export function FormLote({
 
   const itemsDelPedido = itemsPedido.filter((i) => i.pedido_id === pedidoId);
 
+  function tallasDeModelo(modeloId: string) {
+    const asignadas = modeloTallas.filter((mt) => mt.modelo_id === modeloId).map((mt) => mt.talla_id);
+    if (!asignadas.length) return tallas;
+    return tallas.filter((t) => asignadas.includes(t.id));
+  }
+
   function agregarItem() {
-    setItems((prev) => [...prev, { modeloId: "", tallaId: "", varianteId: null, cantidadPlaneada: 1 }]);
+    setItems((prev) => [...prev, { modeloId: "", tallaId: "", cantidadPlaneada: 1 }]);
   }
 
   function actualizarItem(index: number, cambios: Partial<ItemOrdenInput>) {
@@ -93,14 +99,9 @@ export function FormLote({
       itemsDelPedido.map((ip) => ({
         modeloId: ip.modelo_id,
         tallaId: ip.talla_id,
-        varianteId: ip.variante_id,
         cantidadPlaneada: ip.cantidad,
       }))
     );
-  }
-
-  function variantesDe(modeloId: string) {
-    return variantes.filter((v) => v.modelo_id === modeloId);
   }
 
   function enviar(e: React.FormEvent) {
@@ -182,7 +183,6 @@ export function FormLote({
             <TableRow>
               <TableHead>Modelo</TableHead>
               <TableHead>Talla</TableHead>
-              <TableHead>Variante</TableHead>
               <TableHead>Cantidad</TableHead>
               <TableHead />
             </TableRow>
@@ -195,43 +195,23 @@ export function FormLote({
                     className="w-40"
                     items={modelos.map((m) => ({ value: m.id, label: m.nombre }))}
                     value={item.modeloId}
-                    onValueChange={(v) => actualizarItem(index, { modeloId: v, varianteId: null })}
+                    onValueChange={(v) => actualizarItem(index, { modeloId: v, tallaId: "" })}
                     placeholder="Buscar modelo..."
                   />
                 </TableCell>
                 <TableCell>
                   <Select
-                    items={tallas.map((t) => ({ value: t.id, label: t.codigo }))}
+                    items={tallasDeModelo(item.modeloId).map((t) => ({ value: t.id, label: t.codigo }))}
                     value={item.tallaId}
                     onValueChange={(v) => actualizarItem(index, { tallaId: v ?? "" })}
+                    disabled={!item.modeloId}
                   >
                     <SelectTrigger className="w-24">
                       <SelectValue placeholder="Talla" />
                     </SelectTrigger>
                     <SelectContent>
-                      {tallas.map((t) => (
+                      {tallasDeModelo(item.modeloId).map((t) => (
                         <SelectItem key={t.id} value={t.id}>{t.codigo}</SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </TableCell>
-                <TableCell>
-                  <Select
-                    items={variantesDe(item.modeloId).map((v) => ({
-                      value: v.id,
-                      label: [v.color, v.tela, v.diseno].filter(Boolean).join(" / ") || v.sku || "Variante",
-                    }))}
-                    value={item.varianteId ?? ""}
-                    onValueChange={(v) => actualizarItem(index, { varianteId: v || null })}
-                  >
-                    <SelectTrigger className="w-36">
-                      <SelectValue placeholder="Sin variante" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {variantesDe(item.modeloId).map((v) => (
-                        <SelectItem key={v.id} value={v.id}>
-                          {[v.color, v.tela, v.diseno].filter(Boolean).join(" / ") || v.sku || "Variante"}
-                        </SelectItem>
                       ))}
                     </SelectContent>
                   </Select>
@@ -254,7 +234,7 @@ export function FormLote({
             ))}
             {!items.length && (
               <TableRow>
-                <TableCell colSpan={5} className="text-center text-muted-foreground">
+                <TableCell colSpan={4} className="text-center text-muted-foreground">
                   Agrega al menos un producto (ej. 10 filipinas chicas y 10 medianas).
                 </TableCell>
               </TableRow>

@@ -11,7 +11,7 @@ export default async function NuevoLotePage() {
     { data: itemsPedido },
     { data: modelos },
     { data: tallas },
-    { data: variantes },
+    { data: modeloTallas },
     { data: materiales },
   ] = await Promise.all([
     sugerirFolioOrdenAction(),
@@ -19,7 +19,7 @@ export default async function NuevoLotePage() {
     supabase.from("items_pedido").select("*"),
     supabase.from("modelos").select("*").eq("activo", true).order("nombre"),
     supabase.from("tallas").select("*").order("orden"),
-    supabase.from("variantes").select("*"),
+    supabase.from("modelo_tallas").select("*"),
     supabase.from("materiales").select("*").order("nombre"),
   ]);
 
@@ -28,7 +28,7 @@ export default async function NuevoLotePage() {
       <div>
         <h1 className="text-2xl font-semibold">Nueva orden de producción</h1>
         <p className="text-muted-foreground">
-          Puedes agregar varios productos (modelos, tallas o variantes distintas) en una misma orden.
+          Puedes agregar varios productos (modelos y tallas distintas) en una misma orden.
         </p>
       </div>
       <FormLote
@@ -37,7 +37,7 @@ export default async function NuevoLotePage() {
         itemsPedido={itemsPedido ?? []}
         modelos={modelos ?? []}
         tallas={tallas ?? []}
-        variantes={variantes ?? []}
+        modeloTallas={modeloTallas ?? []}
         materiales={materiales ?? []}
       />
     </div>

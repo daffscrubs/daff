@@ -29,6 +29,17 @@ export async function crearMaterial(input: MaterialInput) {
   revalidatePath("/materiales");
 }
 
+export async function actualizarCostoMaterial(id: string, costoUnitario: number, stockMinimo: number) {
+  await requerirPerfil(["admin", "supervisor"]);
+  const supabase = await createClient();
+  const { error } = await supabase
+    .from("materiales")
+    .update({ costo_unitario: costoUnitario, stock_minimo: stockMinimo })
+    .eq("id", id);
+  if (error) throw new Error(error.message);
+  revalidatePath("/materiales");
+}
+
 export async function crearMovimiento(input: MovimientoInput) {
   const perfil = await requerirPerfil(["admin", "supervisor"]);
   const datos = movimientoSchema.parse(input);

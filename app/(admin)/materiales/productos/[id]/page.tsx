@@ -21,28 +21,18 @@ export default async function ProductoStockDetallePage({
 
   const { data: stock } = await supabase
     .from("stock_productos")
-    .select("*, modelos(nombre), tallas(codigo), variantes(color, tela, diseno, sku)")
+    .select("*, modelos(nombre), tallas(codigo)")
     .eq("id", id)
     .single();
 
   if (!stock) notFound();
 
-  let query = supabase
+  const { data: movimientos } = await supabase
     .from("movimientos_stock_producto")
     .select("*, lotes_produccion(folio)")
     .eq("modelo_id", stock.modelo_id)
     .eq("talla_id", stock.talla_id)
     .order("created_at", { ascending: false });
-
-  query = stock.variante_id ? query.eq("variante_id", stock.variante_id) : query.is("variante_id", null);
-
-  const { data: movimientos } = await query;
-
-  const etiquetaVariante = stock.variantes
-    ? [stock.variantes.color, stock.variantes.tela, stock.variantes.diseno].filter(Boolean).join(" / ") ||
-      stock.variantes.sku ||
-      "Variante"
-    : null;
 
   return (
     <div className="space-y-6">
@@ -50,13 +40,12 @@ export default async function ProductoStockDetallePage({
         <div>
           <h1 className="text-2xl font-semibold">
             {stock.modelos?.nombre} · Talla {stock.tallas?.codigo}
-            {etiquetaVariante && ` · ${etiquetaVariante}`}
           </h1>
         </div>
         <p className="text-2xl font-semibold">{stock.cantidad_actual} pzas</p>
       </div>
 
-      <FormMovimientoStock modeloId={stock.modelo_id} tallaId={stock.talla_id} varianteId={stock.variante_id} />
+      <FormMovimientoStock modeloId={stock.modelo_id} tallaId={stock.talla_id} />
 
       <div>
         <h2 className="mb-3 text-lg font-semibold">Historial de movimientos</h2>

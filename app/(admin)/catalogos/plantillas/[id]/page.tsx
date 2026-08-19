@@ -10,13 +10,13 @@ export default async function PlantillaDetallePage({
   const { id } = await params;
   const supabase = await createClient();
 
-  const [{ data: plantilla }, { data: items }, { data: modelos }, { data: tallas }, { data: variantes }] =
+  const [{ data: plantilla }, { data: items }, { data: modelos }, { data: tallas }, { data: modeloTallas }] =
     await Promise.all([
       supabase.from("plantillas_pedido").select("*").eq("id", id).single(),
       supabase.from("plantilla_items").select("*").eq("plantilla_id", id),
       supabase.from("modelos").select("*").order("nombre"),
       supabase.from("tallas").select("*").order("orden"),
-      supabase.from("variantes").select("*"),
+      supabase.from("modelo_tallas").select("*"),
     ]);
 
   if (!plantilla) notFound();
@@ -32,7 +32,7 @@ export default async function PlantillaDetallePage({
         items={items ?? []}
         modelos={modelos ?? []}
         tallas={tallas ?? []}
-        variantes={variantes ?? []}
+        modeloTallas={modeloTallas ?? []}
       />
     </div>
   );

@@ -59,7 +59,6 @@ export async function crearOrdenProduccion(input: OrdenProduccionInput) {
       lote_id: lote.id,
       modelo_id: item.modeloId,
       talla_id: item.tallaId,
-      variante_id: item.varianteId || null,
       cantidad_planeada: item.cantidadPlaneada,
     }))
   );
