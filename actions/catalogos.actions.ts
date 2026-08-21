@@ -41,7 +41,7 @@ export async function crearModelo(input: ModeloInput) {
     if (errorTallas) throw new Error(errorTallas.message);
   }
 
-  revalidatePath("/catalogos/modelos");
+  revalidatePath("/inventario");
 }
 
 export async function actualizarCostoModelo(
@@ -57,7 +57,8 @@ export async function actualizarCostoModelo(
     .update({ costo_unitario: costoUnitario, precio_venta: precioVenta, categoria: categoria || null })
     .eq("id", id);
   if (error) throw new Error(error.message);
-  revalidatePath("/catalogos/modelos");
+  revalidatePath("/inventario");
+  revalidatePath(`/inventario/${id}`);
 }
 
 export async function guardarTallasModelo(
@@ -81,15 +82,16 @@ export async function guardarTallasModelo(
     if (errorInsertar) throw new Error(errorInsertar.message);
   }
 
-  revalidatePath("/catalogos/modelos");
+  revalidatePath("/inventario");
+  revalidatePath(`/inventario/${modeloId}`);
 }
 
 export async function eliminarModelo(id: string) {
   await requerirPerfil(["admin", "supervisor"]);
   const supabase = await createClient();
   const { error } = await supabase.from("modelos").delete().eq("id", id);
-  if (error) throw new Error("No se puede eliminar: el modelo tiene pedidos, órdenes de producción o existencias asociadas.");
-  revalidatePath("/catalogos/modelos");
+  if (error) throw new Error("No se puede eliminar: el producto tiene pedidos, órdenes de producción o existencias asociadas.");
+  revalidatePath("/inventario");
 }
 
 // ---------- Tallas ----------

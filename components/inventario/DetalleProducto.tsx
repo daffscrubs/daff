@@ -2,10 +2,10 @@
 
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import Link from "next/link";
 import { toast } from "sonner";
 import { obtenerDetalleModelo } from "@/actions/detalle.actions";
 import { actualizarCostoModelo, eliminarModelo, guardarTallasModelo } from "@/actions/catalogos.actions";
+import { crearMovimientoStockProducto } from "@/actions/stockProductos.actions";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -23,6 +23,20 @@ import {
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
 import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from "@/components/ui/dialog";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import {
   Table,
   TableBody,
   TableCell,
@@ -30,10 +44,11 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import type { TipoMovimiento } from "@/types/database.types";
 
 export type DetalleModelo = Awaited<ReturnType<typeof obtenerDetalleModelo>>;
 
-export function DetalleModeloPagina({ detalle }: { detalle: DetalleModelo }) {
+export function DetalleProducto({ detalle }: { detalle: DetalleModelo }) {
   const router = useRouter();
   const [costo, setCosto] = useState(detalle.modelo?.costo_unitario != null ? String(detalle.modelo.costo_unitario) : "");
   const [precioVenta, setPrecioVenta] = useState(detalle.modelo?.precio_venta != null ? String(detalle.modelo.precio_venta) : "");
@@ -49,6 +64,12 @@ export function DetalleModeloPagina({ detalle }: { detalle: DetalleModelo }) {
   const [eliminando, startTransitionEliminar] = useTransition();
   const [editandoPrecio, setEditandoPrecio] = useState(false);
 
+  const [tallaAjuste, setTallaAjuste] = useState<{ id: string; codigo: string } | null>(null);
+  const [tipoAjuste, setTipoAjuste] = useState<TipoMovimiento>("entrada");
+  const [cantidadAjuste, setCantidadAjuste] = useState("");
+  const [motivoAjuste, setMotivoAjuste] = useState("");
+  const [ajustando, startTransitionAjuste] = useTransition();
+
   const modelo = detalle.modelo;
   if (!modelo) return null;
 
@@ -58,6 +79,7 @@ export function DetalleModeloPagina({ detalle }: { detalle: DetalleModelo }) {
         await actualizarCostoModelo(modelo!.id, Number(costo) || 0, Number(precioVenta) || 0, categoria);
         toast.success("Costo y precio actualizados");
         setEditandoPrecio(false);
+        router.refresh();
       } catch (err) {
         toast.error(err instanceof Error ? err.message : "Error al guardar");
       }
@@ -97,6 +119,7 @@ export function DetalleModeloPagina({ detalle }: { detalle: DetalleModelo }) {
         );
         toast.success("Tallas actualizadas");
         setEditandoPrecio(false);
+        router.refresh();
       } catch (err) {
         toast.error(err instanceof Error ? err.message : "Error al guardar");
       }
@@ -124,10 +147,38 @@ export function DetalleModeloPagina({ detalle }: { detalle: DetalleModelo }) {
     startTransitionEliminar(async () => {
       try {
         await eliminarModelo(modelo!.id);
-        toast.success("Modelo eliminado");
-        router.push("/catalogos/modelos");
+        toast.success("Producto eliminado");
+        router.push("/inventario");
       } catch (err) {
         toast.error(err instanceof Error ? err.message : "Error al eliminar");
+      }
+    });
+  }
+
+  function abrirAjuste(tallaId: string, codigo: string) {
+    setTallaAjuste({ id: tallaId, codigo });
+    setTipoAjuste("entrada");
+    setCantidadAjuste("");
+    setMotivoAjuste("");
+  }
+
+  function registrarAjuste(e: React.FormEvent) {
+    e.preventDefault();
+    if (!tallaAjuste) return;
+    startTransitionAjuste(async () => {
+      try {
+        await crearMovimientoStockProducto({
+          modeloId: modelo!.id,
+          tallaId: tallaAjuste.id,
+          tipo: tipoAjuste,
+          cantidad: Number(cantidadAjuste),
+          motivo: motivoAjuste,
+        });
+        toast.success("Movimiento registrado");
+        setTallaAjuste(null);
+        router.refresh();
+      } catch (err) {
+        toast.error(err instanceof Error ? err.message : "Error al registrar");
       }
     });
   }
@@ -153,7 +204,7 @@ export function DetalleModeloPagina({ detalle }: { detalle: DetalleModelo }) {
             <AlertDialogTrigger render={<Button variant="outline" disabled={eliminando} />}>Eliminar</AlertDialogTrigger>
             <AlertDialogContent>
               <AlertDialogHeader>
-                <AlertDialogTitle>¿Deseas eliminar este modelo?</AlertDialogTitle>
+                <AlertDialogTitle>¿Deseas eliminar este producto?</AlertDialogTitle>
               </AlertDialogHeader>
               <AlertDialogDescription>No podrás deshacer esta acción.</AlertDialogDescription>
               <AlertDialogFooter>
@@ -255,7 +306,7 @@ export function DetalleModeloPagina({ detalle }: { detalle: DetalleModelo }) {
           <>
             <p className="text-xs text-muted-foreground">
               Si no eliges ninguna, se podrá usar cualquier talla del catálogo al crear pedidos u órdenes. Si dejas el
-              precio en blanco, se usa el precio de venta general del modelo.
+              precio en blanco, se usa el precio de venta general del producto.
             </p>
             <div className="flex flex-wrap gap-3">
               {detalle.tallas.map((talla) => {
@@ -329,9 +380,9 @@ export function DetalleModeloPagina({ detalle }: { detalle: DetalleModelo }) {
                 <TableCell>{nombreTalla(e.talla_id)}</TableCell>
                 <TableCell>{e.cantidad_actual}</TableCell>
                 <TableCell className="text-right">
-                  <Link href={`/materiales/productos/${e.id}`}>
-                    <Button variant="outline" size="sm">Más datos</Button>
-                  </Link>
+                  <Button variant="outline" size="sm" onClick={() => abrirAjuste(e.talla_id, nombreTalla(e.talla_id))}>
+                    Ajustar stock
+                  </Button>
                 </TableCell>
               </TableRow>
             ))}
@@ -344,7 +395,72 @@ export function DetalleModeloPagina({ detalle }: { detalle: DetalleModelo }) {
             )}
           </TableBody>
         </Table>
+        {(() => {
+          const tallasSinStock = detalle.tallas
+            .filter((t) => !detalle.existencias.some((e) => e.talla_id === t.id))
+            .filter((t) => !detalle.tallaIdsAsignadas.length || detalle.tallaIdsAsignadas.includes(t.id));
+          if (!tallasSinStock.length) return null;
+          return (
+            <div className="mt-3 flex flex-wrap gap-2">
+              {tallasSinStock.map((t) => (
+                <Button key={t.id} variant="ghost" size="sm" onClick={() => abrirAjuste(t.id, t.codigo)}>
+                  + Registrar stock en talla {t.codigo}
+                </Button>
+              ))}
+            </div>
+          );
+        })()}
       </div>
+
+      <Dialog open={!!tallaAjuste} onOpenChange={(v) => !v && setTallaAjuste(null)}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Ajustar stock · Talla {tallaAjuste?.codigo}</DialogTitle>
+          </DialogHeader>
+          <form className="space-y-4" onSubmit={registrarAjuste}>
+            <div className="space-y-2">
+              <Label>Tipo</Label>
+              <Select
+                items={[
+                  { value: "entrada", label: "Entrada" },
+                  { value: "salida", label: "Salida" },
+                  { value: "ajuste", label: "Ajuste" },
+                ]}
+                value={tipoAjuste}
+                onValueChange={(v) => setTipoAjuste((v ?? "entrada") as TipoMovimiento)}
+              >
+                <SelectTrigger className="w-full">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="entrada">Entrada</SelectItem>
+                  <SelectItem value="salida">Salida</SelectItem>
+                  <SelectItem value="ajuste">Ajuste</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="cantidadAjuste">
+                Cantidad {tipoAjuste === "ajuste" && "(negativa para restar)"}
+              </Label>
+              <Input
+                id="cantidadAjuste"
+                type="number"
+                value={cantidadAjuste}
+                onChange={(e) => setCantidadAjuste(e.target.value)}
+                required
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="motivoAjuste">Motivo (opcional)</Label>
+              <Input id="motivoAjuste" value={motivoAjuste} onChange={(e) => setMotivoAjuste(e.target.value)} />
+            </div>
+            <Button type="submit" className="w-full" disabled={ajustando}>
+              {ajustando ? "Guardando..." : "Registrar movimiento"}
+            </Button>
+          </form>
+        </DialogContent>
+      </Dialog>
 
       <div>
         <h2 className="mb-3 text-lg font-semibold">Historial</h2>

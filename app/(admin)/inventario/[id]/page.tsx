@@ -1,9 +1,9 @@
 import { notFound } from "next/navigation";
 import Link from "next/link";
 import { obtenerDetalleModelo } from "@/actions/detalle.actions";
-import { DetalleModeloPagina } from "@/components/detalle/DetalleModeloPagina";
+import { DetalleProducto } from "@/components/inventario/DetalleProducto";
 
-export default async function ModeloDetallePage({
+export default async function ProductoDetallePage({
   params,
 }: {
   params: Promise<{ id: string }>;
@@ -15,10 +15,10 @@ export default async function ModeloDetallePage({
 
   return (
     <div className="space-y-6">
-      <Link href="/catalogos/modelos" className="text-sm text-muted-foreground hover:underline">
-        ← Catálogos / Modelos
+      <Link href="/inventario" className="text-sm text-muted-foreground hover:underline">
+        ← Inventario
       </Link>
-      <DetalleModeloPagina detalle={detalle} />
+      <DetalleProducto detalle={detalle} />
     </div>
   );
 }

@@ -5,7 +5,6 @@ import { usePathname } from "next/navigation";
 import { cn } from "@/lib/utils";
 
 const TABS = [
-  { href: "/catalogos/modelos", label: "Modelos" },
   { href: "/catalogos/tallas", label: "Tallas" },
   { href: "/catalogos/etapas-proceso", label: "Etapas de proceso" },
   { href: "/catalogos/plantillas", label: "Plantillas" },
@@ -18,7 +17,7 @@ export default function CatalogosLayout({ children }: { children: React.ReactNod
     <div className="space-y-6">
       <div>
         <h1 className="text-2xl font-semibold">Catálogos</h1>
-        <p className="text-muted-foreground">Modelos, tallas, etapas y plantillas.</p>
+        <p className="text-muted-foreground">Tallas, etapas de proceso y plantillas.</p>
       </div>
       <div className="flex gap-2 border-b">
         {TABS.map((tab) => (

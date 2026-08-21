@@ -23,5 +23,6 @@ export async function crearMovimientoStockProducto(input: MovimientoStockProduct
   });
 
   if (error) throw new Error(error.message);
-  revalidatePath("/materiales/productos");
+  revalidatePath("/inventario");
+  revalidatePath(`/inventario/${datos.modeloId}`);
 }

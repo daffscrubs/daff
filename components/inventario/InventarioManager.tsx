@@ -2,7 +2,7 @@
 
 import { useMemo, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { Search, BookOpen } from "lucide-react";
+import { Search, Boxes } from "lucide-react";
 import { toast } from "sonner";
 import { eliminarModelo, crearModelo } from "@/actions/catalogos.actions";
 import { Button } from "@/components/ui/button";
@@ -39,15 +39,18 @@ import type { Database } from "@/types/database.types";
 type Modelo = Database["public"]["Tables"]["modelos"]["Row"];
 type Talla = Database["public"]["Tables"]["tallas"]["Row"];
 type ModeloTalla = Pick<Database["public"]["Tables"]["modelo_tallas"]["Row"], "modelo_id" | "precio_venta">;
+type StockProducto = Pick<Database["public"]["Tables"]["stock_productos"]["Row"], "modelo_id" | "cantidad_actual">;
 
-export function ModelosManager({
+export function InventarioManager({
   modelos,
   tallas,
   modeloTallas,
+  stock,
 }: {
   modelos: Modelo[];
   tallas: Talla[];
   modeloTallas: ModeloTalla[];
+  stock: StockProducto[];
 }) {
   function precioVentaDe(modelo: Modelo): string {
     const precios = modeloTallas
@@ -58,6 +61,9 @@ export function ModelosManager({
     const min = Math.min(...precios);
     const max = Math.max(...precios);
     return min === max ? formatearMoneda(min) : `${formatearMoneda(min)} - ${formatearMoneda(max)}`;
+  }
+  function existenciasDe(modelo: Modelo): number {
+    return stock.filter((s) => s.modelo_id === modelo.id).reduce((acc, s) => acc + s.cantidad_actual, 0);
   }
   const [abierto, setAbierto] = useState(false);
   const [nombre, setNombre] = useState("");
@@ -105,7 +111,7 @@ export function ModelosManager({
           precioVenta: precioVenta ? Number(precioVenta) : undefined,
           tallaIds,
         });
-        toast.success("Modelo creado");
+        toast.success("Producto creado");
         setNombre("");
         setDescripcion("");
         setCategoria("");
@@ -115,7 +121,7 @@ export function ModelosManager({
         setAbierto(false);
         router.refresh();
       } catch (err) {
-        toast.error(err instanceof Error ? err.message : "Error al crear el modelo");
+        toast.error(err instanceof Error ? err.message : "Error al crear el producto");
       }
     });
   }
@@ -127,7 +133,7 @@ export function ModelosManager({
           <div className="relative max-w-sm flex-1">
             <Search className="pointer-events-none absolute left-2.5 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
             <Input
-              placeholder="Buscar modelo..."
+              placeholder="Buscar producto..."
               value={busqueda}
               onChange={(e) => setBusqueda(e.target.value)}
               className="pl-8"
@@ -149,10 +155,10 @@ export function ModelosManager({
           </Select>
         </div>
         <Dialog open={abierto} onOpenChange={setAbierto}>
-          <DialogTrigger render={<Button />}>Nuevo modelo</DialogTrigger>
+          <DialogTrigger render={<Button />}>Nuevo producto</DialogTrigger>
           <DialogContent className="max-h-[90vh] overflow-y-auto">
             <DialogHeader>
-              <DialogTitle>Nuevo modelo</DialogTitle>
+              <DialogTitle>Nuevo producto</DialogTitle>
             </DialogHeader>
             <form className="space-y-4" onSubmit={crear}>
               <div className="space-y-2">
@@ -197,7 +203,7 @@ export function ModelosManager({
                 </div>
               </div>
               <div className="space-y-2">
-                <Label>Tallas disponibles para este modelo</Label>
+                <Label>Tallas disponibles para este producto</Label>
                 <p className="text-xs text-muted-foreground">
                   Si no eliges ninguna, se podrá usar cualquier talla del catálogo.
                 </p>
@@ -234,7 +240,7 @@ export function ModelosManager({
           <TableRow>
             <TableHead>Nombre</TableHead>
             <TableHead>Categoría</TableHead>
-            <TableHead>Descripción</TableHead>
+            <TableHead>Existencias</TableHead>
             <TableHead>Costo</TableHead>
             <TableHead>Precio de venta</TableHead>
             <TableHead />
@@ -245,18 +251,18 @@ export function ModelosManager({
             <TableRow
               key={modelo.id}
               className="cursor-pointer"
-              onClick={() => router.push(`/catalogos/modelos/${modelo.id}`)}
+              onClick={() => router.push(`/inventario/${modelo.id}`)}
             >
               <TableCell className="font-medium">{modelo.nombre}</TableCell>
               <TableCell className="text-muted-foreground">{modelo.categoria ?? "—"}</TableCell>
-              <TableCell className="text-muted-foreground">{modelo.descripcion ?? "—"}</TableCell>
+              <TableCell>{existenciasDe(modelo)}</TableCell>
               <TableCell className="text-muted-foreground">
                 {modelo.costo_unitario != null ? formatearMoneda(modelo.costo_unitario) : "—"}
               </TableCell>
               <TableCell className="text-muted-foreground">{precioVentaDe(modelo)}</TableCell>
               <TableCell className="text-right" onClick={(e) => e.stopPropagation()}>
                 <BotonEliminarConfirmacion
-                  entidad="modelo"
+                  entidad="producto"
                   onEliminar={() => eliminarModelo(modelo.id)}
                 />
               </TableCell>
@@ -266,9 +272,9 @@ export function ModelosManager({
             <TableRow>
               <TableCell colSpan={6}>
                 <EstadoVacio
-                  icon={BookOpen}
-                  titulo={modelos.length ? "Sin resultados" : "Sin modelos todavía"}
-                  descripcion={modelos.length ? "Prueba con otra búsqueda o filtro." : "Los modelos que agregues van a aparecer aquí."}
+                  icon={Boxes}
+                  titulo={modelos.length ? "Sin resultados" : "Sin productos todavía"}
+                  descripcion={modelos.length ? "Prueba con otra búsqueda o filtro." : "Los productos que agregues van a aparecer aquí."}
                 />
               </TableCell>
             </TableRow>
