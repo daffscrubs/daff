@@ -86,9 +86,13 @@ export async function crearCompra(input: CompraInput) {
   return compra.id as string;
 }
 
-// Revierte el efecto en inventario de una compra: por cada movimiento de
-// "entrada" que generó, registra una "salida" compensatoria (nunca se
-// borran movimientos, para no perder el rastro de auditoría).
+// Revierte el efecto en inventario de una compra: registra una "salida"
+// compensatoria por el NETO de entradas menos salidas ya ligadas a esta
+// compra (nunca se borran movimientos, para no perder el rastro de
+// auditoría). El neto —no solo la última entrada— importa porque una
+// compra puede haberse editado más de una vez: si solo revirtiéramos la
+// entrada más reciente, las reversiones de ediciones anteriores (que
+// también quedan ligadas a compra_id) se contarían de más.
 async function revertirMovimientosCompra(
   supabase: Awaited<ReturnType<typeof createClient>>,
   compraId: string,
@@ -101,12 +105,19 @@ async function revertirMovimientosCompra(
     .eq("compra_id", compraId);
   if (error) throw new Error(error.message);
 
+  const netoPorMaterial = new Map<string, number>();
   for (const m of movimientos ?? []) {
-    if (m.tipo !== "entrada") continue;
+    const signo = m.tipo === "entrada" ? 1 : m.tipo === "salida" ? -1 : 0;
+    if (!signo) continue;
+    netoPorMaterial.set(m.material_id, (netoPorMaterial.get(m.material_id) ?? 0) + signo * m.cantidad);
+  }
+
+  for (const [materialId, neto] of netoPorMaterial) {
+    if (neto <= 0) continue;
     const { error: errorReversa } = await supabase.from("movimientos_inventario").insert({
-      material_id: m.material_id,
+      material_id: materialId,
       tipo: "salida",
-      cantidad: m.cantidad,
+      cantidad: neto,
       motivo,
       registrado_por: perfilId,
       compra_id: compraId,
