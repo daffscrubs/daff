@@ -39,7 +39,7 @@ export default async function EditarPedidoPage({
         pedidoId={id}
         valoresIniciales={{
           clienteId: pedido.cliente_id,
-          fechaCompromiso: pedido.fecha_compromiso,
+          fechaCompromiso: pedido.fecha_compromiso ?? "",
           notas: pedido.notas ?? "",
           diasCredito: pedido.dias_credito,
           items: (items ?? []).map((item) => ({

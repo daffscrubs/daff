@@ -163,13 +163,12 @@ export function FormPedido({
           </Select>
         </div>
         <div className="space-y-2">
-          <Label htmlFor="fechaCompromiso">Fecha compromiso</Label>
+          <Label htmlFor="fechaCompromiso">Fecha compromiso (opcional)</Label>
           <Input
             id="fechaCompromiso"
             type="date"
             value={fechaCompromiso}
             onChange={(e) => setFechaCompromiso(e.target.value)}
-            required
           />
         </div>
         {!modoEdicion && !!plantillas.length && (

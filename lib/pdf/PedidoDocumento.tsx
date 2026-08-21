@@ -16,7 +16,7 @@ export interface PedidoPDFProps {
   contacto: string;
   telefono: string;
   fechaPedido: string;
-  fechaCompromiso: string;
+  fechaCompromiso: string | null;
   estatus: string;
   notas: string | null;
   items: ItemPedidoPDF[];
@@ -48,10 +48,12 @@ export function PedidoDocumento({ folio, cliente, contacto, telefono, fechaPedid
             <Text style={estilos.etiqueta}>Fecha de pedido</Text>
             <Text style={estilos.valor}>{fechaPedido}</Text>
           </View>
-          <View style={estilos.columnaDato}>
-            <Text style={estilos.etiqueta}>Fecha compromiso</Text>
-            <Text style={estilos.valor}>{fechaCompromiso}</Text>
-          </View>
+          {fechaCompromiso && (
+            <View style={estilos.columnaDato}>
+              <Text style={estilos.etiqueta}>Fecha compromiso</Text>
+              <Text style={estilos.valor}>{fechaCompromiso}</Text>
+            </View>
+          )}
         </View>
 
         <View style={estilos.tabla}>

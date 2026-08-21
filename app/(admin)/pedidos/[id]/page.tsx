@@ -51,7 +51,7 @@ export default async function PedidoDetallePage({
             <Link href={`/clientes/${pedido.cliente_id}`} className="hover:underline">
               {cliente?.nombre_comercial ?? "—"}
             </Link>
-            {" · "}Compromiso: {pedido.fecha_compromiso}
+            {pedido.fecha_compromiso && ` · Compromiso: ${pedido.fecha_compromiso}`}
           </p>
         </div>
         <div className="flex items-center gap-2">

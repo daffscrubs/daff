@@ -110,7 +110,7 @@ export function PedidosTable({
                   </Link>
                 </TableCell>
                 <TableCell>{nombreCliente(pedido.cliente_id)}</TableCell>
-                <TableCell className="text-muted-foreground">{pedido.fecha_compromiso}</TableCell>
+                <TableCell className="text-muted-foreground">{pedido.fecha_compromiso ?? "—"}</TableCell>
                 <TableCell>{total ? formatearMoneda(total) : "—"}</TableCell>
                 <TableCell>
                   {total ? (

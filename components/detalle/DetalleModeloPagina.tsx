@@ -68,6 +68,12 @@ export function DetalleModeloPagina({ detalle }: { detalle: DetalleModelo }) {
     setCosto(modelo!.costo_unitario != null ? String(modelo!.costo_unitario) : "");
     setPrecioVenta(modelo!.precio_venta != null ? String(modelo!.precio_venta) : "");
     setCategoria(modelo!.categoria ?? "");
+    setTallaIds(detalle.tallaIdsAsignadas);
+    setPreciosPorTalla(
+      Object.fromEntries(
+        Object.entries(detalle.preciosPorTalla).map(([tallaId, precio]) => [tallaId, precio != null ? String(precio) : ""])
+      )
+    );
     setEditandoPrecio(false);
   }
 
@@ -90,10 +96,28 @@ export function DetalleModeloPagina({ detalle }: { detalle: DetalleModelo }) {
           }))
         );
         toast.success("Tallas actualizadas");
+        setEditandoPrecio(false);
       } catch (err) {
         toast.error(err instanceof Error ? err.message : "Error al guardar");
       }
     });
+  }
+
+  // Precio a mostrar cuando hay precios distintos por talla: si varían,
+  // muestra el rango (ej. "$625.00 - $640.00") en vez de un solo precio
+  // (que podría no reflejar ninguna talla real si el precio general del
+  // modelo se dejó en blanco).
+  function precioVentaMostrar(): string {
+    if (!detalle.tallaIdsAsignadas.length) {
+      return modelo!.precio_venta != null ? formatearMoneda(modelo!.precio_venta) : "—";
+    }
+    const precios = detalle.tallaIdsAsignadas
+      .map((id) => detalle.preciosPorTalla[id] ?? modelo!.precio_venta)
+      .filter((p): p is number => p != null);
+    if (!precios.length) return "—";
+    const min = Math.min(...precios);
+    const max = Math.max(...precios);
+    return min === max ? formatearMoneda(min) : `${formatearMoneda(min)} - ${formatearMoneda(max)}`;
   }
 
   function eliminar() {
@@ -154,7 +178,7 @@ export function DetalleModeloPagina({ detalle }: { detalle: DetalleModelo }) {
         </div>
         <div className="rounded-lg border p-4">
           <p className="text-xs text-muted-foreground">Precio de venta</p>
-          <p className="text-2xl font-semibold">{modelo.precio_venta != null ? formatearMoneda(modelo.precio_venta) : "—"}</p>
+          <p className="text-2xl font-semibold">{precioVentaMostrar()}</p>
         </div>
       </div>
 
@@ -216,7 +240,10 @@ export function DetalleModeloPagina({ detalle }: { detalle: DetalleModelo }) {
             </div>
             <div>
               <p className="text-xs text-muted-foreground">Precio de venta</p>
-              <p className="text-sm">{modelo.precio_venta != null ? formatearMoneda(modelo.precio_venta) : "—"}</p>
+              <p className="text-sm">{precioVentaMostrar()}</p>
+              {precioVentaMostrar().includes(" - ") && (
+                <p className="text-xs text-muted-foreground">Varía según la talla</p>
+              )}
             </div>
           </div>
         )}
@@ -224,45 +251,66 @@ export function DetalleModeloPagina({ detalle }: { detalle: DetalleModelo }) {
 
       <div className="space-y-3 rounded-lg border p-4">
         <h2 className="text-lg font-semibold">Tallas disponibles y precio por talla</h2>
-        <p className="text-xs text-muted-foreground">
-          Si no eliges ninguna, se podrá usar cualquier talla del catálogo al crear pedidos u órdenes. Si dejas el
-          precio en blanco, se usa el precio de venta general del modelo.
-        </p>
-        <div className="flex flex-wrap gap-3">
-          {detalle.tallas.map((talla) => {
-            const activa = tallaIds.includes(talla.id);
-            return (
-              <div
-                key={talla.id}
-                className="flex items-center gap-2 rounded-lg border px-2.5 py-1.5 text-sm"
-              >
-                <label className="flex items-center gap-1.5">
-                  <input
-                    type="checkbox"
-                    checked={activa}
-                    onChange={() => alternarTalla(talla.id)}
-                    className="size-4"
-                  />
-                  {talla.codigo}
-                </label>
-                {activa && (
-                  <Input
-                    type="number"
-                    min={0}
-                    step="0.01"
-                    placeholder={modelo.precio_venta != null ? String(modelo.precio_venta) : "Precio"}
-                    className="h-7 w-24"
-                    value={preciosPorTalla[talla.id] ?? ""}
-                    onChange={(e) => actualizarPrecioTalla(talla.id, e.target.value)}
-                  />
-                )}
-              </div>
-            );
-          })}
-        </div>
-        <Button onClick={guardarTallas} disabled={guardandoTallas} size="sm" variant="outline">
-          {guardandoTallas ? "Guardando..." : "Guardar tallas"}
-        </Button>
+        {editandoPrecio ? (
+          <>
+            <p className="text-xs text-muted-foreground">
+              Si no eliges ninguna, se podrá usar cualquier talla del catálogo al crear pedidos u órdenes. Si dejas el
+              precio en blanco, se usa el precio de venta general del modelo.
+            </p>
+            <div className="flex flex-wrap gap-3">
+              {detalle.tallas.map((talla) => {
+                const activa = tallaIds.includes(talla.id);
+                return (
+                  <div
+                    key={talla.id}
+                    className="flex items-center gap-2 rounded-lg border px-2.5 py-1.5 text-sm"
+                  >
+                    <label className="flex items-center gap-1.5">
+                      <input
+                        type="checkbox"
+                        checked={activa}
+                        onChange={() => alternarTalla(talla.id)}
+                        className="size-4"
+                      />
+                      {talla.codigo}
+                    </label>
+                    {activa && (
+                      <Input
+                        type="number"
+                        min={0}
+                        step="0.01"
+                        placeholder={modelo.precio_venta != null ? String(modelo.precio_venta) : "Precio"}
+                        className="h-7 w-24"
+                        value={preciosPorTalla[talla.id] ?? ""}
+                        onChange={(e) => actualizarPrecioTalla(talla.id, e.target.value)}
+                      />
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+            <Button onClick={guardarTallas} disabled={guardandoTallas} size="sm" variant="outline">
+              {guardandoTallas ? "Guardando..." : "Guardar tallas"}
+            </Button>
+          </>
+        ) : detalle.tallaIdsAsignadas.length ? (
+          <div className="flex flex-wrap gap-2">
+            {detalle.tallaIdsAsignadas.map((tallaId) => {
+              const codigo = detalle.tallas.find((t) => t.id === tallaId)?.codigo ?? "—";
+              const precio = detalle.preciosPorTalla[tallaId];
+              return (
+                <Badge key={tallaId} variant="secondary">
+                  {codigo}
+                  {precio != null && ` · ${formatearMoneda(precio)}`}
+                </Badge>
+              );
+            })}
+          </div>
+        ) : (
+          <p className="text-sm text-muted-foreground">
+            Sin restricción de tallas — se puede usar cualquier talla del catálogo.
+          </p>
+        )}
       </div>
 
       <div>

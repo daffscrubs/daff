@@ -10,7 +10,7 @@ export const itemPedidoSchema = z.object({
 
 export const pedidoSchema = z.object({
   clienteId: z.string().uuid("Selecciona un cliente"),
-  fechaCompromiso: z.string().min(1, "Requerido"),
+  fechaCompromiso: z.string().optional(),
   notas: z.string().optional(),
   diasCredito: z.coerce.number().int().min(0).default(0),
   items: z.array(itemPedidoSchema).min(1, "Agrega al menos un producto"),

@@ -925,7 +925,7 @@ export type Database = {
           created_at: string
           dias_credito: number
           estatus: Database["public"]["Enums"]["estatus_pedido"]
-          fecha_compromiso: string
+          fecha_compromiso: string | null
           fecha_pedido: string
           folio: string
           id: string
@@ -937,7 +937,7 @@ export type Database = {
           created_at?: string
           dias_credito?: number
           estatus?: Database["public"]["Enums"]["estatus_pedido"]
-          fecha_compromiso: string
+          fecha_compromiso?: string | null
           fecha_pedido?: string
           folio: string
           id?: string
@@ -949,7 +949,7 @@ export type Database = {
           created_at?: string
           dias_credito?: number
           estatus?: Database["public"]["Enums"]["estatus_pedido"]
-          fecha_compromiso?: string
+          fecha_compromiso?: string | null
           fecha_pedido?: string
           folio?: string
           id?: string

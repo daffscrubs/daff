@@ -30,7 +30,7 @@ export async function crearPedido(input: PedidoInput) {
     .insert({
       cliente_id: datos.clienteId,
       folio,
-      fecha_compromiso: datos.fechaCompromiso,
+      fecha_compromiso: datos.fechaCompromiso || null,
       creado_por: perfil.id,
       notas: datos.notas || null,
       dias_credito: datos.diasCredito,
@@ -88,7 +88,7 @@ export async function actualizarPedido(id: string, input: PedidoInput) {
     .from("pedidos")
     .update({
       cliente_id: datos.clienteId,
-      fecha_compromiso: datos.fechaCompromiso,
+      fecha_compromiso: datos.fechaCompromiso || null,
       notas: datos.notas || null,
       dias_credito: datos.diasCredito,
     })

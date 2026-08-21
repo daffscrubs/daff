@@ -38,8 +38,27 @@ import type { Database } from "@/types/database.types";
 
 type Modelo = Database["public"]["Tables"]["modelos"]["Row"];
 type Talla = Database["public"]["Tables"]["tallas"]["Row"];
+type ModeloTalla = Pick<Database["public"]["Tables"]["modelo_tallas"]["Row"], "modelo_id" | "precio_venta">;
 
-export function ModelosManager({ modelos, tallas }: { modelos: Modelo[]; tallas: Talla[] }) {
+export function ModelosManager({
+  modelos,
+  tallas,
+  modeloTallas,
+}: {
+  modelos: Modelo[];
+  tallas: Talla[];
+  modeloTallas: ModeloTalla[];
+}) {
+  function precioVentaDe(modelo: Modelo): string {
+    const precios = modeloTallas
+      .filter((mt) => mt.modelo_id === modelo.id)
+      .map((mt) => mt.precio_venta ?? modelo.precio_venta)
+      .filter((p): p is number => p != null);
+    if (!precios.length) return modelo.precio_venta != null ? formatearMoneda(modelo.precio_venta) : "—";
+    const min = Math.min(...precios);
+    const max = Math.max(...precios);
+    return min === max ? formatearMoneda(min) : `${formatearMoneda(min)} - ${formatearMoneda(max)}`;
+  }
   const [abierto, setAbierto] = useState(false);
   const [nombre, setNombre] = useState("");
   const [descripcion, setDescripcion] = useState("");
@@ -234,9 +253,7 @@ export function ModelosManager({ modelos, tallas }: { modelos: Modelo[]; tallas:
               <TableCell className="text-muted-foreground">
                 {modelo.costo_unitario != null ? formatearMoneda(modelo.costo_unitario) : "—"}
               </TableCell>
-              <TableCell className="text-muted-foreground">
-                {modelo.precio_venta != null ? formatearMoneda(modelo.precio_venta) : "—"}
-              </TableCell>
+              <TableCell className="text-muted-foreground">{precioVentaDe(modelo)}</TableCell>
               <TableCell className="text-right" onClick={(e) => e.stopPropagation()}>
                 <BotonEliminarConfirmacion
                   entidad="modelo"
