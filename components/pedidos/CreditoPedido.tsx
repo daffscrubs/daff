@@ -96,10 +96,10 @@ export function CreditoPedido({
 
       {saldo > 0 && (
         <Dialog open={abierto} onOpenChange={setAbierto}>
-          <DialogTrigger render={<Button size="sm" />}>Registrar pago</DialogTrigger>
+          <DialogTrigger render={<Button size="sm" />}>Registrar cobro</DialogTrigger>
           <DialogContent>
             <DialogHeader>
-              <DialogTitle>Registrar pago</DialogTitle>
+              <DialogTitle>Registrar cobro</DialogTitle>
             </DialogHeader>
             <form className="space-y-4" onSubmit={registrar}>
               <div className="space-y-2">

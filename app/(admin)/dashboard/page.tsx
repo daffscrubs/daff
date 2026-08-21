@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { ClipboardList, Factory, Truck, AlertTriangle, CalendarClock } from "lucide-react";
+import { ClipboardList, Factory, AlertTriangle } from "lucide-react";
 import { createClient } from "@/lib/supabase/server";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -17,18 +17,13 @@ import { PiezasPorColaboradorSemana } from "@/components/dashboard/PiezasPorCola
 import { totalesPorPedido } from "@/lib/pedidos/totales";
 import { construirRegistrosReporte } from "@/lib/produccion/registro-reporte";
 import { piezasPorColaboradorSemana } from "@/lib/dashboard/piezasPorColaborador";
-import { fechaISOLocal } from "@/lib/fechas";
 
 export default async function DashboardPage() {
   const supabase = await createClient();
 
-  const enUnaSemana = new Date();
-  enUnaSemana.setDate(enUnaSemana.getDate() + 7);
-
   const [
     { count: pedidosActivos },
     { count: lotesEnProceso },
-    { data: entregasProximas },
     { data: materiales },
     { data: pedidos },
     { data: itemsPedido },
@@ -44,12 +39,6 @@ export default async function DashboardPage() {
       .from("lotes_produccion")
       .select("id", { count: "exact", head: true })
       .in("estatus", ["planeada", "en_proceso"]),
-    supabase
-      .from("entregas")
-      .select("*, pedidos(folio)")
-      .eq("estatus", "programada")
-      .lte("fecha_programada", fechaISOLocal(enUnaSemana))
-      .order("fecha_programada"),
     supabase.from("materiales").select("*"),
     supabase.from("pedidos").select("id, fecha_pedido"),
     supabase.from("items_pedido").select("*"),
@@ -107,7 +96,6 @@ export default async function DashboardPage() {
   const kpis = [
     { href: "/pedidos", label: "Pedidos activos", valor: pedidosActivos ?? 0, icon: ClipboardList, color: "text-blue-600 bg-blue-100 dark:bg-blue-950" },
     { href: "/produccion", label: "Órdenes en producción", valor: lotesEnProceso ?? 0, icon: Factory, color: "text-amber-600 bg-amber-100 dark:bg-amber-950" },
-    { href: "/entregas", label: "Entregas esta semana", valor: entregasProximas?.length ?? 0, icon: Truck, color: "text-emerald-600 bg-emerald-100 dark:bg-emerald-950" },
   ];
 
   return (
@@ -126,7 +114,7 @@ export default async function DashboardPage() {
 
       <PiezasPorColaboradorSemana datos={piezasSemana} />
 
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
         {kpis.map((kpi) => (
           <Link key={kpi.href} href={kpi.href}>
             <Card className="transition-shadow hover:shadow-md">
@@ -144,78 +132,42 @@ export default async function DashboardPage() {
         ))}
       </div>
 
-      <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
-        <div>
-          <h2 className="mb-3 flex items-center gap-2 text-lg font-semibold">
-            <CalendarClock className="size-4 text-muted-foreground" />
-            Próximas entregas
-          </h2>
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>Pedido</TableHead>
-                <TableHead>Fecha</TableHead>
+      <div>
+        <h2 className="mb-3 flex items-center gap-2 text-lg font-semibold">
+          <AlertTriangle className="size-4 text-muted-foreground" />
+          Alertas de inventario
+        </h2>
+        <Table>
+          <TableHeader>
+            <TableRow>
+              <TableHead>Material</TableHead>
+              <TableHead>Stock</TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {bajoStock.map((m) => (
+              <TableRow key={m.id}>
+                <TableCell>
+                  <Link href={`/materiales/${m.id}`} className="hover:underline">
+                    {m.nombre}
+                  </Link>
+                </TableCell>
+                <TableCell>
+                  <Badge variant="destructive">
+                    {m.stock_actual} / mínimo {m.stock_minimo} {m.unidad_medida}
+                  </Badge>
+                </TableCell>
               </TableRow>
-            </TableHeader>
-            <TableBody>
-              {entregasProximas?.map((e) => (
-                <TableRow key={e.id}>
-                  <TableCell>
-                    <Link href={`/entregas/${e.id}`} className="hover:underline">
-                      {e.pedidos?.folio}
-                    </Link>
-                  </TableCell>
-                  <TableCell className="text-muted-foreground">{e.fecha_programada}</TableCell>
-                </TableRow>
-              ))}
-              {!entregasProximas?.length && (
-                <TableRow>
-                  <TableCell colSpan={2} className="text-center text-muted-foreground">
-                    Sin entregas próximas.
-                  </TableCell>
-                </TableRow>
-              )}
-            </TableBody>
-          </Table>
-        </div>
-
-        <div>
-          <h2 className="mb-3 flex items-center gap-2 text-lg font-semibold">
-            <AlertTriangle className="size-4 text-muted-foreground" />
-            Alertas de inventario
-          </h2>
-          <Table>
-            <TableHeader>
+            ))}
+            {!bajoStock.length && (
               <TableRow>
-                <TableHead>Material</TableHead>
-                <TableHead>Stock</TableHead>
+                <TableCell colSpan={2} className="text-center text-muted-foreground">
+                  Sin alertas de inventario.
+                </TableCell>
               </TableRow>
-            </TableHeader>
-            <TableBody>
-              {bajoStock.map((m) => (
-                <TableRow key={m.id}>
-                  <TableCell>
-                    <Link href={`/materiales/${m.id}`} className="hover:underline">
-                      {m.nombre}
-                    </Link>
-                  </TableCell>
-                  <TableCell>
-                    <Badge variant="destructive">
-                      {m.stock_actual} / mínimo {m.stock_minimo} {m.unidad_medida}
-                    </Badge>
-                  </TableCell>
-                </TableRow>
-              ))}
-              {!bajoStock.length && (
-                <TableRow>
-                  <TableCell colSpan={2} className="text-center text-muted-foreground">
-                    Sin alertas de inventario.
-                  </TableCell>
-                </TableRow>
-              )}
-            </TableBody>
-          </Table>
-        </div>
+            )}
+          </TableBody>
+        </Table>
       </div>
 
       <ActividadDiariaColaboradores

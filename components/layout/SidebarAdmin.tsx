@@ -10,7 +10,6 @@ import {
   BookOpen,
   Boxes,
   ShoppingCart,
-  Truck,
   BarChart3,
   UserCog,
   type LucideIcon,
@@ -26,7 +25,6 @@ const ITEMS = [
   { href: "/catalogos/modelos", label: "Catálogos", icon: BookOpen, roles: ["admin", "supervisor"] },
   { href: "/materiales", label: "Materiales", icon: Boxes, roles: ["admin", "supervisor"] },
   { href: "/compras", label: "Compras", icon: ShoppingCart, roles: ["admin", "supervisor", "ventas"] },
-  { href: "/entregas", label: "Entregas", icon: Truck, roles: ["admin", "ventas"] },
   { href: "/reportes/productividad", label: "Reportes", icon: BarChart3, roles: ["admin", "ventas", "supervisor"] },
   { href: "/usuarios", label: "Usuarios", icon: UserCog, roles: ["admin"] },
 ] as const satisfies ReadonlyArray<{ href: string; label: string; icon: LucideIcon; roles: RolUsuario[] }>;

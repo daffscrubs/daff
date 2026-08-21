@@ -2,7 +2,7 @@ import { createServerClient } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
 import type { Database } from "@/types/database.types";
 
-const RUTAS_ADMIN = ["/dashboard", "/clientes", "/pedidos", "/produccion", "/catalogos", "/materiales", "/entregas", "/reportes", "/usuarios"];
+const RUTAS_ADMIN = ["/dashboard", "/clientes", "/pedidos", "/produccion", "/catalogos", "/materiales", "/reportes", "/usuarios"];
 
 export async function updateSession(request: NextRequest) {
   let supabaseResponse = NextResponse.next({ request });

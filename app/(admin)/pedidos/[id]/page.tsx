@@ -5,6 +5,7 @@ import { createClient } from "@/lib/supabase/server";
 import { EstatusPedidoSelect } from "@/components/pedidos/EstatusPedidoSelect";
 import { BotonCancelarPedido } from "@/components/pedidos/BotonCancelarPedido";
 import { CreditoPedido } from "@/components/pedidos/CreditoPedido";
+import { EntregaPedido } from "@/components/pedidos/EntregaPedido";
 import { Button } from "@/components/ui/button";
 import {
   Table,
@@ -24,13 +25,20 @@ export default async function PedidoDetallePage({
   const { id } = await params;
   const supabase = await createClient();
 
-  const [{ data: pedido }, { data: items }, { data: modelos }, { data: tallas }, { data: pagos }] =
+  const [{ data: pedido }, { data: items }, { data: modelos }, { data: tallas }, { data: pagos }, { data: entrega }] =
     await Promise.all([
       supabase.from("pedidos").select("*, clientes(nombre_comercial)").eq("id", id).single(),
       supabase.from("items_pedido").select("*").eq("pedido_id", id),
       supabase.from("modelos").select("*"),
       supabase.from("tallas").select("*"),
       supabase.from("pagos_pedido").select("*").eq("pedido_id", id).order("fecha", { ascending: false }),
+      supabase
+        .from("entregas")
+        .select("fecha_real, recibido_por")
+        .eq("pedido_id", id)
+        .order("created_at", { ascending: false })
+        .limit(1)
+        .maybeSingle(),
     ]);
 
   if (!pedido) notFound();
@@ -108,6 +116,13 @@ export default async function PedidoDetallePage({
           </p>
         )}
       </div>
+
+      <EntregaPedido
+        pedidoId={id}
+        estatus={pedido.estatus}
+        fechaEntrega={entrega?.fecha_real ?? null}
+        recibidoPor={entrega?.recibido_por ?? null}
+      />
 
       <CreditoPedido
         pedidoId={id}
