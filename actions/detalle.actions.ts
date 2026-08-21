@@ -34,7 +34,7 @@ export async function obtenerDetalleModelo(id: string) {
         .order("created_at", { ascending: false })
         .limit(20),
       supabase.from("tallas").select("id, codigo"),
-      supabase.from("modelo_tallas").select("talla_id").eq("modelo_id", id),
+      supabase.from("modelo_tallas").select("talla_id, precio_venta").eq("modelo_id", id),
     ]);
 
   const existenciasTotal = (existencias ?? []).reduce((acc, e) => acc + e.cantidad_actual, 0);
@@ -46,6 +46,9 @@ export async function obtenerDetalleModelo(id: string) {
     movimientos: movimientos ?? [],
     tallas: tallas ?? [],
     tallaIdsAsignadas: (tallasAsignadas ?? []).map((t) => t.talla_id),
+    preciosPorTalla: Object.fromEntries(
+      (tallasAsignadas ?? []).map((t) => [t.talla_id, t.precio_venta])
+    ) as Record<string, number | null>,
   };
 }
 

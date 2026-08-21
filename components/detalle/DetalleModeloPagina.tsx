@@ -39,6 +39,11 @@ export function DetalleModeloPagina({ detalle }: { detalle: DetalleModelo }) {
   const [precioVenta, setPrecioVenta] = useState(detalle.modelo?.precio_venta != null ? String(detalle.modelo.precio_venta) : "");
   const [categoria, setCategoria] = useState(detalle.modelo?.categoria ?? "");
   const [tallaIds, setTallaIds] = useState<string[]>(detalle.tallaIdsAsignadas);
+  const [preciosPorTalla, setPreciosPorTalla] = useState<Record<string, string>>(
+    Object.fromEntries(
+      Object.entries(detalle.preciosPorTalla).map(([tallaId, precio]) => [tallaId, precio != null ? String(precio) : ""])
+    )
+  );
   const [pendiente, startTransition] = useTransition();
   const [guardandoTallas, startTransitionTallas] = useTransition();
   const [eliminando, startTransitionEliminar] = useTransition();
@@ -70,10 +75,20 @@ export function DetalleModeloPagina({ detalle }: { detalle: DetalleModelo }) {
     setTallaIds((prev) => (prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]));
   }
 
+  function actualizarPrecioTalla(id: string, valor: string) {
+    setPreciosPorTalla((prev) => ({ ...prev, [id]: valor }));
+  }
+
   function guardarTallas() {
     startTransitionTallas(async () => {
       try {
-        await guardarTallasModelo(modelo!.id, tallaIds);
+        await guardarTallasModelo(
+          modelo!.id,
+          tallaIds.map((tallaId) => ({
+            tallaId,
+            precioVenta: preciosPorTalla[tallaId] ? Number(preciosPorTalla[tallaId]) : undefined,
+          }))
+        );
         toast.success("Tallas actualizadas");
       } catch (err) {
         toast.error(err instanceof Error ? err.message : "Error al guardar");
@@ -208,22 +223,42 @@ export function DetalleModeloPagina({ detalle }: { detalle: DetalleModelo }) {
       </div>
 
       <div className="space-y-3 rounded-lg border p-4">
-        <h2 className="text-lg font-semibold">Tallas disponibles</h2>
+        <h2 className="text-lg font-semibold">Tallas disponibles y precio por talla</h2>
         <p className="text-xs text-muted-foreground">
-          Si no eliges ninguna, se podrá usar cualquier talla del catálogo al crear pedidos u órdenes.
+          Si no eliges ninguna, se podrá usar cualquier talla del catálogo al crear pedidos u órdenes. Si dejas el
+          precio en blanco, se usa el precio de venta general del modelo.
         </p>
-        <div className="flex flex-wrap gap-2">
-          {detalle.tallas.map((talla) => (
-            <label key={talla.id} className="flex items-center gap-1.5 rounded-lg border px-2.5 py-1.5 text-sm">
-              <input
-                type="checkbox"
-                checked={tallaIds.includes(talla.id)}
-                onChange={() => alternarTalla(talla.id)}
-                className="size-4"
-              />
-              {talla.codigo}
-            </label>
-          ))}
+        <div className="flex flex-wrap gap-3">
+          {detalle.tallas.map((talla) => {
+            const activa = tallaIds.includes(talla.id);
+            return (
+              <div
+                key={talla.id}
+                className="flex items-center gap-2 rounded-lg border px-2.5 py-1.5 text-sm"
+              >
+                <label className="flex items-center gap-1.5">
+                  <input
+                    type="checkbox"
+                    checked={activa}
+                    onChange={() => alternarTalla(talla.id)}
+                    className="size-4"
+                  />
+                  {talla.codigo}
+                </label>
+                {activa && (
+                  <Input
+                    type="number"
+                    min={0}
+                    step="0.01"
+                    placeholder={modelo.precio_venta != null ? String(modelo.precio_venta) : "Precio"}
+                    className="h-7 w-24"
+                    value={preciosPorTalla[talla.id] ?? ""}
+                    onChange={(e) => actualizarPrecioTalla(talla.id, e.target.value)}
+                  />
+                )}
+              </div>
+            );
+          })}
         </div>
         <Button onClick={guardarTallas} disabled={guardandoTallas} size="sm" variant="outline">
           {guardandoTallas ? "Guardando..." : "Guardar tallas"}

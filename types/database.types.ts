@@ -675,16 +675,19 @@ export type Database = {
         Row: {
           id: string
           modelo_id: string
+          precio_venta: number | null
           talla_id: string
         }
         Insert: {
           id?: string
           modelo_id: string
+          precio_venta?: number | null
           talla_id: string
         }
         Update: {
           id?: string
           modelo_id?: string
+          precio_venta?: number | null
           talla_id?: string
         }
         Relationships: [

@@ -75,6 +75,15 @@ export function FormPedido({
     return tallas.filter((t) => asignadas.includes(t.id));
   }
 
+  // El precio puede variar por talla (ej. una capa CH/M cuesta distinto que
+  // G/XG); si no hay precio específico para esa talla, usa el precio
+  // general del modelo.
+  function precioDe(modeloId: string, tallaId: string): number {
+    const porTalla = modeloTallas.find((mt) => mt.modelo_id === modeloId && mt.talla_id === tallaId)?.precio_venta;
+    if (porTalla != null) return porTalla;
+    return modelos.find((m) => m.id === modeloId)?.precio_venta ?? 0;
+  }
+
   function agregarItem() {
     setItems((prev) => [...prev, { modeloId: "", tallaId: "", cantidad: 1, precioUnitario: 0 }]);
   }
@@ -259,7 +268,16 @@ export function FormPedido({
                   <Select
                     items={tallasDeModelo(item.modeloId).map((t) => ({ value: t.id, label: t.codigo }))}
                     value={item.tallaId}
-                    onValueChange={(v) => actualizarItem(index, { tallaId: v ?? "" })}
+                    onValueChange={(v) => {
+                      const tallaId = v ?? "";
+                      // Solo autocompleta si el precio sigue en 0: así no se
+                      // pisa un precio que la persona ya haya escrito a mano.
+                      const precioAuto = !item.precioUnitario && tallaId ? precioDe(item.modeloId, tallaId) : undefined;
+                      actualizarItem(index, {
+                        tallaId,
+                        ...(precioAuto ? { precioUnitario: precioAuto } : {}),
+                      });
+                    }}
                     disabled={!item.modeloId}
                   >
                     <SelectTrigger className="w-24">

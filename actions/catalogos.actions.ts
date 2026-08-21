@@ -60,17 +60,24 @@ export async function actualizarCostoModelo(
   revalidatePath("/catalogos/modelos");
 }
 
-export async function guardarTallasModelo(modeloId: string, tallaIds: string[]) {
+export async function guardarTallasModelo(
+  modeloId: string,
+  tallas: { tallaId: string; precioVenta?: number }[]
+) {
   await requerirPerfil(["admin", "supervisor"]);
   const supabase = await createClient();
 
   const { error: errorEliminar } = await supabase.from("modelo_tallas").delete().eq("modelo_id", modeloId);
   if (errorEliminar) throw new Error(errorEliminar.message);
 
-  if (tallaIds.length) {
-    const { error: errorInsertar } = await supabase
-      .from("modelo_tallas")
-      .insert(tallaIds.map((tallaId) => ({ modelo_id: modeloId, talla_id: tallaId })));
+  if (tallas.length) {
+    const { error: errorInsertar } = await supabase.from("modelo_tallas").insert(
+      tallas.map((t) => ({
+        modelo_id: modeloId,
+        talla_id: t.tallaId,
+        precio_venta: t.precioVenta ?? null,
+      }))
+    );
     if (errorInsertar) throw new Error(errorInsertar.message);
   }
 
