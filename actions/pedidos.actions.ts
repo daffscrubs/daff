@@ -3,7 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import { requerirPerfil } from "@/lib/supabase/auth-helpers";
-import { pedidoSchema, type PedidoInput } from "@/lib/validaciones/pedidos.schema";
+import { pagoPedidoSchema, pedidoSchema, type PagoPedidoInput, type PedidoInput } from "@/lib/validaciones/pedidos.schema";
 import type { EstatusPedido } from "@/types/database.types";
 
 async function generarFolioPedido(supabase: Awaited<ReturnType<typeof createClient>>) {
@@ -33,6 +33,7 @@ export async function crearPedido(input: PedidoInput) {
       fecha_compromiso: datos.fechaCompromiso,
       creado_por: perfil.id,
       notas: datos.notas || null,
+      dias_credito: datos.diasCredito,
     })
     .select("id")
     .single();
@@ -89,6 +90,7 @@ export async function actualizarPedido(id: string, input: PedidoInput) {
       cliente_id: datos.clienteId,
       fecha_compromiso: datos.fechaCompromiso,
       notas: datos.notas || null,
+      dias_credito: datos.diasCredito,
     })
     .eq("id", id);
 
@@ -146,4 +148,22 @@ export async function cancelarPedido(id: string) {
   revalidatePath("/pedidos");
   revalidatePath(`/pedidos/${id}`);
   revalidatePath("/produccion");
+}
+
+export async function registrarPagoPedido(input: PagoPedidoInput) {
+  const perfil = await requerirPerfil(["admin", "ventas"]);
+  const datos = pagoPedidoSchema.parse(input);
+  const supabase = await createClient();
+
+  const { error } = await supabase.from("pagos_pedido").insert({
+    pedido_id: datos.pedidoId,
+    monto: datos.monto,
+    fecha: datos.fecha,
+    notas: datos.notas || null,
+    registrado_por: perfil.id,
+  });
+
+  if (error) throw new Error(error.message);
+  revalidatePath(`/pedidos/${datos.pedidoId}`);
+  revalidatePath("/pedidos");
 }

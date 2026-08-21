@@ -4,6 +4,7 @@ import { Download } from "lucide-react";
 import { createClient } from "@/lib/supabase/server";
 import { EstatusPedidoSelect } from "@/components/pedidos/EstatusPedidoSelect";
 import { BotonCancelarPedido } from "@/components/pedidos/BotonCancelarPedido";
+import { CreditoPedido } from "@/components/pedidos/CreditoPedido";
 import { Button } from "@/components/ui/button";
 import {
   Table,
@@ -23,12 +24,13 @@ export default async function PedidoDetallePage({
   const { id } = await params;
   const supabase = await createClient();
 
-  const [{ data: pedido }, { data: items }, { data: modelos }, { data: tallas }] =
+  const [{ data: pedido }, { data: items }, { data: modelos }, { data: tallas }, { data: pagos }] =
     await Promise.all([
       supabase.from("pedidos").select("*, clientes(nombre_comercial)").eq("id", id).single(),
       supabase.from("items_pedido").select("*").eq("pedido_id", id),
       supabase.from("modelos").select("*"),
       supabase.from("tallas").select("*"),
+      supabase.from("pagos_pedido").select("*").eq("pedido_id", id).order("fecha", { ascending: false }),
     ]);
 
   if (!pedido) notFound();
@@ -37,6 +39,7 @@ export default async function PedidoDetallePage({
   const nombre = (id: string, lista: { id: string; nombre?: string; codigo?: string }[]) =>
     lista.find((x) => x.id === id)?.nombre ?? lista.find((x) => x.id === id)?.codigo ?? "—";
   const puedeModificar = pedido.estatus !== "cancelado";
+  const totalPedido = (items ?? []).reduce((acc, i) => acc + i.cantidad * (i.precio_unitario ?? 0), 0);
 
   return (
     <div className="space-y-6">
@@ -101,10 +104,18 @@ export default async function PedidoDetallePage({
         </Table>
         {!!items?.some((i) => i.precio_unitario != null) && (
           <p className="mt-2 text-right text-sm font-medium">
-            Total: {formatearMoneda(items!.reduce((acc, i) => acc + i.cantidad * (i.precio_unitario ?? 0), 0))}
+            Total: {formatearMoneda(totalPedido)}
           </p>
         )}
       </div>
+
+      <CreditoPedido
+        pedidoId={id}
+        fechaPedido={pedido.fecha_pedido}
+        diasCredito={pedido.dias_credito}
+        total={totalPedido}
+        pagos={pagos ?? []}
+      />
     </div>
   );
 }

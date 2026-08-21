@@ -24,6 +24,7 @@ import { EstadoVacio } from "@/components/ui/estado-vacio";
 import { ESTATUS_PEDIDO_LABEL } from "@/lib/labels";
 import { CLASE_ESTATUS_PEDIDO } from "@/lib/estatus-colores";
 import { formatearMoneda } from "@/lib/dinero";
+import { fechaISOLocal, sumarDias } from "@/lib/fechas";
 import type { Database, EstatusPedido } from "@/types/database.types";
 
 type Pedido = Database["public"]["Tables"]["pedidos"]["Row"];
@@ -37,10 +38,12 @@ export function PedidosTable({
   pedidos,
   clientes,
   totales,
+  pagados,
 }: {
   pedidos: Pedido[];
   clientes: { id: string; nombre_comercial: string }[];
   totales: Record<string, number>;
+  pagados: Record<string, number>;
 }) {
   const [busqueda, setBusqueda] = useState("");
   const [estatus, setEstatus] = useState("todos");
@@ -88,30 +91,50 @@ export function PedidosTable({
             <TableHead>Cliente</TableHead>
             <TableHead>Compromiso</TableHead>
             <TableHead>Total</TableHead>
+            <TableHead>Saldo</TableHead>
             <TableHead>Estatus</TableHead>
           </TableRow>
         </TableHeader>
         <TableBody>
-          {filtrados.map((pedido) => (
-            <TableRow key={pedido.id}>
-              <TableCell>
-                <Link href={`/pedidos/${pedido.id}`} className="font-medium hover:underline">
-                  {pedido.folio}
-                </Link>
-              </TableCell>
-              <TableCell>{nombreCliente(pedido.cliente_id)}</TableCell>
-              <TableCell className="text-muted-foreground">{pedido.fecha_compromiso}</TableCell>
-              <TableCell>{totales[pedido.id] ? formatearMoneda(totales[pedido.id]) : "—"}</TableCell>
-              <TableCell>
-                <Badge className={CLASE_ESTATUS_PEDIDO[pedido.estatus as EstatusPedido]}>
-                  {ESTATUS_PEDIDO_LABEL[pedido.estatus as EstatusPedido]}
-                </Badge>
-              </TableCell>
-            </TableRow>
-          ))}
+          {filtrados.map((pedido) => {
+            const total = totales[pedido.id] ?? 0;
+            const pagado = pagados[pedido.id] ?? 0;
+            const saldo = Math.max(total - pagado, 0);
+            const fechaLimite = pedido.dias_credito > 0 ? sumarDias(pedido.fecha_pedido, pedido.dias_credito) : null;
+            const vencido = !!fechaLimite && saldo > 0 && fechaLimite < fechaISOLocal(new Date());
+            return (
+              <TableRow key={pedido.id}>
+                <TableCell>
+                  <Link href={`/pedidos/${pedido.id}`} className="font-medium hover:underline">
+                    {pedido.folio}
+                  </Link>
+                </TableCell>
+                <TableCell>{nombreCliente(pedido.cliente_id)}</TableCell>
+                <TableCell className="text-muted-foreground">{pedido.fecha_compromiso}</TableCell>
+                <TableCell>{total ? formatearMoneda(total) : "—"}</TableCell>
+                <TableCell>
+                  {total ? (
+                    <span className="flex items-center gap-1.5">
+                      <span className={saldo > 0 ? "text-destructive font-medium" : "text-muted-foreground"}>
+                        {formatearMoneda(saldo)}
+                      </span>
+                      {vencido && <Badge variant="destructive">Vencido</Badge>}
+                    </span>
+                  ) : (
+                    "—"
+                  )}
+                </TableCell>
+                <TableCell>
+                  <Badge className={CLASE_ESTATUS_PEDIDO[pedido.estatus as EstatusPedido]}>
+                    {ESTATUS_PEDIDO_LABEL[pedido.estatus as EstatusPedido]}
+                  </Badge>
+                </TableCell>
+              </TableRow>
+            );
+          })}
           {!filtrados.length && (
             <TableRow>
-              <TableCell colSpan={5}>
+              <TableCell colSpan={6}>
                 <EstadoVacio
                   icon={ClipboardList}
                   titulo={pedidos.length ? "Sin resultados" : "Sin pedidos todavía"}

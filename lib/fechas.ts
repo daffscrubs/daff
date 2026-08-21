@@ -35,3 +35,18 @@ export function fechaISOLocal(d: Date): string {
   const dia = String(d.getDate()).padStart(2, "0");
   return `${anio}-${mes}-${dia}`;
 }
+
+/**
+ * Suma (o resta) días a una fecha "YYYY-MM-DD" y devuelve otra "YYYY-MM-DD".
+ * Usa componentes UTC de punta a punta (nunca se mezcla con hora local), así
+ * que es pura aritmética de calendario sin riesgo de saltar de día.
+ */
+export function sumarDias(fechaISO: string, dias: number): string {
+  const [anio, mes, dia] = fechaISO.slice(0, 10).split("-").map(Number);
+  const d = new Date(Date.UTC(anio, mes - 1, dia));
+  d.setUTCDate(d.getUTCDate() + dias);
+  const anioOut = d.getUTCFullYear();
+  const mesOut = String(d.getUTCMonth() + 1).padStart(2, "0");
+  const diaOut = String(d.getUTCDate()).padStart(2, "0");
+  return `${anioOut}-${mesOut}-${diaOut}`;
+}

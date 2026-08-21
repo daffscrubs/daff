@@ -1,7 +1,8 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { Search, Download, ShoppingCart } from "lucide-react";
+import Link from "next/link";
+import { Search, Download, ShoppingCart, Pencil } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import {
@@ -19,6 +20,8 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { EstadoVacio } from "@/components/ui/estado-vacio";
+import { BotonEliminarConfirmacion } from "@/components/forms/BotonEliminarConfirmacion";
+import { eliminarCompra } from "@/actions/compras.actions";
 import { formatearMoneda } from "@/lib/dinero";
 import type { Database } from "@/types/database.types";
 
@@ -100,15 +103,33 @@ export function ComprasTable({
                 <DialogTitle>{seleccionada.folio}</DialogTitle>
               </DialogHeader>
               <div className="space-y-3 text-sm">
-                <Button
-                  variant="outline"
-                  size="sm"
-                  render={<a href={`/api/pdf/compras/${seleccionada.id}`} target="_blank" rel="noopener noreferrer" />}
-                  nativeButton={false}
-                >
-                  <Download className="size-4" />
-                  Descargar PDF
-                </Button>
+                <div className="flex flex-wrap gap-2">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    render={<a href={`/api/pdf/compras/${seleccionada.id}`} target="_blank" rel="noopener noreferrer" />}
+                    nativeButton={false}
+                  >
+                    <Download className="size-4" />
+                    Descargar PDF
+                  </Button>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    render={<Link href={`/compras/${seleccionada.id}/editar`} />}
+                    nativeButton={false}
+                  >
+                    <Pencil className="size-4" />
+                    Editar
+                  </Button>
+                  <BotonEliminarConfirmacion
+                    entidad="compra"
+                    onEliminar={async () => {
+                      await eliminarCompra(seleccionada.id);
+                      setSeleccionada(null);
+                    }}
+                  />
+                </div>
                 <p><span className="text-muted-foreground">Proveedor:</span> {seleccionada.proveedor}</p>
                 <p><span className="text-muted-foreground">Fecha:</span> {seleccionada.fecha}</p>
                 {seleccionada.notas && <p><span className="text-muted-foreground">Notas:</span> {seleccionada.notas}</p>}

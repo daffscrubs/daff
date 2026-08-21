@@ -55,6 +55,7 @@ export function FormPedido({
     clienteId: string;
     fechaCompromiso: string;
     notas: string;
+    diasCredito: number;
     items: ItemPedidoInput[];
   };
 }) {
@@ -62,6 +63,8 @@ export function FormPedido({
   const [clienteId, setClienteId] = useState(valoresIniciales?.clienteId ?? "");
   const [fechaCompromiso, setFechaCompromiso] = useState(valoresIniciales?.fechaCompromiso ?? "");
   const [notas, setNotas] = useState(valoresIniciales?.notas ?? "");
+  const [esCredito, setEsCredito] = useState((valoresIniciales?.diasCredito ?? 0) > 0);
+  const [diasCreditoInput, setDiasCreditoInput] = useState(String(valoresIniciales?.diasCredito || 30));
   const [items, setItems] = useState<ItemPedidoInput[]>(valoresIniciales?.items ?? []);
   const [pendiente, startTransition] = useTransition();
   const router = useRouter();
@@ -112,14 +115,15 @@ export function FormPedido({
       toast.error("Todos los productos deben tener un precio unitario");
       return;
     }
+    const diasCredito = esCredito ? Number(diasCreditoInput) || 0 : 0;
     startTransition(async () => {
       try {
         if (modoEdicion) {
-          await actualizarPedido(pedidoId, { clienteId, fechaCompromiso, notas, items });
+          await actualizarPedido(pedidoId, { clienteId, fechaCompromiso, notas, diasCredito, items });
           toast.success("Pedido actualizado");
           router.push(`/pedidos/${pedidoId}`);
         } else {
-          const id = await crearPedido({ clienteId, fechaCompromiso, notas, items });
+          const id = await crearPedido({ clienteId, fechaCompromiso, notas, diasCredito, items });
           toast.success("Pedido creado");
           router.push(`/pedidos/${id}`);
         }
@@ -183,6 +187,42 @@ export function FormPedido({
       <div className="space-y-2">
         <Label htmlFor="notas">Notas</Label>
         <Textarea id="notas" value={notas} onChange={(e) => setNotas(e.target.value)} />
+      </div>
+
+      <div className="space-y-2 rounded-lg border p-4">
+        <Label>Condición de pago</Label>
+        <div className="flex flex-wrap items-center gap-3">
+          <div className="flex rounded-lg border p-0.5">
+            <Button
+              type="button"
+              size="sm"
+              variant={!esCredito ? "default" : "ghost"}
+              onClick={() => setEsCredito(false)}
+            >
+              Contado
+            </Button>
+            <Button
+              type="button"
+              size="sm"
+              variant={esCredito ? "default" : "ghost"}
+              onClick={() => setEsCredito(true)}
+            >
+              Crédito
+            </Button>
+          </div>
+          {esCredito && (
+            <div className="flex items-center gap-2">
+              <Input
+                type="number"
+                min={1}
+                className="w-20"
+                value={diasCreditoInput}
+                onChange={(e) => setDiasCreditoInput(e.target.value)}
+              />
+              <span className="text-sm text-muted-foreground">días para cobrar</span>
+            </div>
+          )}
+        </div>
       </div>
 
       <div className="space-y-3">

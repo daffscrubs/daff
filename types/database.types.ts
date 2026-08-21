@@ -743,6 +743,7 @@ export type Database = {
       movimientos_inventario: {
         Row: {
           cantidad: number
+          compra_id: string | null
           created_at: string
           id: string
           lote_id: string | null
@@ -753,6 +754,7 @@ export type Database = {
         }
         Insert: {
           cantidad: number
+          compra_id?: string | null
           created_at?: string
           id?: string
           lote_id?: string | null
@@ -763,6 +765,7 @@ export type Database = {
         }
         Update: {
           cantidad?: number
+          compra_id?: string | null
           created_at?: string
           id?: string
           lote_id?: string | null
@@ -772,6 +775,13 @@ export type Database = {
           tipo?: Database["public"]["Enums"]["tipo_movimiento"]
         }
         Relationships: [
+          {
+            foreignKeyName: "movimientos_inventario_compra_id_fkey"
+            columns: ["compra_id"]
+            isOneToOne: false
+            referencedRelation: "compras"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "movimientos_inventario_lote_id_fkey"
             columns: ["lote_id"]
@@ -860,11 +870,57 @@ export type Database = {
           },
         ]
       }
+      pagos_pedido: {
+        Row: {
+          created_at: string
+          fecha: string
+          id: string
+          monto: number
+          notas: string | null
+          pedido_id: string
+          registrado_por: string | null
+        }
+        Insert: {
+          created_at?: string
+          fecha?: string
+          id?: string
+          monto: number
+          notas?: string | null
+          pedido_id: string
+          registrado_por?: string | null
+        }
+        Update: {
+          created_at?: string
+          fecha?: string
+          id?: string
+          monto?: number
+          notas?: string | null
+          pedido_id?: string
+          registrado_por?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "pagos_pedido_pedido_id_fkey"
+            columns: ["pedido_id"]
+            isOneToOne: false
+            referencedRelation: "pedidos"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "pagos_pedido_registrado_por_fkey"
+            columns: ["registrado_por"]
+            isOneToOne: false
+            referencedRelation: "perfiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       pedidos: {
         Row: {
           cliente_id: string
           creado_por: string | null
           created_at: string
+          dias_credito: number
           estatus: Database["public"]["Enums"]["estatus_pedido"]
           fecha_compromiso: string
           fecha_pedido: string
@@ -876,6 +932,7 @@ export type Database = {
           cliente_id: string
           creado_por?: string | null
           created_at?: string
+          dias_credito?: number
           estatus?: Database["public"]["Enums"]["estatus_pedido"]
           fecha_compromiso: string
           fecha_pedido?: string
@@ -887,6 +944,7 @@ export type Database = {
           cliente_id?: string
           creado_por?: string | null
           created_at?: string
+          dias_credito?: number
           estatus?: Database["public"]["Enums"]["estatus_pedido"]
           fecha_compromiso?: string
           fecha_pedido?: string

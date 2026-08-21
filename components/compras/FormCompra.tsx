@@ -3,7 +3,7 @@
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
-import { crearCompra } from "@/actions/compras.actions";
+import { actualizarCompra, crearCompra } from "@/actions/compras.actions";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -24,11 +24,25 @@ import { formatearMoneda } from "@/lib/dinero";
 
 type Material = Database["public"]["Tables"]["materiales"]["Row"];
 
-export function FormCompra({ materiales }: { materiales: Material[] }) {
-  const [proveedor, setProveedor] = useState("");
-  const [fecha, setFecha] = useState(() => fechaISOLocal(new Date()));
-  const [notas, setNotas] = useState("");
-  const [items, setItems] = useState<CompraItemInput[]>([]);
+export function FormCompra({
+  materiales,
+  compraId,
+  valoresIniciales,
+}: {
+  materiales: Material[];
+  compraId?: string;
+  valoresIniciales?: {
+    proveedor: string;
+    fecha: string;
+    notas: string;
+    items: CompraItemInput[];
+  };
+}) {
+  const modoEdicion = !!compraId;
+  const [proveedor, setProveedor] = useState(valoresIniciales?.proveedor ?? "");
+  const [fecha, setFecha] = useState(() => valoresIniciales?.fecha ?? fechaISOLocal(new Date()));
+  const [notas, setNotas] = useState(valoresIniciales?.notas ?? "");
+  const [items, setItems] = useState<CompraItemInput[]>(valoresIniciales?.items ?? []);
   const [pendiente, startTransition] = useTransition();
   const router = useRouter();
 
@@ -56,11 +70,16 @@ export function FormCompra({ materiales }: { materiales: Material[] }) {
     }
     startTransition(async () => {
       try {
-        await crearCompra({ proveedor, fecha, notas, items });
-        toast.success("Compra registrada, se actualizó el inventario");
+        if (modoEdicion) {
+          await actualizarCompra(compraId, { proveedor, fecha, notas, items });
+          toast.success("Compra actualizada, se ajustó el inventario");
+        } else {
+          await crearCompra({ proveedor, fecha, notas, items });
+          toast.success("Compra registrada, se actualizó el inventario");
+        }
         router.push("/compras");
       } catch (err) {
-        toast.error(err instanceof Error ? err.message : "Error al registrar la compra");
+        toast.error(err instanceof Error ? err.message : "Error al guardar la compra");
       }
     });
   }
@@ -159,7 +178,7 @@ export function FormCompra({ materiales }: { materiales: Material[] }) {
       </div>
 
       <Button type="submit" disabled={pendiente}>
-        {pendiente ? "Registrando..." : "Registrar compra"}
+        {pendiente ? "Guardando..." : modoEdicion ? "Guardar cambios" : "Registrar compra"}
       </Button>
     </form>
   );
