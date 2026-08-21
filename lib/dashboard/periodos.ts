@@ -1,8 +1,8 @@
+import { fechaISOLocal } from "@/lib/fechas";
+
 export type TipoPeriodo = "hoy" | "semana" | "mes" | "personalizado";
 
-function aFechaISO(d: Date) {
-  return d.toISOString().slice(0, 10);
-}
+const aFechaISO = fechaISOLocal;
 
 /** Calcula el rango [desde, hasta] (inclusive, formato YYYY-MM-DD) para un periodo predefinido. */
 export function rangoDePeriodo(tipo: Exclude<TipoPeriodo, "personalizado">): { desde: string; hasta: string } {

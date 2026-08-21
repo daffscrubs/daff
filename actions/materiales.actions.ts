@@ -29,12 +29,17 @@ export async function crearMaterial(input: MaterialInput) {
   revalidatePath("/materiales");
 }
 
-export async function actualizarCostoMaterial(id: string, costoUnitario: number, stockMinimo: number) {
+export async function actualizarCostoMaterial(
+  id: string,
+  costoUnitario: number,
+  stockMinimo: number,
+  categoria: string
+) {
   await requerirPerfil(["admin", "supervisor"]);
   const supabase = await createClient();
   const { error } = await supabase
     .from("materiales")
-    .update({ costo_unitario: costoUnitario, stock_minimo: stockMinimo })
+    .update({ costo_unitario: costoUnitario, stock_minimo: stockMinimo, categoria: categoria || null })
     .eq("id", id);
   if (error) throw new Error(error.message);
   revalidatePath("/materiales");
@@ -78,15 +83,27 @@ export async function guardarConsumoEstimado(input: ConsumoEstimadoInput) {
 export async function eliminarConsumoMaterial(id: string, loteId: string) {
   await requerirPerfil(["admin", "supervisor"]);
   const supabase = await createClient();
-  const { error } = await supabase.from("consumo_material_orden").delete().eq("id", id);
+  const { data, error } = await supabase
+    .from("consumo_material_orden")
+    .delete()
+    .eq("id", id)
+    .is("cantidad_real_registrada_en", null)
+    .select("id");
   if (error) throw new Error(error.message);
+  if (!data?.length) throw new Error("No se puede quitar: el consumo real de este insumo ya fue registrado.");
   revalidatePath(`/produccion/${loteId}`);
 }
 
 export async function registrarConsumoReal(id: string, loteId: string, cantidadReal: number) {
   await requerirPerfil(["admin", "supervisor"]);
   const supabase = await createClient();
-  const { error } = await supabase.from("consumo_material_orden").update({ cantidad_real: cantidadReal }).eq("id", id);
+  const { data, error } = await supabase
+    .from("consumo_material_orden")
+    .update({ cantidad_real: cantidadReal, cantidad_real_registrada_en: new Date().toISOString() })
+    .eq("id", id)
+    .is("cantidad_real_registrada_en", null)
+    .select("id");
   if (error) throw new Error(error.message);
+  if (!data?.length) throw new Error("El consumo real de este insumo ya fue registrado y no se puede modificar.");
   revalidatePath(`/produccion/${loteId}`);
 }

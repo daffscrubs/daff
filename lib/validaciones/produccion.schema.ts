@@ -19,6 +19,11 @@ export const ordenProduccionSchema = z.object({
   insumos: z.array(insumoOrdenSchema).optional().default([]),
 });
 
+export const editarOrdenProduccionSchema = z.object({
+  fechaFinEstimada: z.string().optional(),
+  items: z.array(itemOrdenSchema).min(1, "Agrega al menos un producto"),
+});
+
 export const agregarEtapaLoteSchema = z.object({
   loteId: z.string().uuid(),
   etapaId: z.string().uuid("Selecciona una etapa"),
@@ -35,5 +40,6 @@ export const incidenciaSchema = z.object({
 export type ItemOrdenInput = z.infer<typeof itemOrdenSchema>;
 export type InsumoOrdenInput = z.infer<typeof insumoOrdenSchema>;
 export type OrdenProduccionInput = z.infer<typeof ordenProduccionSchema>;
+export type EditarOrdenProduccionInput = z.infer<typeof editarOrdenProduccionSchema>;
 export type AgregarEtapaLoteInput = z.infer<typeof agregarEtapaLoteSchema>;
 export type IncidenciaInput = z.infer<typeof incidenciaSchema>;

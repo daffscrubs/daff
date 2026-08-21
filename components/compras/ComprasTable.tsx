@@ -1,7 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { Search, Download } from "lucide-react";
+import { Search, Download, ShoppingCart } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import {
@@ -18,6 +18,8 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import { EstadoVacio } from "@/components/ui/estado-vacio";
+import { formatearMoneda } from "@/lib/dinero";
 import type { Database } from "@/types/database.types";
 
 type Compra = Database["public"]["Tables"]["compras"]["Row"];
@@ -73,13 +75,17 @@ export function ComprasTable({
               <TableCell className="font-medium">{c.folio}</TableCell>
               <TableCell>{c.proveedor}</TableCell>
               <TableCell className="text-muted-foreground">{c.fecha}</TableCell>
-              <TableCell>${c.total.toFixed(2)}</TableCell>
+              <TableCell>{formatearMoneda(c.total)}</TableCell>
             </TableRow>
           ))}
           {!filtradas.length && (
             <TableRow>
-              <TableCell colSpan={4} className="text-center text-muted-foreground">
-                {compras.length ? "Sin resultados." : "Sin compras todavía."}
+              <TableCell colSpan={4}>
+                <EstadoVacio
+                  icon={ShoppingCart}
+                  titulo={compras.length ? "Sin resultados" : "Sin compras todavía"}
+                  descripcion={compras.length ? "Prueba con otra búsqueda." : "Las compras que registres van a aparecer aquí."}
+                />
               </TableCell>
             </TableRow>
           )}
@@ -120,13 +126,13 @@ export function ComprasTable({
                       <TableRow key={i.id}>
                         <TableCell>{nombreMaterial(i.material_id)}</TableCell>
                         <TableCell>{i.cantidad} {unidadMaterial(i.material_id)}</TableCell>
-                        <TableCell>${i.costo_unitario.toFixed(2)}</TableCell>
-                        <TableCell>${(i.subtotal ?? 0).toFixed(2)}</TableCell>
+                        <TableCell>{formatearMoneda(i.costo_unitario)}</TableCell>
+                        <TableCell>{formatearMoneda(i.subtotal ?? 0)}</TableCell>
                       </TableRow>
                     ))}
                   </TableBody>
                 </Table>
-                <p className="text-right font-medium">Total: ${seleccionada.total.toFixed(2)}</p>
+                <p className="text-right font-medium">Total: {formatearMoneda(seleccionada.total)}</p>
               </div>
             </>
           )}

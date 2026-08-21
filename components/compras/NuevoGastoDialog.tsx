@@ -23,6 +23,7 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "@/components/ui/dialog";
+import { fechaISOLocal } from "@/lib/fechas";
 
 const ETIQUETA_CATEGORIA: Record<(typeof CATEGORIAS_GASTO)[number], string> = {
   renta: "Renta",
@@ -35,7 +36,7 @@ const ETIQUETA_CATEGORIA: Record<(typeof CATEGORIAS_GASTO)[number], string> = {
 
 export function NuevoGastoDialog() {
   const [abierto, setAbierto] = useState(false);
-  const [fecha, setFecha] = useState(() => new Date().toISOString().slice(0, 10));
+  const [fecha, setFecha] = useState(() => fechaISOLocal(new Date()));
   const [categoria, setCategoria] = useState<(typeof CATEGORIAS_GASTO)[number]>("otro");
   const [concepto, setConcepto] = useState("");
   const [monto, setMonto] = useState("");

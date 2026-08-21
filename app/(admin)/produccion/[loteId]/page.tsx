@@ -9,7 +9,10 @@ import { AjusteAvanceForm } from "@/components/produccion/AjusteAvanceForm";
 import { NotasOrden } from "@/components/produccion/NotasOrden";
 import { InsumosOrden } from "@/components/produccion/InsumosOrden";
 import { HistorialOrden } from "@/components/produccion/HistorialOrden";
+import { BotonCancelarOrden } from "@/components/produccion/BotonCancelarOrden";
 import { construirHistorialOrden } from "@/lib/produccion/historial";
+import { construirRegistrosReporte } from "@/lib/produccion/registro-reporte";
+import { formatearFechaHora } from "@/lib/fechas";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
@@ -79,11 +82,19 @@ export default async function LoteDetallePage({
   };
   const puedeGestionar = perfil.rol === "admin" || perfil.rol === "supervisor";
 
+  const registrosReporte = construirRegistrosReporte({
+    registros: registros ?? [],
+    etapasCatalogo: etapasCatalogo ?? [],
+    loteEtapas: loteEtapas ?? [],
+    items: itemsOrden,
+    lotes: [{ id: lote.id, folio: lote.folio }],
+    modelos: modelos ?? [],
+    tallas: tallas ?? [],
+  });
+
   const eventosHistorial = construirHistorialOrden({
     lote,
-    registros: registros ?? [],
-    loteEtapas: loteEtapas ?? [],
-    etapasCatalogo: etapasCatalogo ?? [],
+    registrosReporte,
     consumos: consumos ?? [],
     materiales: materiales ?? [],
     entregas,
@@ -114,6 +125,14 @@ export default async function LoteDetallePage({
             <Button variant="outline" size="sm" render={<Link href={`/produccion/${loteId}/etapas`} />} nativeButton={false}>
               Configurar procesos
             </Button>
+          )}
+          {puedeGestionar && lote.estatus !== "cancelada" && (
+            <Button variant="outline" size="sm" render={<Link href={`/produccion/${loteId}/editar`} />} nativeButton={false}>
+              Editar
+            </Button>
+          )}
+          {puedeGestionar && lote.estatus !== "cancelada" && (
+            <BotonCancelarOrden loteId={loteId} />
           )}
         </div>
       </div>
@@ -167,7 +186,7 @@ export default async function LoteDetallePage({
               const le = loteEtapas?.find((le) => le.id === r.lote_etapa_id);
               return (
                 <TableRow key={r.id}>
-                  <TableCell className="text-muted-foreground">{r.fecha}</TableCell>
+                  <TableCell className="text-muted-foreground whitespace-nowrap">{formatearFechaHora(r.created_at)}</TableCell>
                   <TableCell>{r.perfiles?.nombre_completo ?? "—"}</TableCell>
                   <TableCell>{le ? nombreItem(le) : "—"}</TableCell>
                   <TableCell>{nombreEtapa(le?.etapa_id ?? "")}</TableCell>

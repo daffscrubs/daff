@@ -11,15 +11,15 @@ import {
 } from "@/lib/validaciones/compras.schema";
 
 async function sugerirFolioCompra(supabase: Awaited<ReturnType<typeof createClient>>) {
-  const anio = new Date().getFullYear();
-  const { count } = await supabase
-    .from("compras")
-    .select("id", { count: "exact", head: true })
-    .gte("created_at", `${anio}-01-01`)
-    .lt("created_at", `${anio + 1}-01-01`);
-
-  const consecutivo = String((count ?? 0) + 1).padStart(4, "0");
-  return `COMPRA-${anio}-${consecutivo}`;
+  // Folio numérico simple y consecutivo (1, 2, 3...). Se toma el máximo folio
+  // numérico existente (ignorando folios antiguos con otro formato) en vez de
+  // un conteo de filas, para no repetir folio si alguna compra fue eliminada.
+  const { data } = await supabase.from("compras").select("folio");
+  const maxNumerico = (data ?? [])
+    .map((c) => Number(c.folio))
+    .filter((n) => Number.isInteger(n) && n > 0)
+    .reduce((max, n) => Math.max(max, n), 0);
+  return String(maxNumerico + 1);
 }
 
 export async function crearCompra(input: CompraInput) {

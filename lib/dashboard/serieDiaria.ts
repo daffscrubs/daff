@@ -1,3 +1,5 @@
+import { fechaISOLocal } from "@/lib/fechas";
+
 export interface PuntoSerieDiaria {
   fecha: string;
   etiqueta: string;
@@ -15,7 +17,7 @@ export function serieDiaria(
   for (let i = dias - 1; i >= 0; i--) {
     const d = new Date(hoy);
     d.setDate(hoy.getDate() - i);
-    const fecha = d.toISOString().slice(0, 10);
+    const fecha = fechaISOLocal(d);
     const etiqueta = d.toLocaleDateString("es-MX", { day: "numeric", month: "short" }).replace(".", "");
     const valor = registros.filter((r) => r.fecha === fecha).reduce((acc, r) => acc + r.monto, 0);
     puntos.push({ fecha, etiqueta, valor });

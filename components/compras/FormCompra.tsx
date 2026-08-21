@@ -19,12 +19,14 @@ import {
 } from "@/components/ui/table";
 import type { Database } from "@/types/database.types";
 import type { CompraItemInput } from "@/lib/validaciones/compras.schema";
+import { fechaISOLocal } from "@/lib/fechas";
+import { formatearMoneda } from "@/lib/dinero";
 
 type Material = Database["public"]["Tables"]["materiales"]["Row"];
 
 export function FormCompra({ materiales }: { materiales: Material[] }) {
   const [proveedor, setProveedor] = useState("");
-  const [fecha, setFecha] = useState(() => new Date().toISOString().slice(0, 10));
+  const [fecha, setFecha] = useState(() => fechaISOLocal(new Date()));
   const [notas, setNotas] = useState("");
   const [items, setItems] = useState<CompraItemInput[]>([]);
   const [pendiente, startTransition] = useTransition();
@@ -131,7 +133,7 @@ export function FormCompra({ materiales }: { materiales: Material[] }) {
                     onChange={(e) => actualizarItem(index, { costoUnitario: Number(e.target.value) })}
                   />
                 </TableCell>
-                <TableCell>${((Number(item.cantidad) || 0) * (Number(item.costoUnitario) || 0)).toFixed(2)}</TableCell>
+                <TableCell>{formatearMoneda((Number(item.cantidad) || 0) * (Number(item.costoUnitario) || 0))}</TableCell>
                 <TableCell>
                   <Button type="button" variant="ghost" size="sm" onClick={() => quitarItem(index)}>
                     Quitar
@@ -151,7 +153,7 @@ export function FormCompra({ materiales }: { materiales: Material[] }) {
 
         {!!items.length && (
           <p className="text-right text-sm font-medium">
-            Total: ${total.toFixed(2)}
+            Total: {formatearMoneda(total)}
           </p>
         )}
       </div>

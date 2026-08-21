@@ -107,6 +107,20 @@ export const estilos = StyleSheet.create({
     fontSize: 11,
     fontWeight: 700,
   },
+  firmaContenedor: {
+    marginTop: 70,
+    alignItems: "center",
+  },
+  firmaLinea: {
+    borderTopWidth: 1,
+    borderTopColor: "#111111",
+    width: 240,
+    marginBottom: 6,
+  },
+  firmaEtiqueta: {
+    fontSize: 9,
+    color: "#555555",
+  },
   pie: {
     position: "absolute",
     bottom: 30,

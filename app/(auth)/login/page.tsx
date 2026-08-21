@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import Image from "next/image";
-import { createClient } from "@/lib/supabase/client";
+import { iniciarSesion } from "@/actions/auth.actions";
 import {
   dominioColaborador,
   loginColaboradorSchema,
@@ -34,14 +34,13 @@ export default function LoginPage() {
     defaultValues: { usuarioCorto: "", pin: "" },
   });
 
-  async function iniciarSesion(email: string, password: string) {
+  async function entrar(identificador: string, email: string, password: string) {
     setError(null);
     setCargando(true);
-    const supabase = createClient();
-    const { error } = await supabase.auth.signInWithPassword({ email, password });
+    const { error } = await iniciarSesion(identificador, email, password);
     setCargando(false);
     if (error) {
-      setError("Usuario o contraseña incorrectos.");
+      setError(error);
       return;
     }
     router.refresh();
@@ -51,7 +50,7 @@ export default function LoginPage() {
   return (
     <div className="flex min-h-screen items-center justify-center bg-muted/30 px-4">
       <Card className="w-full max-w-sm">
-        <CardHeader className="items-center text-center">
+        <CardHeader className="justify-items-center text-center">
           <Image src="/brand/logo-full-trimmed.png" alt="daff" width={92} height={125} className="mb-1" priority />
           <CardDescription>Inicia sesión para continuar</CardDescription>
         </CardHeader>
@@ -66,15 +65,16 @@ export default function LoginPage() {
               <form
                 className="space-y-4"
                 onSubmit={formColaborador.handleSubmit((datos) =>
-                  iniciarSesion(`${datos.usuarioCorto}@${dominioColaborador}`, datos.pin)
+                  entrar(datos.usuarioCorto, `${datos.usuarioCorto}@${dominioColaborador}`, datos.pin)
                 )}
               >
                 <div className="space-y-2">
                   <Label htmlFor="usuarioCorto">Usuario</Label>
                   <Input
                     id="usuarioCorto"
-                    placeholder="martha"
+                    placeholder="usuario"
                     autoCapitalize="none"
+                    autoComplete="off"
                     {...formColaborador.register("usuarioCorto")}
                   />
                   {formColaborador.formState.errors.usuarioCorto && (
@@ -91,6 +91,7 @@ export default function LoginPage() {
                     inputMode="numeric"
                     maxLength={6}
                     placeholder="••••••"
+                    autoComplete="off"
                     {...formColaborador.register("pin")}
                   />
                   {formColaborador.formState.errors.pin && (
@@ -110,7 +111,7 @@ export default function LoginPage() {
               <form
                 className="space-y-4"
                 onSubmit={formPersonal.handleSubmit((datos) =>
-                  iniciarSesion(datos.email, datos.password)
+                  entrar(datos.email, datos.email, datos.password)
                 )}
               >
                 <div className="space-y-2">

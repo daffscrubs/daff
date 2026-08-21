@@ -13,6 +13,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import type { RegistroReporte } from "@/components/produccion/ReporteProductividadTable";
+import { fechaISOLocal } from "@/lib/fechas";
 
 function iniciales(nombre: string) {
   return nombre
@@ -30,7 +31,7 @@ export function ActividadDiariaColaboradores({
   registros: RegistroReporte[];
   colaboradores: { id: string; nombre: string }[];
 }) {
-  const hoy = new Date().toISOString().slice(0, 10);
+  const hoy = fechaISOLocal(new Date());
   const [fecha, setFecha] = useState(hoy);
   const [colaboradorId, setColaboradorId] = useState("todos");
 

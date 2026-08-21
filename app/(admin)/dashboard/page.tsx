@@ -13,12 +13,11 @@ import {
 } from "@/components/ui/table";
 import { MetricasFinancieras } from "@/components/dashboard/MetricasFinancieras";
 import { ActividadDiariaColaboradores } from "@/components/dashboard/ActividadDiariaColaboradores";
-import { PedidosPorEtapa } from "@/components/dashboard/PedidosPorEtapa";
 import { PiezasPorColaboradorSemana } from "@/components/dashboard/PiezasPorColaboradorSemana";
 import { totalesPorPedido } from "@/lib/pedidos/totales";
 import { construirRegistrosReporte } from "@/lib/produccion/registro-reporte";
-import { pedidosPorEtapa } from "@/lib/dashboard/pedidosPorEtapa";
 import { piezasPorColaboradorSemana } from "@/lib/dashboard/piezasPorColaborador";
+import { fechaISOLocal } from "@/lib/fechas";
 
 export default async function DashboardPage() {
   const supabase = await createClient();
@@ -49,10 +48,10 @@ export default async function DashboardPage() {
       .from("entregas")
       .select("*, pedidos(folio)")
       .eq("estatus", "programada")
-      .lte("fecha_programada", enUnaSemana.toISOString().slice(0, 10))
+      .lte("fecha_programada", fechaISOLocal(enUnaSemana))
       .order("fecha_programada"),
     supabase.from("materiales").select("*"),
-    supabase.from("pedidos").select("id, fecha_pedido, estatus"),
+    supabase.from("pedidos").select("id, fecha_pedido"),
     supabase.from("items_pedido").select("*"),
     supabase.from("compras").select("fecha, total"),
     supabase.from("gastos").select("fecha, monto"),
@@ -76,7 +75,7 @@ export default async function DashboardPage() {
     supabase.from("etapas_proceso").select("*"),
     supabase.from("lote_etapas").select("*"),
     supabase.from("items_orden_produccion").select("*"),
-    supabase.from("lotes_produccion").select("id, folio, pedido_id"),
+    supabase.from("lotes_produccion").select("id, folio"),
     supabase.from("modelos").select("id, nombre"),
     supabase.from("tallas").select("id, codigo"),
     supabase.from("perfiles").select("id, nombre_completo").eq("rol", "colaborador").eq("activo", true).order("nombre_completo"),
@@ -90,14 +89,6 @@ export default async function DashboardPage() {
     lotes: lotes ?? [],
     modelos: modelos ?? [],
     tallas: tallas ?? [],
-  });
-
-  const conteosPorEtapa = pedidosPorEtapa({
-    pedidos: pedidos ?? [],
-    lotes: lotes ?? [],
-    items: items ?? [],
-    loteEtapas: loteEtapas ?? [],
-    etapasCatalogo: etapasCatalogo ?? [],
   });
 
   const piezasSemana = piezasPorColaboradorSemana(actividadColaboradores);
@@ -133,10 +124,7 @@ export default async function DashboardPage() {
         avances={avancesParaMetricas}
       />
 
-      <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
-        <PedidosPorEtapa conteos={conteosPorEtapa} />
-        <PiezasPorColaboradorSemana datos={piezasSemana} />
-      </div>
+      <PiezasPorColaboradorSemana datos={piezasSemana} />
 
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
         {kpis.map((kpi) => (

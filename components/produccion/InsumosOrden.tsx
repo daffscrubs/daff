@@ -8,6 +8,7 @@ import {
   guardarConsumoEstimado,
   registrarConsumoReal,
 } from "@/actions/materiales.actions";
+import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { ComboboxField } from "@/components/ui/combobox-field";
@@ -23,6 +24,91 @@ import type { Database } from "@/types/database.types";
 
 type Consumo = Database["public"]["Tables"]["consumo_material_orden"]["Row"];
 type Material = Database["public"]["Tables"]["materiales"]["Row"];
+
+function FilaConsumo({
+  consumo,
+  loteId,
+  nombreMaterial,
+  unidadMaterial,
+  onQuitar,
+  bloqueado,
+}: {
+  consumo: Consumo;
+  loteId: string;
+  nombreMaterial: string;
+  unidadMaterial: string;
+  onQuitar: () => void;
+  bloqueado: boolean;
+}) {
+  const valorGuardado = String(consumo.cantidad_real ?? 0);
+  const [real, setReal] = useState(valorGuardado);
+  const [pendiente, startTransition] = useTransition();
+  const router = useRouter();
+  const registrado = !!consumo.cantidad_real_registrada_en;
+
+  function guardar() {
+    startTransition(async () => {
+      try {
+        await registrarConsumoReal(consumo.id, loteId, Number(real) || 0);
+        toast.success("Consumo real guardado");
+        router.refresh();
+      } catch (err) {
+        toast.error(err instanceof Error ? err.message : "Error al guardar");
+      }
+    });
+  }
+
+  if (registrado) {
+    return (
+      <TableRow>
+        <TableCell>{nombreMaterial}</TableCell>
+        <TableCell>
+          {consumo.cantidad_estimada ?? "—"} {unidadMaterial}
+        </TableCell>
+        <TableCell>
+          {consumo.cantidad_real} {unidadMaterial}
+        </TableCell>
+        <TableCell className="text-right">
+          <Badge variant="secondary">Registrado</Badge>
+        </TableCell>
+      </TableRow>
+    );
+  }
+
+  return (
+    <TableRow>
+      <TableCell>{nombreMaterial}</TableCell>
+      <TableCell>
+        {consumo.cantidad_estimada ?? "—"} {unidadMaterial}
+      </TableCell>
+      <TableCell>
+        <div className="flex items-center gap-2">
+          <Input
+            type="number"
+            min={0}
+            step="0.01"
+            className="w-24"
+            value={real}
+            onChange={(e) => setReal(e.target.value)}
+          />
+          <Button
+            size="sm"
+            variant="outline"
+            disabled={pendiente || bloqueado || real === valorGuardado}
+            onClick={guardar}
+          >
+            Guardar
+          </Button>
+        </div>
+      </TableCell>
+      <TableCell className="text-right">
+        <Button variant="ghost" size="sm" disabled={pendiente || bloqueado} onClick={onQuitar}>
+          Quitar
+        </Button>
+      </TableCell>
+    </TableRow>
+  );
+}
 
 export function InsumosOrden({
   loteId,
@@ -65,20 +151,10 @@ export function InsumosOrden({
     startTransition(async () => {
       try {
         await eliminarConsumoMaterial(id, loteId);
+        toast.success("Insumo eliminado");
         router.refresh();
       } catch (err) {
         toast.error(err instanceof Error ? err.message : "Error al quitar");
-      }
-    });
-  }
-
-  function actualizarReal(id: string, valor: string) {
-    startTransition(async () => {
-      try {
-        await registrarConsumoReal(id, loteId, Number(valor) || 0);
-        router.refresh();
-      } catch (err) {
-        toast.error(err instanceof Error ? err.message : "Error al actualizar");
       }
     });
   }
@@ -118,25 +194,15 @@ export function InsumosOrden({
         </TableHeader>
         <TableBody>
           {consumos.map((c) => (
-            <TableRow key={c.id}>
-              <TableCell>{nombreMaterial(c.material_id)}</TableCell>
-              <TableCell>{c.cantidad_estimada ?? "—"} {unidadMaterial(c.material_id)}</TableCell>
-              <TableCell>
-                <Input
-                  type="number"
-                  min={0}
-                  step="0.01"
-                  className="w-28"
-                  defaultValue={c.cantidad_real}
-                  onBlur={(e) => e.target.value !== String(c.cantidad_real) && actualizarReal(c.id, e.target.value)}
-                />
-              </TableCell>
-              <TableCell className="text-right">
-                <Button variant="ghost" size="sm" disabled={pendiente} onClick={() => quitar(c.id)}>
-                  Quitar
-                </Button>
-              </TableCell>
-            </TableRow>
+            <FilaConsumo
+              key={c.id}
+              consumo={c}
+              loteId={loteId}
+              nombreMaterial={nombreMaterial(c.material_id)}
+              unidadMaterial={unidadMaterial(c.material_id)}
+              bloqueado={pendiente}
+              onQuitar={() => quitar(c.id)}
+            />
           ))}
           {!consumos.length && (
             <TableRow>

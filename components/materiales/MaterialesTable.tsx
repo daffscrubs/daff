@@ -1,7 +1,7 @@
 "use client";
 
 import { useMemo, useState, useTransition } from "react";
-import { Search } from "lucide-react";
+import { Search, Boxes } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -13,6 +13,14 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import { EstadoVacio } from "@/components/ui/estado-vacio";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { DetalleMaterialSheet, type DetalleMaterial } from "@/components/detalle/DetalleMaterialSheet";
 import { obtenerDetalleMaterial } from "@/actions/detalle.actions";
 import type { Database } from "@/types/database.types";
@@ -22,18 +30,29 @@ type Material = Database["public"]["Tables"]["materiales"]["Row"];
 export function MaterialesTable({ materiales }: { materiales: Material[] }) {
   const [busqueda, setBusqueda] = useState("");
   const [soloStockBajo, setSoloStockBajo] = useState(false);
+  const [categoriaFiltro, setCategoriaFiltro] = useState("todas");
   const [abierto, setAbierto] = useState(false);
   const [detalle, setDetalle] = useState<DetalleMaterial | null>(null);
   const [cargando, startTransition] = useTransition();
+
+  const categorias = useMemo(
+    () => [...new Set(materiales.map((m) => m.categoria).filter((c): c is string => !!c))].sort(),
+    [materiales]
+  );
+  const opcionesCategoria = useMemo(
+    () => [{ value: "todas", label: "Todas las categorías" }, ...categorias.map((c) => ({ value: c, label: c }))],
+    [categorias]
+  );
 
   const filtrados = useMemo(() => {
     const q = busqueda.trim().toLowerCase();
     return materiales.filter((m) => {
       if (soloStockBajo && m.stock_actual > m.stock_minimo) return false;
+      if (categoriaFiltro !== "todas" && m.categoria !== categoriaFiltro) return false;
       if (!q) return true;
       return [m.nombre, m.categoria].filter(Boolean).some((v) => v!.toLowerCase().includes(q));
     });
-  }, [materiales, busqueda, soloStockBajo]);
+  }, [materiales, busqueda, soloStockBajo, categoriaFiltro]);
 
   function abrirDetalle(id: string) {
     setAbierto(true);
@@ -54,6 +73,20 @@ export function MaterialesTable({ materiales }: { materiales: Material[] }) {
             className="pl-8"
           />
         </div>
+        <Select
+          items={opcionesCategoria}
+          value={categoriaFiltro}
+          onValueChange={(v) => setCategoriaFiltro((v as string) ?? "todas")}
+        >
+          <SelectTrigger className="w-52">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            {opcionesCategoria.map((o) => (
+              <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
         <Button
           type="button"
           variant={soloStockBajo ? "default" : "outline"}
@@ -88,8 +121,12 @@ export function MaterialesTable({ materiales }: { materiales: Material[] }) {
           ))}
           {!filtrados.length && (
             <TableRow>
-              <TableCell colSpan={5} className="text-center text-muted-foreground">
-                {materiales.length ? "Sin resultados." : "Sin materiales todavía."}
+              <TableCell colSpan={5}>
+                <EstadoVacio
+                  icon={Boxes}
+                  titulo={materiales.length ? "Sin resultados" : "Sin materiales todavía"}
+                  descripcion={materiales.length ? "Prueba con otra búsqueda o filtro." : "Los materiales que agregues van a aparecer aquí."}
+                />
               </TableCell>
             </TableRow>
           )}

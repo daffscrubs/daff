@@ -8,6 +8,7 @@ export const entregaSchema = z.object({
 
 export const registrarEntregaRealSchema = z.object({
   recibidoPor: z.string().min(2, "Requerido"),
+  fechaReal: z.string().min(1, "Requerido"),
   firmaUrl: z.string().optional().nullable(),
   notas: z.string().optional(),
 });

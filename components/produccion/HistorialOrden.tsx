@@ -1,4 +1,5 @@
 import type { EventoHistorial } from "@/lib/produccion/historial";
+import { formatearFechaHora, formatearFechaSolo } from "@/lib/fechas";
 
 export function HistorialOrden({ eventos }: { eventos: EventoHistorial[] }) {
   if (!eventos.length) {
@@ -13,7 +14,7 @@ export function HistorialOrden({ eventos }: { eventos: EventoHistorial[] }) {
           <p className="font-medium">{evento.titulo}</p>
           {evento.detalle && <p className="text-sm text-muted-foreground">{evento.detalle}</p>}
           <p className="text-xs text-muted-foreground">
-            {new Date(evento.fecha).toLocaleString("es-MX", { dateStyle: "medium", timeStyle: "short" })}
+            {evento.soloFecha ? formatearFechaSolo(evento.fecha) : formatearFechaHora(evento.fecha)}
           </p>
         </li>
       ))}

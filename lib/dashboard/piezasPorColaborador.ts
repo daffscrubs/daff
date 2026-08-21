@@ -1,3 +1,5 @@
+import { fechaISOLocal } from "@/lib/fechas";
+
 export interface PiezasColaborador {
   colaborador: string;
   piezas: number;
@@ -9,8 +11,8 @@ export function piezasPorColaboradorSemana(
 ): PiezasColaborador[] {
   const inicio = new Date(hoy);
   inicio.setDate(inicio.getDate() - 6);
-  const desde = inicio.toISOString().slice(0, 10);
-  const hasta = hoy.toISOString().slice(0, 10);
+  const desde = fechaISOLocal(inicio);
+  const hasta = fechaISOLocal(hoy);
 
   const mapa = new Map<string, PiezasColaborador>();
   for (const r of registros) {

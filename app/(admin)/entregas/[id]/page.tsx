@@ -1,8 +1,10 @@
 import { notFound } from "next/navigation";
 import Link from "next/link";
+import { Download } from "lucide-react";
 import { createClient } from "@/lib/supabase/server";
 import { FormEntregaReal } from "@/components/entregas/FormEntregaReal";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import { ESTATUS_ENTREGA_LABEL } from "@/lib/labels";
 import { CLASE_ESTATUS_ENTREGA } from "@/lib/estatus-colores";
 
@@ -29,7 +31,20 @@ export default async function EntregaDetallePage({
           </h1>
           <p className="text-muted-foreground">Programada: {entrega.fecha_programada}</p>
         </div>
-        <Badge className={CLASE_ESTATUS_ENTREGA[entrega.estatus]}>{ESTATUS_ENTREGA_LABEL[entrega.estatus]}</Badge>
+        <div className="flex items-center gap-2">
+          {entrega.estatus === "entregada" && (
+            <Button
+              variant="outline"
+              size="sm"
+              render={<a href={`/api/pdf/entregas/${id}`} target="_blank" rel="noopener noreferrer" />}
+              nativeButton={false}
+            >
+              <Download className="size-4" />
+              Descargar PDF
+            </Button>
+          )}
+          <Badge className={CLASE_ESTATUS_ENTREGA[entrega.estatus]}>{ESTATUS_ENTREGA_LABEL[entrega.estatus]}</Badge>
+        </div>
       </div>
 
       {entrega.estatus === "entregada" ? (

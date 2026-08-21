@@ -9,9 +9,11 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
+import { fechaISOLocal } from "@/lib/fechas";
 
 export function FormEntregaReal({ entregaId, pedidoId }: { entregaId: string; pedidoId: string }) {
   const [recibidoPor, setRecibidoPor] = useState("");
+  const [fechaReal, setFechaReal] = useState(fechaISOLocal(new Date()));
   const [notas, setNotas] = useState("");
   const [foto, setFoto] = useState<File | null>(null);
   const [pendiente, startTransition] = useTransition();
@@ -30,7 +32,7 @@ export function FormEntregaReal({ entregaId, pedidoId }: { entregaId: string; pe
           firmaUrl = path;
         }
 
-        await registrarEntregaReal(entregaId, pedidoId, { recibidoPor, notas, firmaUrl });
+        await registrarEntregaReal(entregaId, pedidoId, { recibidoPor, fechaReal, notas, firmaUrl });
         toast.success("Entrega registrada");
         router.refresh();
       } catch (err) {
@@ -44,6 +46,19 @@ export function FormEntregaReal({ entregaId, pedidoId }: { entregaId: string; pe
       <div className="space-y-2">
         <Label htmlFor="recibidoPor">Nombre de quien recibe</Label>
         <Input id="recibidoPor" value={recibidoPor} onChange={(e) => setRecibidoPor(e.target.value)} required />
+      </div>
+      <div className="space-y-2">
+        <Label htmlFor="fechaRealEntrega">Fecha de entrega</Label>
+        <Input
+          id="fechaRealEntrega"
+          type="date"
+          value={fechaReal}
+          onChange={(e) => setFechaReal(e.target.value)}
+          required
+        />
+        <p className="text-xs text-muted-foreground">
+          No tiene que coincidir con la fecha programada.
+        </p>
       </div>
       <div className="space-y-2">
         <Label htmlFor="fotoEntrega">Foto/firma de confirmación (opcional)</Label>

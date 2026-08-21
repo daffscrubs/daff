@@ -1,6 +1,7 @@
 import { Document, Page, View, Text } from "@react-pdf/renderer";
 import { Encabezado, Pie } from "@/lib/pdf/Encabezado";
 import { estilos } from "@/lib/pdf/estilos";
+import { formatearMoneda } from "@/lib/dinero";
 
 export interface ItemCompraPDF {
   material: string;
@@ -47,15 +48,15 @@ export function CompraDocumento({ folio, proveedor, fecha, notas, items, total }
             <View key={i} style={estilos.filaTabla}>
               <Text style={[estilos.celda, { width: "40%" }]}>{item.material}</Text>
               <Text style={[estilos.celda, { width: "20%", textAlign: "right" }]}>{item.cantidad} {item.unidad}</Text>
-              <Text style={[estilos.celda, { width: "20%", textAlign: "right" }]}>${item.costoUnitario.toFixed(2)}</Text>
-              <Text style={[estilos.celda, { width: "20%", textAlign: "right" }]}>${item.subtotal.toFixed(2)}</Text>
+              <Text style={[estilos.celda, { width: "20%", textAlign: "right" }]}>{formatearMoneda(item.costoUnitario)}</Text>
+              <Text style={[estilos.celda, { width: "20%", textAlign: "right" }]}>{formatearMoneda(item.subtotal)}</Text>
             </View>
           ))}
         </View>
 
         <View style={estilos.totalFila}>
           <Text style={estilos.totalEtiqueta}>Total</Text>
-          <Text style={estilos.totalValor}>${total.toFixed(2)}</Text>
+          <Text style={estilos.totalValor}>{formatearMoneda(total)}</Text>
         </View>
 
         {notas && (

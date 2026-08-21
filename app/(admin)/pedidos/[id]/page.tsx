@@ -3,6 +3,7 @@ import Link from "next/link";
 import { Download } from "lucide-react";
 import { createClient } from "@/lib/supabase/server";
 import { EstatusPedidoSelect } from "@/components/pedidos/EstatusPedidoSelect";
+import { BotonCancelarPedido } from "@/components/pedidos/BotonCancelarPedido";
 import { Button } from "@/components/ui/button";
 import {
   Table,
@@ -12,6 +13,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import { formatearMoneda } from "@/lib/dinero";
 
 export default async function PedidoDetallePage({
   params,
@@ -34,6 +36,7 @@ export default async function PedidoDetallePage({
   const cliente = pedido.clientes;
   const nombre = (id: string, lista: { id: string; nombre?: string; codigo?: string }[]) =>
     lista.find((x) => x.id === id)?.nombre ?? lista.find((x) => x.id === id)?.codigo ?? "—";
+  const puedeModificar = pedido.estatus !== "cancelado";
 
   return (
     <div className="space-y-6">
@@ -58,7 +61,13 @@ export default async function PedidoDetallePage({
             <Download className="size-4" />
             Descargar PDF
           </Button>
+          {puedeModificar && (
+            <Button variant="outline" size="sm" render={<Link href={`/pedidos/${id}/editar`} />} nativeButton={false}>
+              Editar
+            </Button>
+          )}
           <EstatusPedidoSelect id={id} estatus={pedido.estatus} />
+          {puedeModificar && <BotonCancelarPedido id={id} />}
         </div>
       </div>
 
@@ -82,9 +91,9 @@ export default async function PedidoDetallePage({
                 <TableCell>{nombre(item.modelo_id, modelos ?? [])}</TableCell>
                 <TableCell>{nombre(item.talla_id, tallas ?? [])}</TableCell>
                 <TableCell>{item.cantidad}</TableCell>
-                <TableCell>{item.precio_unitario != null ? `$${item.precio_unitario.toFixed(2)}` : "—"}</TableCell>
+                <TableCell>{item.precio_unitario != null ? formatearMoneda(item.precio_unitario) : "—"}</TableCell>
                 <TableCell>
-                  {item.precio_unitario != null ? `$${(item.cantidad * item.precio_unitario).toFixed(2)}` : "—"}
+                  {item.precio_unitario != null ? formatearMoneda(item.cantidad * item.precio_unitario) : "—"}
                 </TableCell>
               </TableRow>
             ))}
@@ -92,8 +101,7 @@ export default async function PedidoDetallePage({
         </Table>
         {!!items?.some((i) => i.precio_unitario != null) && (
           <p className="mt-2 text-right text-sm font-medium">
-            Total: $
-            {items!.reduce((acc, i) => acc + i.cantidad * (i.precio_unitario ?? 0), 0).toFixed(2)}
+            Total: {formatearMoneda(items!.reduce((acc, i) => acc + i.cantidad * (i.precio_unitario ?? 0), 0))}
           </p>
         )}
       </div>

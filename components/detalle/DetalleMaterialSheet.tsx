@@ -17,6 +17,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { formatearMoneda } from "@/lib/dinero";
 
 export type DetalleMaterial = Awaited<ReturnType<typeof obtenerDetalleMaterial>>;
 
@@ -33,6 +34,7 @@ export function DetalleMaterialSheet({
 }) {
   const [costo, setCosto] = useState("");
   const [stockMinimo, setStockMinimo] = useState("");
+  const [categoria, setCategoria] = useState("");
   const [inicializadoPara, setInicializadoPara] = useState<string | null>(null);
   const [pendiente, startTransition] = useTransition();
 
@@ -40,6 +42,7 @@ export function DetalleMaterialSheet({
     setInicializadoPara(detalle.material.id);
     setCosto(detalle.material.costo_unitario != null ? String(detalle.material.costo_unitario) : "");
     setStockMinimo(String(detalle.material.stock_minimo));
+    setCategoria(detalle.material.categoria ?? "");
   }
 
   function guardar() {
@@ -47,7 +50,7 @@ export function DetalleMaterialSheet({
     const id = detalle.material.id;
     startTransition(async () => {
       try {
-        await actualizarCostoMaterial(id, Number(costo) || 0, Number(stockMinimo) || 0);
+        await actualizarCostoMaterial(id, Number(costo) || 0, Number(stockMinimo) || 0, categoria);
         toast.success("Material actualizado");
       } catch (err) {
         toast.error(err instanceof Error ? err.message : "Error al guardar");
@@ -86,11 +89,20 @@ export function DetalleMaterialSheet({
                 <div className="rounded-lg border p-3">
                   <p className="text-xs text-muted-foreground">Valor en inventario</p>
                   <p className="text-2xl font-semibold">
-                    {valorInventario != null ? `$${valorInventario.toFixed(2)}` : "—"}
+                    {valorInventario != null ? formatearMoneda(valorInventario) : "—"}
                   </p>
                 </div>
               </div>
 
+              <div className="space-y-2">
+                <Label htmlFor="categoriaMaterial">Categoría</Label>
+                <Input
+                  id="categoriaMaterial"
+                  placeholder="Tela, hilo, accesorio..."
+                  value={categoria}
+                  onChange={(e) => setCategoria(e.target.value)}
+                />
+              </div>
               <div className="grid grid-cols-2 gap-3">
                 <div className="space-y-2">
                   <Label htmlFor="costoMaterial">Costo unitario</Label>

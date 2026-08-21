@@ -12,6 +12,7 @@ import {
 import { TarjetaMetricaConGrafica } from "@/components/dashboard/TarjetaMetricaConGrafica";
 import { rangoDePeriodo, type TipoPeriodo } from "@/lib/dashboard/periodos";
 import { serieDiaria } from "@/lib/dashboard/serieDiaria";
+import { fechaISOLocal } from "@/lib/fechas";
 
 export interface PedidoResumenFinanciero {
   fecha: string;
@@ -42,7 +43,7 @@ export function MetricasFinancieras({
   avances: MovimientoFinanciero[];
 }) {
   const [periodo, setPeriodo] = useState<TipoPeriodo>("mes");
-  const hoy = new Date().toISOString().slice(0, 10);
+  const hoy = fechaISOLocal(new Date());
   const [desdePersonalizado, setDesdePersonalizado] = useState(hoy);
   const [hastaPersonalizado, setHastaPersonalizado] = useState(hoy);
 

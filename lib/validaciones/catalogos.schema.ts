@@ -3,6 +3,7 @@ import { z } from "zod";
 export const modeloSchema = z.object({
   nombre: z.string().min(2, "Requerido"),
   descripcion: z.string().optional(),
+  categoria: z.string().optional(),
   costoUnitario: z.coerce.number().min(0).optional(),
   precioVenta: z.coerce.number().min(0).optional(),
   tallaIds: z.array(z.string().uuid()).optional(),

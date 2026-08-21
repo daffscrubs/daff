@@ -1,7 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { Search, Download } from "lucide-react";
+import { Search, Download, Receipt } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -27,6 +27,8 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { CATEGORIAS_GASTO } from "@/lib/validaciones/compras.schema";
+import { EstadoVacio } from "@/components/ui/estado-vacio";
+import { formatearMoneda } from "@/lib/dinero";
 import type { Database } from "@/types/database.types";
 
 type Gasto = Database["public"]["Tables"]["gastos"]["Row"];
@@ -100,20 +102,24 @@ export function GastosTable({ gastos }: { gastos: Gasto[] }) {
               <TableCell className="text-muted-foreground">{g.fecha}</TableCell>
               <TableCell className="font-medium">{g.concepto}</TableCell>
               <TableCell><Badge variant="secondary">{ETIQUETA_CATEGORIA[g.categoria] ?? g.categoria}</Badge></TableCell>
-              <TableCell>${g.monto.toFixed(2)}</TableCell>
+              <TableCell>{formatearMoneda(g.monto)}</TableCell>
             </TableRow>
           ))}
           {!filtrados.length && (
             <TableRow>
-              <TableCell colSpan={4} className="text-center text-muted-foreground">
-                {gastos.length ? "Sin resultados." : "Sin gastos registrados todavía."}
+              <TableCell colSpan={4}>
+                <EstadoVacio
+                  icon={Receipt}
+                  titulo={gastos.length ? "Sin resultados" : "Sin gastos registrados todavía"}
+                  descripcion={gastos.length ? "Prueba con otra búsqueda o filtro." : "Los gastos que registres van a aparecer aquí."}
+                />
               </TableCell>
             </TableRow>
           )}
         </TableBody>
       </Table>
       {!!filtrados.length && (
-        <p className="text-right text-sm font-medium">Total: ${total.toFixed(2)}</p>
+        <p className="text-right text-sm font-medium">Total: {formatearMoneda(total)}</p>
       )}
 
       <Dialog open={!!seleccionado} onOpenChange={(open) => !open && setSeleccionado(null)}>
@@ -135,7 +141,7 @@ export function GastosTable({ gastos }: { gastos: Gasto[] }) {
                 </Button>
                 <p><span className="text-muted-foreground">Fecha:</span> {seleccionado.fecha}</p>
                 <p><span className="text-muted-foreground">Categoría:</span> {ETIQUETA_CATEGORIA[seleccionado.categoria] ?? seleccionado.categoria}</p>
-                <p><span className="text-muted-foreground">Monto:</span> ${seleccionado.monto.toFixed(2)}</p>
+                <p><span className="text-muted-foreground">Monto:</span> {formatearMoneda(seleccionado.monto)}</p>
                 {seleccionado.notas && <p><span className="text-muted-foreground">Notas:</span> {seleccionado.notas}</p>}
               </div>
             </>

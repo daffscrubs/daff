@@ -2,7 +2,7 @@
 
 import { useMemo, useState } from "react";
 import Link from "next/link";
-import { Search } from "lucide-react";
+import { Search, Factory } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import {
@@ -20,6 +20,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import { EstadoVacio } from "@/components/ui/estado-vacio";
 import { ESTATUS_ORDEN_LABEL } from "@/lib/labels";
 import { CLASE_ESTATUS_ORDEN } from "@/lib/estatus-colores";
 import type { Database } from "@/types/database.types";
@@ -118,8 +119,12 @@ export function ProduccionTable({
           })}
           {!filtrados.length && (
             <TableRow>
-              <TableCell colSpan={4} className="text-center text-muted-foreground">
-                {lotes.length ? "Sin resultados." : "Sin órdenes de producción todavía."}
+              <TableCell colSpan={4}>
+                <EstadoVacio
+                  icon={Factory}
+                  titulo={lotes.length ? "Sin resultados" : "Sin órdenes de producción todavía"}
+                  descripcion={lotes.length ? "Prueba con otra búsqueda o filtro." : "Las órdenes que crees van a aparecer aquí."}
+                />
               </TableCell>
             </TableRow>
           )}

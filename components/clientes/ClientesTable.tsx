@@ -1,7 +1,7 @@
 "use client";
 
 import { useMemo, useState, useTransition } from "react";
-import { Search } from "lucide-react";
+import { Search, Users } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import {
   Table,
@@ -11,6 +11,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import { EstadoVacio } from "@/components/ui/estado-vacio";
 import { DetalleClienteSheet, type DetalleCliente } from "@/components/detalle/DetalleClienteSheet";
 import { obtenerDetalleCliente } from "@/actions/detalle.actions";
 import type { Database } from "@/types/database.types";
@@ -76,8 +77,12 @@ export function ClientesTable({ clientes }: { clientes: Cliente[] }) {
           ))}
           {!filtrados.length && (
             <TableRow>
-              <TableCell colSpan={4} className="text-center text-muted-foreground">
-                {clientes.length ? "Sin resultados." : "Sin clientes todavía."}
+              <TableCell colSpan={4}>
+                <EstadoVacio
+                  icon={Users}
+                  titulo={clientes.length ? "Sin resultados" : "Sin clientes todavía"}
+                  descripcion={clientes.length ? "Prueba con otra búsqueda." : "Los clientes que agregues van a aparecer aquí."}
+                />
               </TableCell>
             </TableRow>
           )}

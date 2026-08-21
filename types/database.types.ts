@@ -198,6 +198,7 @@ export type Database = {
         Row: {
           cantidad_estimada: number | null
           cantidad_real: number
+          cantidad_real_registrada_en: string | null
           created_at: string
           id: string
           lote_id: string
@@ -206,6 +207,7 @@ export type Database = {
         Insert: {
           cantidad_estimada?: number | null
           cantidad_real?: number
+          cantidad_real_registrada_en?: string | null
           created_at?: string
           id?: string
           lote_id: string
@@ -214,6 +216,7 @@ export type Database = {
         Update: {
           cantidad_estimada?: number | null
           cantidad_real?: number
+          cantidad_real_registrada_en?: string | null
           created_at?: string
           id?: string
           lote_id?: string
@@ -409,6 +412,27 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      intentos_login: {
+        Row: {
+          actualizado_at: string
+          bloqueado_hasta: string | null
+          identificador: string
+          intentos: number
+        }
+        Insert: {
+          actualizado_at?: string
+          bloqueado_hasta?: string | null
+          identificador: string
+          intentos?: number
+        }
+        Update: {
+          actualizado_at?: string
+          bloqueado_hasta?: string | null
+          identificador?: string
+          intentos?: number
+        }
+        Relationships: []
       }
       items_orden_produccion: {
         Row: {
@@ -683,6 +707,7 @@ export type Database = {
       modelos: {
         Row: {
           activo: boolean
+          categoria: string | null
           costo_unitario: number | null
           created_at: string
           descripcion: string | null
@@ -693,6 +718,7 @@ export type Database = {
         }
         Insert: {
           activo?: boolean
+          categoria?: string | null
           costo_unitario?: number | null
           created_at?: string
           descripcion?: string | null
@@ -703,6 +729,7 @@ export type Database = {
         }
         Update: {
           activo?: boolean
+          categoria?: string | null
           costo_unitario?: number | null
           created_at?: string
           descripcion?: string | null

@@ -18,4 +18,13 @@ export const crearUsuarioSchema = z.discriminatedUnion("rol", [
   }),
 ]);
 
+export const editarUsuarioSchema = z.object({
+  nombreCompleto: z.string().min(2, "Requerido"),
+  rol: z.enum(["admin", "ventas", "supervisor", "colaborador"]),
+  usuarioCorto: z.string().optional(),
+  email: z.string().optional(),
+  nuevaContrasena: z.string().optional(),
+});
+
 export type CrearUsuarioInput = z.infer<typeof crearUsuarioSchema>;
+export type EditarUsuarioInput = z.infer<typeof editarUsuarioSchema>;

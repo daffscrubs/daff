@@ -5,12 +5,15 @@ import { createClient } from "@/lib/supabase/server";
 import { requerirPerfil } from "@/lib/supabase/auth-helpers";
 import {
   agregarEtapaLoteSchema,
+  editarOrdenProduccionSchema,
   incidenciaSchema,
   ordenProduccionSchema,
   type AgregarEtapaLoteInput,
+  type EditarOrdenProduccionInput,
   type IncidenciaInput,
   type OrdenProduccionInput,
 } from "@/lib/validaciones/produccion.schema";
+import { fechaISOLocal } from "@/lib/fechas";
 
 async function sugerirFolioOrden(supabase: Awaited<ReturnType<typeof createClient>>) {
   const anio = new Date().getFullYear();
@@ -40,7 +43,7 @@ export async function crearOrdenProduccion(input: OrdenProduccionInput) {
     .insert({
       folio: datos.folio,
       pedido_id: datos.pedidoId || null,
-      fecha_inicio: new Date().toISOString().slice(0, 10),
+      fecha_inicio: fechaISOLocal(new Date()),
       fecha_fin_estimada: datos.fechaFinEstimada || null,
       creado_por: perfil.id,
     })
@@ -81,6 +84,105 @@ export async function crearOrdenProduccion(input: OrdenProduccionInput) {
 
   revalidatePath("/produccion");
   return lote.id as string;
+}
+
+export async function actualizarOrdenProduccion(loteId: string, input: EditarOrdenProduccionInput) {
+  await requerirPerfil(["admin", "supervisor"]);
+  const datos = editarOrdenProduccionSchema.parse(input);
+  const supabase = await createClient();
+
+  const { data: lote, error: errorLote } = await supabase
+    .from("lotes_produccion")
+    .select("estatus")
+    .eq("id", loteId)
+    .single();
+  if (errorLote) throw new Error(errorLote.message);
+  if (lote.estatus === "cancelada") {
+    throw new Error("No se puede modificar una orden cancelada.");
+  }
+
+  const { error: errorFecha } = await supabase
+    .from("lotes_produccion")
+    .update({ fecha_fin_estimada: datos.fechaFinEstimada || null })
+    .eq("id", loteId);
+  if (errorFecha) throw new Error(errorFecha.message);
+
+  // Los productos solo se pueden reemplazar mientras la orden no tenga
+  // procesos configurados (lote_etapas): una vez configurados, el avance ya
+  // depende de la cantidad planeada original de cada producto.
+  const { count: etapasCount } = await supabase
+    .from("lote_etapas")
+    .select("id", { count: "exact", head: true })
+    .eq("lote_id", loteId);
+
+  if (!etapasCount) {
+    const { error: errorEliminar } = await supabase.from("items_orden_produccion").delete().eq("lote_id", loteId);
+    if (errorEliminar) throw new Error(errorEliminar.message);
+
+    const { error: errorItems } = await supabase.from("items_orden_produccion").insert(
+      datos.items.map((item) => ({
+        lote_id: loteId,
+        modelo_id: item.modeloId,
+        talla_id: item.tallaId,
+        cantidad_planeada: item.cantidadPlaneada,
+      }))
+    );
+    if (errorItems) throw new Error(errorItems.message);
+  }
+
+  revalidatePath("/produccion");
+  revalidatePath(`/produccion/${loteId}`);
+}
+
+// El trigger de BD que sincroniza pedidos<->lotes_produccion solo se dispara
+// al insertar un avance; cancelar un lote no dispara nada, así que el pedido
+// se recalcula aquí manualmente para no dejarlo "atorado" (o marcado como
+// listo sin haber producido nada).
+async function reevaluarEstatusPedido(supabase: Awaited<ReturnType<typeof createClient>>, pedidoId: string) {
+  const { data: lotes } = await supabase.from("lotes_produccion").select("estatus").eq("pedido_id", pedidoId);
+  if (!lotes || !lotes.length) return;
+
+  const { data: pedido } = await supabase.from("pedidos").select("estatus").eq("id", pedidoId).single();
+  if (!pedido || pedido.estatus === "cancelado" || pedido.estatus === "entregado") return;
+
+  const todosFinalizados = lotes.every((lote) => lote.estatus === "terminada" || lote.estatus === "cancelada");
+  const hayTerminada = lotes.some((lote) => lote.estatus === "terminada");
+
+  if (todosFinalizados && hayTerminada && pedido.estatus !== "listo") {
+    await supabase.from("pedidos").update({ estatus: "listo" }).eq("id", pedidoId);
+  } else if (todosFinalizados && !hayTerminada && pedido.estatus !== "confirmado") {
+    // Todos los lotes del pedido se cancelaron y ninguno llegó a terminarse:
+    // no hay producción activa, el pedido vuelve a "confirmado" para que
+    // quede visible que necesita una nueva orden de producción.
+    await supabase.from("pedidos").update({ estatus: "confirmado" }).eq("id", pedidoId);
+  }
+}
+
+export async function cancelarOrdenProduccion(loteId: string) {
+  await requerirPerfil(["admin", "supervisor"]);
+  const supabase = await createClient();
+
+  const { data: lote, error: errorLote } = await supabase
+    .from("lotes_produccion")
+    .select("estatus, pedido_id")
+    .eq("id", loteId)
+    .single();
+  if (errorLote) throw new Error(errorLote.message);
+  if (lote.estatus === "cancelada") {
+    throw new Error("Esta orden ya está cancelada.");
+  }
+
+  const { error } = await supabase.from("lotes_produccion").update({ estatus: "cancelada" }).eq("id", loteId);
+  if (error) throw new Error(error.message);
+
+  if (lote.pedido_id) {
+    await reevaluarEstatusPedido(supabase, lote.pedido_id);
+    revalidatePath(`/pedidos/${lote.pedido_id}`);
+  }
+
+  revalidatePath("/produccion");
+  revalidatePath(`/produccion/${loteId}`);
+  revalidatePath("/pedidos");
 }
 
 export async function agregarEtapaLote(input: AgregarEtapaLoteInput) {

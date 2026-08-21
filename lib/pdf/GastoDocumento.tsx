@@ -1,6 +1,7 @@
 import { Document, Page, View, Text } from "@react-pdf/renderer";
 import { Encabezado, Pie } from "@/lib/pdf/Encabezado";
 import { estilos } from "@/lib/pdf/estilos";
+import { formatearMoneda } from "@/lib/dinero";
 
 export interface GastoPDFProps {
   folio: string;
@@ -39,7 +40,7 @@ export function GastoDocumento({ folio, fecha, categoria, concepto, monto, notas
 
         <View style={estilos.totalFila}>
           <Text style={estilos.totalEtiqueta}>Monto</Text>
-          <Text style={estilos.totalValor}>${monto.toFixed(2)}</Text>
+          <Text style={estilos.totalValor}>{formatearMoneda(monto)}</Text>
         </View>
 
         {notas && (

@@ -26,6 +26,7 @@ export async function crearModelo(input: ModeloInput) {
     .insert({
       nombre: datos.nombre,
       descripcion: datos.descripcion || null,
+      categoria: datos.categoria || null,
       costo_unitario: datos.costoUnitario ?? null,
       precio_venta: datos.precioVenta ?? null,
     })
@@ -43,12 +44,17 @@ export async function crearModelo(input: ModeloInput) {
   revalidatePath("/catalogos/modelos");
 }
 
-export async function actualizarCostoModelo(id: string, costoUnitario: number, precioVenta: number) {
+export async function actualizarCostoModelo(
+  id: string,
+  costoUnitario: number,
+  precioVenta: number,
+  categoria: string
+) {
   await requerirPerfil(["admin", "supervisor"]);
   const supabase = await createClient();
   const { error } = await supabase
     .from("modelos")
-    .update({ costo_unitario: costoUnitario, precio_venta: precioVenta })
+    .update({ costo_unitario: costoUnitario, precio_venta: precioVenta, categoria: categoria || null })
     .eq("id", id);
   if (error) throw new Error(error.message);
   revalidatePath("/catalogos/modelos");
@@ -71,11 +77,11 @@ export async function guardarTallasModelo(modeloId: string, tallaIds: string[]) 
   revalidatePath("/catalogos/modelos");
 }
 
-export async function alternarModeloActivo(id: string, activo: boolean) {
+export async function eliminarModelo(id: string) {
   await requerirPerfil(["admin", "supervisor"]);
   const supabase = await createClient();
-  const { error } = await supabase.from("modelos").update({ activo }).eq("id", id);
-  if (error) throw new Error(error.message);
+  const { error } = await supabase.from("modelos").delete().eq("id", id);
+  if (error) throw new Error("No se puede eliminar: el modelo tiene pedidos, órdenes de producción o existencias asociadas.");
   revalidatePath("/catalogos/modelos");
 }
 

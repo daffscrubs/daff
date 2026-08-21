@@ -3,7 +3,7 @@
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
-import { crearPedido } from "@/actions/pedidos.actions";
+import { actualizarPedido, crearPedido } from "@/actions/pedidos.actions";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -41,6 +41,8 @@ export function FormPedido({
   modeloTallas,
   plantillas,
   plantillaItems,
+  pedidoId,
+  valoresIniciales,
 }: {
   clientes: Cliente[];
   modelos: Modelo[];
@@ -48,11 +50,19 @@ export function FormPedido({
   modeloTallas: ModeloTalla[];
   plantillas: Plantilla[];
   plantillaItems: PlantillaItem[];
+  pedidoId?: string;
+  valoresIniciales?: {
+    clienteId: string;
+    fechaCompromiso: string;
+    notas: string;
+    items: ItemPedidoInput[];
+  };
 }) {
-  const [clienteId, setClienteId] = useState("");
-  const [fechaCompromiso, setFechaCompromiso] = useState("");
-  const [notas, setNotas] = useState("");
-  const [items, setItems] = useState<ItemPedidoInput[]>([]);
+  const modoEdicion = !!pedidoId;
+  const [clienteId, setClienteId] = useState(valoresIniciales?.clienteId ?? "");
+  const [fechaCompromiso, setFechaCompromiso] = useState(valoresIniciales?.fechaCompromiso ?? "");
+  const [notas, setNotas] = useState(valoresIniciales?.notas ?? "");
+  const [items, setItems] = useState<ItemPedidoInput[]>(valoresIniciales?.items ?? []);
   const [pendiente, startTransition] = useTransition();
   const router = useRouter();
 
@@ -104,11 +114,17 @@ export function FormPedido({
     }
     startTransition(async () => {
       try {
-        const id = await crearPedido({ clienteId, fechaCompromiso, notas, items });
-        toast.success("Pedido creado");
-        router.push(`/pedidos/${id}`);
+        if (modoEdicion) {
+          await actualizarPedido(pedidoId, { clienteId, fechaCompromiso, notas, items });
+          toast.success("Pedido actualizado");
+          router.push(`/pedidos/${pedidoId}`);
+        } else {
+          const id = await crearPedido({ clienteId, fechaCompromiso, notas, items });
+          toast.success("Pedido creado");
+          router.push(`/pedidos/${id}`);
+        }
       } catch (err) {
-        toast.error(err instanceof Error ? err.message : "Error al crear el pedido");
+        toast.error(err instanceof Error ? err.message : "Error al guardar el pedido");
       }
     });
   }
@@ -143,7 +159,7 @@ export function FormPedido({
             required
           />
         </div>
-        {!!plantillas.length && (
+        {!modoEdicion && !!plantillas.length && (
           <div className="space-y-2">
             <Label>Cargar desde plantilla (opcional)</Label>
             <Select
@@ -259,7 +275,7 @@ export function FormPedido({
       </div>
 
       <Button type="submit" disabled={pendiente}>
-        {pendiente ? "Creando..." : "Crear pedido"}
+        {pendiente ? "Guardando..." : modoEdicion ? "Guardar cambios" : "Crear pedido"}
       </Button>
     </form>
   );

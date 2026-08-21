@@ -2,7 +2,7 @@
 
 import { useMemo, useState } from "react";
 import Link from "next/link";
-import { Search } from "lucide-react";
+import { Search, ClipboardList } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import {
@@ -20,8 +20,10 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import { EstadoVacio } from "@/components/ui/estado-vacio";
 import { ESTATUS_PEDIDO_LABEL } from "@/lib/labels";
 import { CLASE_ESTATUS_PEDIDO } from "@/lib/estatus-colores";
+import { formatearMoneda } from "@/lib/dinero";
 import type { Database, EstatusPedido } from "@/types/database.types";
 
 type Pedido = Database["public"]["Tables"]["pedidos"]["Row"];
@@ -99,7 +101,7 @@ export function PedidosTable({
               </TableCell>
               <TableCell>{nombreCliente(pedido.cliente_id)}</TableCell>
               <TableCell className="text-muted-foreground">{pedido.fecha_compromiso}</TableCell>
-              <TableCell>{totales[pedido.id] ? `$${totales[pedido.id].toFixed(2)}` : "—"}</TableCell>
+              <TableCell>{totales[pedido.id] ? formatearMoneda(totales[pedido.id]) : "—"}</TableCell>
               <TableCell>
                 <Badge className={CLASE_ESTATUS_PEDIDO[pedido.estatus as EstatusPedido]}>
                   {ESTATUS_PEDIDO_LABEL[pedido.estatus as EstatusPedido]}
@@ -109,8 +111,12 @@ export function PedidosTable({
           ))}
           {!filtrados.length && (
             <TableRow>
-              <TableCell colSpan={5} className="text-center text-muted-foreground">
-                {pedidos.length ? "Sin resultados." : "Sin pedidos todavía."}
+              <TableCell colSpan={5}>
+                <EstadoVacio
+                  icon={ClipboardList}
+                  titulo={pedidos.length ? "Sin resultados" : "Sin pedidos todavía"}
+                  descripcion={pedidos.length ? "Prueba con otra búsqueda o filtro." : "Los pedidos que crees van a aparecer aquí."}
+                />
               </TableCell>
             </TableRow>
           )}

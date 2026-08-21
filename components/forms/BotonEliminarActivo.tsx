@@ -67,13 +67,13 @@ export function BotonEliminarActivo({
           />
         }
       >
-        Eliminar
+        Desactivar
       </AlertDialogTrigger>
       <AlertDialogContent onClick={(e) => e.stopPropagation()}>
         <AlertDialogHeader>
-          <AlertDialogTitle>¿Deseas eliminar este {entidad}?</AlertDialogTitle>
+          <AlertDialogTitle>¿Deseas desactivar este {entidad}?</AlertDialogTitle>
         </AlertDialogHeader>
-        <AlertDialogDescription>No podrás deshacer esta acción.</AlertDialogDescription>
+        <AlertDialogDescription>Podrás volver a activarlo cuando quieras.</AlertDialogDescription>
         <AlertDialogFooter>
           <AlertDialogCancel onClick={(e) => e.stopPropagation()}>Cancelar</AlertDialogCancel>
           <AlertDialogAction
@@ -83,7 +83,7 @@ export function BotonEliminarActivo({
               ejecutar(false);
             }}
           >
-            Eliminar
+            Desactivar
           </AlertDialogAction>
         </AlertDialogFooter>
       </AlertDialogContent>

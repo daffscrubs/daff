@@ -19,6 +19,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import { fechaISOLocal } from "@/lib/fechas";
 
 export interface RegistroReporte {
   id: string;
@@ -36,7 +37,7 @@ export interface RegistroReporte {
 }
 
 export function ReporteProductividadTable({ registros }: { registros: RegistroReporte[] }) {
-  const hoy = new Date().toISOString().slice(0, 10);
+  const hoy = fechaISOLocal(new Date());
   const primerDiaMes = hoy.slice(0, 8) + "01";
   const [desde, setDesde] = useState(primerDiaMes);
   const [hasta, setHasta] = useState(hoy);

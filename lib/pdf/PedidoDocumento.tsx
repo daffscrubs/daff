@@ -1,6 +1,7 @@
 import { Document, Page, View, Text } from "@react-pdf/renderer";
 import { Encabezado, Pie } from "@/lib/pdf/Encabezado";
 import { estilos } from "@/lib/pdf/estilos";
+import { formatearMoneda } from "@/lib/dinero";
 
 export interface ItemPedidoPDF {
   producto: string;
@@ -69,7 +70,7 @@ export function PedidoDocumento({ folio, cliente, contacto, telefono, fechaPedid
               <Text style={[estilos.celda, { width: "14%", textAlign: "right" }]}>{item.cantidad}</Text>
               {hayPrecios && (
                 <Text style={[estilos.celda, { width: "22%", textAlign: "right" }]}>
-                  {item.precioUnitario != null ? `$${item.precioUnitario.toFixed(2)}` : "—"}
+                  {item.precioUnitario != null ? formatearMoneda(item.precioUnitario) : "—"}
                 </Text>
               )}
             </View>
@@ -79,7 +80,7 @@ export function PedidoDocumento({ folio, cliente, contacto, telefono, fechaPedid
         {hayPrecios && (
           <View style={estilos.totalFila}>
             <Text style={estilos.totalEtiqueta}>Total</Text>
-            <Text style={estilos.totalValor}>${total.toFixed(2)}</Text>
+            <Text style={estilos.totalValor}>{formatearMoneda(total)}</Text>
           </View>
         )}
 
