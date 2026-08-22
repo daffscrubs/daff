@@ -32,6 +32,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { BotonEliminarConfirmacion } from "@/components/forms/BotonEliminarConfirmacion";
+import { ImportarProductosDialog } from "@/components/inventario/ImportarProductosDialog";
 import { EstadoVacio } from "@/components/ui/estado-vacio";
 import { formatearMoneda } from "@/lib/dinero";
 import type { Database } from "@/types/database.types";
@@ -154,8 +155,10 @@ export function InventarioManager({
             </SelectContent>
           </Select>
         </div>
-        <Dialog open={abierto} onOpenChange={setAbierto}>
-          <DialogTrigger render={<Button />}>Nuevo producto</DialogTrigger>
+        <div className="flex items-center gap-2">
+          <ImportarProductosDialog />
+          <Dialog open={abierto} onOpenChange={setAbierto}>
+            <DialogTrigger render={<Button />}>Nuevo producto</DialogTrigger>
           <DialogContent className="max-h-[90vh] overflow-y-auto">
             <DialogHeader>
               <DialogTitle>Nuevo producto</DialogTitle>
@@ -232,7 +235,8 @@ export function InventarioManager({
               </Button>
             </form>
           </DialogContent>
-        </Dialog>
+          </Dialog>
+        </div>
       </div>
 
       <Table>
