@@ -89,8 +89,17 @@ export async function guardarTallasModelo(
 export async function eliminarModelo(id: string) {
   await requerirPerfil(["admin", "supervisor"]);
   const supabase = await createClient();
+
+  // Tallas, precios por talla, stock y su historial de movimientos son datos
+  // propios de este producto (nada más los referencia), así que se eliminan
+  // junto con él. Pedidos y órdenes de producción reales SÍ lo bloquean —
+  // borrarlos ahí destruiría historial de ventas/producción del negocio.
+  await supabase.from("plantilla_items").delete().eq("modelo_id", id);
+  await supabase.from("movimientos_stock_producto").delete().eq("modelo_id", id);
+  await supabase.from("stock_productos").delete().eq("modelo_id", id);
+
   const { error } = await supabase.from("modelos").delete().eq("id", id);
-  if (error) throw new Error("No se puede eliminar: el producto tiene pedidos, órdenes de producción o existencias asociadas.");
+  if (error) throw new Error("No se puede eliminar: el producto tiene pedidos u órdenes de producción reales asociadas.");
   revalidatePath("/inventario");
 }
 
