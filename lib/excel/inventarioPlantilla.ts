@@ -1,27 +1,50 @@
 import ExcelJS from "exceljs";
 
-export const ENCABEZADOS_FIJOS = ["Nombre", "Descripción", "Categoría", "Costo de producción", "Precio de venta general"];
+export const ENCABEZADOS_FIJOS = [
+  "NOMBRE DEL PRODUCTO",
+  "CATEGORIA",
+  "VARIANTE DE TAMAÑO (TALLA)",
+  "STOCK",
+  "COSTO",
+  "PRECIO DE VENTA",
+];
 
 export async function generarPlantillaInventario(tallas: { codigo: string }[]): Promise<Buffer> {
   const libro = new ExcelJS.Workbook();
 
   const hoja = libro.addWorksheet("Productos");
-  const encabezados = [...ENCABEZADOS_FIJOS, ...tallas.map((t) => t.codigo)];
-  hoja.addRow(encabezados);
+  hoja.addRow(ENCABEZADOS_FIJOS);
   hoja.getRow(1).font = { bold: true };
-  hoja.columns = encabezados.map((h) => ({ width: Math.max(h.length + 4, 14) }));
+  hoja.columns = ENCABEZADOS_FIJOS.map((h) => ({ width: Math.max(h.length + 4, 16) }));
+
+  if (tallas.length) {
+    const listaTallas = `"${tallas.map((t) => t.codigo).join(",")}"`;
+    for (let fila = 2; fila <= 1000; fila++) {
+      hoja.getCell(`C${fila}`).dataValidation = {
+        type: "list",
+        allowBlank: true,
+        formulae: [listaTallas],
+        showErrorMessage: true,
+        errorTitle: "Talla inválida",
+        error: "Elige una talla de la lista del catálogo.",
+      };
+    }
+  }
 
   const instrucciones = libro.addWorksheet("Instrucciones");
   instrucciones.columns = [{ width: 95 }];
   const lineas = [
     "Instrucciones para cargar productos",
     "",
-    '1. Llena una fila por producto en la hoja "Productos".',
-    '2. "Nombre" es el único campo obligatorio.',
-    '3. "Costo de producción" y "Precio de venta general" son opcionales — usa solo números, sin signo de $.',
-    "4. En las columnas de tallas (XS, S, M, L...) escribe el precio de venta de esa talla si el producto la maneja.",
-    "   Déjala en blanco si el producto no se ofrece en esa talla.",
-    "5. Si dejas TODAS las columnas de tallas en blanco, el producto podrá usarse con cualquier talla del catálogo.",
+    '1. Cada fila es UNA variante (producto + talla) en la hoja "Productos".',
+    "2. Si un producto tiene varias tallas, repite el nombre en varias filas — una por talla.",
+    '   Ejemplo: "Filipina Clásica" / S    y    "Filipina Clásica" / M en dos filas distintas.',
+    '3. "NOMBRE DEL PRODUCTO" es obligatorio.',
+    '4. "VARIANTE DE TAMAÑO (TALLA)" debe ser una talla del catálogo (hay una lista para elegir en la celda).',
+    "   Si la dejas en blanco, el producto se crea sin existencias ni precio para esa fila.",
+    '5. "STOCK", "COSTO" y "PRECIO DE VENTA" son opcionales — usa solo números, sin signo de $.',
+    '   "STOCK" es la cantidad de existencias con la que arranca esa talla.',
+    '   "PRECIO DE VENTA" es el precio de esa talla en particular.',
     "6. No cambies los nombres de las columnas ni el orden de las hojas.",
   ];
   lineas.forEach((linea) => instrucciones.addRow([linea]));
