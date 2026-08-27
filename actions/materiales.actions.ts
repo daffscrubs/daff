@@ -13,6 +13,29 @@ import {
 } from "@/lib/validaciones/materiales.schema";
 import { accionError, accionOk, type AccionResultado } from "@/lib/tipos/accion";
 
+// Los materiales con seguimiento_por_unidad=true se controlan por rollo/bolsa
+// individual (unidades_material + consumo_unidad_orden, con QR); el consumo
+// agregado de aquí abajo es solo para materiales por bulto. Sin este candado
+// se podría escribir en consumo_material_orden por el camino viejo y desfasar
+// el trigger que lo mantiene sincronizado desde las unidades.
+async function requerirMaterialPorBulto(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  materialId: string
+): Promise<AccionResultado> {
+  const { data: material, error } = await supabase
+    .from("materiales")
+    .select("seguimiento_por_unidad")
+    .eq("id", materialId)
+    .single();
+  if (error) return accionError(error.message);
+  if (material.seguimiento_por_unidad) {
+    return accionError(
+      "Este material se controla por unidad (rollo/bolsa con QR) — asigna unidades específicas en vez de una cantidad agregada."
+    );
+  }
+  return accionOk(undefined);
+}
+
 export async function crearMaterial(input: MaterialInput): Promise<AccionResultado> {
   await requerirPerfil(["admin", "supervisor"]);
   const datos = materialSchema.parse(input);
@@ -73,6 +96,9 @@ export async function guardarConsumoEstimado(input: ConsumoEstimadoInput): Promi
   const datos = consumoEstimadoSchema.parse(input);
   const supabase = await createClient();
 
+  const chequeo = await requerirMaterialPorBulto(supabase, datos.materialId);
+  if (!chequeo.ok) return chequeo;
+
   const { error } = await supabase
     .from("consumo_material_orden")
     .upsert(
@@ -88,6 +114,17 @@ export async function guardarConsumoEstimado(input: ConsumoEstimadoInput): Promi
 export async function eliminarConsumoMaterial(id: string, loteId: string): Promise<AccionResultado> {
   await requerirPerfil(["admin", "supervisor"]);
   const supabase = await createClient();
+
+  const { data: consumo, error: errorConsumo } = await supabase
+    .from("consumo_material_orden")
+    .select("material_id")
+    .eq("id", id)
+    .single();
+  if (errorConsumo) return accionError(errorConsumo.message);
+
+  const chequeo = await requerirMaterialPorBulto(supabase, consumo.material_id);
+  if (!chequeo.ok) return chequeo;
+
   const { data, error } = await supabase
     .from("consumo_material_orden")
     .delete()
@@ -103,6 +140,17 @@ export async function eliminarConsumoMaterial(id: string, loteId: string): Promi
 export async function registrarConsumoReal(id: string, loteId: string, cantidadReal: number): Promise<AccionResultado> {
   await requerirPerfil(["admin", "supervisor"]);
   const supabase = await createClient();
+
+  const { data: consumo, error: errorConsumo } = await supabase
+    .from("consumo_material_orden")
+    .select("material_id")
+    .eq("id", id)
+    .single();
+  if (errorConsumo) return accionError(errorConsumo.message);
+
+  const chequeo = await requerirMaterialPorBulto(supabase, consumo.material_id);
+  if (!chequeo.ok) return chequeo;
+
   const { data, error } = await supabase
     .from("consumo_material_orden")
     .update({ cantidad_real: cantidadReal, cantidad_real_registrada_en: new Date().toISOString() })

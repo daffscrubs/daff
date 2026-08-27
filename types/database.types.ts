@@ -645,6 +645,7 @@ export type Database = {
           created_at: string
           id: string
           nombre: string
+          seguimiento_por_unidad: boolean
           stock_actual: number
           stock_minimo: number
           unidad_medida: string
@@ -655,6 +656,7 @@ export type Database = {
           created_at?: string
           id?: string
           nombre: string
+          seguimiento_por_unidad?: boolean
           stock_actual?: number
           stock_minimo?: number
           unidad_medida: string
@@ -665,6 +667,7 @@ export type Database = {
           created_at?: string
           id?: string
           nombre?: string
+          seguimiento_por_unidad?: boolean
           stock_actual?: number
           stock_minimo?: number
           unidad_medida?: string
