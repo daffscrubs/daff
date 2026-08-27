@@ -4,6 +4,7 @@ import { useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
+import type { AccionResultado } from "@/lib/tipos/accion";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -23,19 +24,19 @@ export function BotonEliminarActivo({
 }: {
   activo: boolean;
   entidad?: string;
-  onCambiarEstado: (nuevoEstado: boolean) => Promise<void>;
+  onCambiarEstado: (nuevoEstado: boolean) => Promise<AccionResultado>;
 }) {
   const [pendiente, startTransition] = useTransition();
   const router = useRouter();
 
   function ejecutar(nuevoEstado: boolean) {
     startTransition(async () => {
-      try {
-        await onCambiarEstado(nuevoEstado);
-        router.refresh();
-      } catch (err) {
-        toast.error(err instanceof Error ? err.message : "Error al actualizar");
+      const res = await onCambiarEstado(nuevoEstado);
+      if (!res.ok) {
+        toast.error(res.error);
+        return;
       }
+      router.refresh();
     });
   }
 

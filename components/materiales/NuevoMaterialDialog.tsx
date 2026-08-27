@@ -28,25 +28,25 @@ export function NuevoMaterialDialog() {
   function crear(e: React.FormEvent) {
     e.preventDefault();
     startTransition(async () => {
-      try {
-        await crearMaterial({
-          nombre,
-          categoria,
-          unidadMedida,
-          stockMinimo: Number(stockMinimo || 0),
-          costoUnitario: costoUnitario ? Number(costoUnitario) : undefined,
-        });
-        toast.success("Material creado");
-        setNombre("");
-        setCategoria("");
-        setUnidadMedida("");
-        setStockMinimo("0");
-        setCostoUnitario("");
-        setAbierto(false);
-        router.refresh();
-      } catch (err) {
-        toast.error(err instanceof Error ? err.message : "Error al crear el material");
+      const res = await crearMaterial({
+        nombre,
+        categoria,
+        unidadMedida,
+        stockMinimo: Number(stockMinimo || 0),
+        costoUnitario: costoUnitario ? Number(costoUnitario) : undefined,
+      });
+      if (!res.ok) {
+        toast.error(res.error);
+        return;
       }
+      toast.success("Material creado");
+      setNombre("");
+      setCategoria("");
+      setUnidadMedida("");
+      setStockMinimo("0");
+      setCostoUnitario("");
+      setAbierto(false);
+      router.refresh();
     });
   }
 

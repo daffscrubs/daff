@@ -4,8 +4,9 @@ import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import { requerirPerfil } from "@/lib/supabase/auth-helpers";
 import { clienteSchema, type ClienteInput } from "@/lib/validaciones/clientes.schema";
+import { accionError, accionOk, type AccionResultado } from "@/lib/tipos/accion";
 
-export async function crearCliente(input: ClienteInput) {
+export async function crearCliente(input: ClienteInput): Promise<AccionResultado<string>> {
   await requerirPerfil(["admin", "ventas"]);
   const datos = clienteSchema.parse(input);
   const supabase = await createClient();
@@ -25,12 +26,12 @@ export async function crearCliente(input: ClienteInput) {
     .select("id")
     .single();
 
-  if (error) throw new Error(error.message);
+  if (error) return accionError(error.message);
   revalidatePath("/clientes");
-  return data.id as string;
+  return accionOk(data.id as string);
 }
 
-export async function actualizarCliente(id: string, input: ClienteInput) {
+export async function actualizarCliente(id: string, input: ClienteInput): Promise<AccionResultado> {
   await requerirPerfil(["admin", "ventas"]);
   const datos = clienteSchema.parse(input);
   const supabase = await createClient();
@@ -49,7 +50,8 @@ export async function actualizarCliente(id: string, input: ClienteInput) {
     })
     .eq("id", id);
 
-  if (error) throw new Error(error.message);
+  if (error) return accionError(error.message);
   revalidatePath("/clientes");
   revalidatePath(`/clientes/${id}`);
+  return accionOk(undefined);
 }

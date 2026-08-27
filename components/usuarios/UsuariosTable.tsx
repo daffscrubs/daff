@@ -43,12 +43,13 @@ export function UsuariosTable({
   function abrirDetalle(id: string) {
     setDetalleAbierto(true);
     startTransitionDetalle(async () => {
-      try {
-        setDetalle(await obtenerUsuarioParaEditar(id));
-      } catch (err) {
-        toast.error(err instanceof Error ? err.message : "Error al cargar el usuario");
+      const res = await obtenerUsuarioParaEditar(id);
+      if (!res.ok) {
+        toast.error(res.error);
         setDetalleAbierto(false);
+        return;
       }
+      setDetalle(res.data);
     });
   }
 

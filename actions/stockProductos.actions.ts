@@ -7,8 +7,9 @@ import {
   movimientoStockProductoSchema,
   type MovimientoStockProductoInput,
 } from "@/lib/validaciones/stock-productos.schema";
+import { accionError, accionOk, type AccionResultado } from "@/lib/tipos/accion";
 
-export async function crearMovimientoStockProducto(input: MovimientoStockProductoInput) {
+export async function crearMovimientoStockProducto(input: MovimientoStockProductoInput): Promise<AccionResultado> {
   const perfil = await requerirPerfil(["admin", "supervisor"]);
   const datos = movimientoStockProductoSchema.parse(input);
   const supabase = await createClient();
@@ -22,7 +23,8 @@ export async function crearMovimientoStockProducto(input: MovimientoStockProduct
     registrado_por: perfil.id,
   });
 
-  if (error) throw new Error(error.message);
+  if (error) return accionError(error.message);
   revalidatePath("/inventario");
   revalidatePath(`/inventario/${datos.modeloId}`);
+  return accionOk(undefined);
 }

@@ -50,16 +50,16 @@ export function CreditoPedido({
   function registrar(e: React.FormEvent) {
     e.preventDefault();
     startTransition(async () => {
-      try {
-        await registrarPagoPedido({ pedidoId, monto: Number(monto), fecha, notas });
-        toast.success("Pago registrado");
-        setAbierto(false);
-        setMonto("");
-        setNotas("");
-        router.refresh();
-      } catch (err) {
-        toast.error(err instanceof Error ? err.message : "Error al registrar el pago");
+      const res = await registrarPagoPedido({ pedidoId, monto: Number(monto), fecha, notas });
+      if (!res.ok) {
+        toast.error(res.error);
+        return;
       }
+      toast.success("Pago registrado");
+      setAbierto(false);
+      setMonto("");
+      setNotas("");
+      router.refresh();
     });
   }
 

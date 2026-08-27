@@ -42,18 +42,17 @@ export function FormUsuario({ onCreado }: { onCreado?: () => void }) {
   function enviar(e: React.FormEvent) {
     e.preventDefault();
     startTransition(async () => {
-      try {
-        if (rol === "colaborador") {
-          await crearUsuario({ rol, nombreCompleto, usuarioCorto, pin });
-        } else {
-          await crearUsuario({ rol, nombreCompleto, email, password });
-        }
-        toast.success("Usuario creado");
-        limpiar();
-        onCreado?.();
-      } catch (err) {
-        toast.error(err instanceof Error ? err.message : "Error al crear el usuario");
+      const res =
+        rol === "colaborador"
+          ? await crearUsuario({ rol, nombreCompleto, usuarioCorto, pin })
+          : await crearUsuario({ rol, nombreCompleto, email, password });
+      if (!res.ok) {
+        toast.error(res.error);
+        return;
       }
+      toast.success("Usuario creado");
+      limpiar();
+      onCreado?.();
     });
   }
 

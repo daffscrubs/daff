@@ -62,24 +62,24 @@ export function EtapasLoteManager({
       return;
     }
     startTransition(async () => {
-      try {
-        await agregarEtapaLote({ loteId, etapaId });
-        setEtapaId("");
-        router.refresh();
-      } catch (err) {
-        toast.error(err instanceof Error ? err.message : "Error al agregar");
+      const res = await agregarEtapaLote({ loteId, etapaId });
+      if (!res.ok) {
+        toast.error(res.error);
+        return;
       }
+      setEtapaId("");
+      router.refresh();
     });
   }
 
   function quitar(ordenSecuencia: number) {
     startTransition(async () => {
-      try {
-        await quitarEtapaLote(loteId, ordenSecuencia);
-        router.refresh();
-      } catch (err) {
-        toast.error(err instanceof Error ? err.message : "Error al quitar");
+      const res = await quitarEtapaLote(loteId, ordenSecuencia);
+      if (!res.ok) {
+        toast.error(res.error);
+        return;
       }
+      router.refresh();
     });
   }
 

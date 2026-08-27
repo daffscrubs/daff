@@ -14,6 +14,7 @@ import {
   type OrdenProduccionInput,
 } from "@/lib/validaciones/produccion.schema";
 import { fechaISOLocal } from "@/lib/fechas";
+import { accionError, accionOk, type AccionResultado } from "@/lib/tipos/accion";
 
 async function sugerirFolioOrden(supabase: Awaited<ReturnType<typeof createClient>>) {
   const anio = new Date().getFullYear();
@@ -27,13 +28,13 @@ async function sugerirFolioOrden(supabase: Awaited<ReturnType<typeof createClien
   return `OP-${anio}-${consecutivo}`;
 }
 
-export async function sugerirFolioOrdenAction() {
+export async function sugerirFolioOrdenAction(): Promise<AccionResultado<string>> {
   await requerirPerfil(["admin", "supervisor"]);
   const supabase = await createClient();
-  return sugerirFolioOrden(supabase);
+  return accionOk(await sugerirFolioOrden(supabase));
 }
 
-export async function crearOrdenProduccion(input: OrdenProduccionInput) {
+export async function crearOrdenProduccion(input: OrdenProduccionInput): Promise<AccionResultado<string>> {
   const perfil = await requerirPerfil(["admin", "supervisor"]);
   const datos = ordenProduccionSchema.parse(input);
   const supabase = await createClient();
@@ -52,9 +53,9 @@ export async function crearOrdenProduccion(input: OrdenProduccionInput) {
 
   if (error) {
     if (error.message.includes("duplicate key")) {
-      throw new Error("Ya existe una orden con ese folio.");
+      return accionError("Ya existe una orden con ese folio.");
     }
-    throw new Error(error.message);
+    return accionError(error.message);
   }
 
   const { error: errorItems } = await supabase.from("items_orden_produccion").insert(
@@ -68,7 +69,7 @@ export async function crearOrdenProduccion(input: OrdenProduccionInput) {
 
   if (errorItems) {
     await supabase.from("lotes_produccion").delete().eq("id", lote.id);
-    throw new Error(errorItems.message);
+    return accionError(errorItems.message);
   }
 
   if (datos.insumos.length) {
@@ -79,14 +80,14 @@ export async function crearOrdenProduccion(input: OrdenProduccionInput) {
         cantidad_estimada: insumo.cantidadEstimada,
       }))
     );
-    if (errorInsumos) throw new Error(errorInsumos.message);
+    if (errorInsumos) return accionError(errorInsumos.message);
   }
 
   revalidatePath("/produccion");
-  return lote.id as string;
+  return accionOk(lote.id as string);
 }
 
-export async function actualizarOrdenProduccion(loteId: string, input: EditarOrdenProduccionInput) {
+export async function actualizarOrdenProduccion(loteId: string, input: EditarOrdenProduccionInput): Promise<AccionResultado> {
   await requerirPerfil(["admin", "supervisor"]);
   const datos = editarOrdenProduccionSchema.parse(input);
   const supabase = await createClient();
@@ -96,16 +97,16 @@ export async function actualizarOrdenProduccion(loteId: string, input: EditarOrd
     .select("estatus")
     .eq("id", loteId)
     .single();
-  if (errorLote) throw new Error(errorLote.message);
+  if (errorLote) return accionError(errorLote.message);
   if (lote.estatus === "cancelada") {
-    throw new Error("No se puede modificar una orden cancelada.");
+    return accionError("No se puede modificar una orden cancelada.");
   }
 
   const { error: errorFecha } = await supabase
     .from("lotes_produccion")
     .update({ fecha_fin_estimada: datos.fechaFinEstimada || null })
     .eq("id", loteId);
-  if (errorFecha) throw new Error(errorFecha.message);
+  if (errorFecha) return accionError(errorFecha.message);
 
   // Los productos solo se pueden reemplazar mientras la orden no tenga
   // procesos configurados (lote_etapas): una vez configurados, el avance ya
@@ -117,7 +118,7 @@ export async function actualizarOrdenProduccion(loteId: string, input: EditarOrd
 
   if (!etapasCount) {
     const { error: errorEliminar } = await supabase.from("items_orden_produccion").delete().eq("lote_id", loteId);
-    if (errorEliminar) throw new Error(errorEliminar.message);
+    if (errorEliminar) return accionError(errorEliminar.message);
 
     const { error: errorItems } = await supabase.from("items_orden_produccion").insert(
       datos.items.map((item) => ({
@@ -127,11 +128,12 @@ export async function actualizarOrdenProduccion(loteId: string, input: EditarOrd
         cantidad_planeada: item.cantidadPlaneada,
       }))
     );
-    if (errorItems) throw new Error(errorItems.message);
+    if (errorItems) return accionError(errorItems.message);
   }
 
   revalidatePath("/produccion");
   revalidatePath(`/produccion/${loteId}`);
+  return accionOk(undefined);
 }
 
 // El trigger de BD que sincroniza pedidos<->lotes_produccion solo se dispara
@@ -158,7 +160,7 @@ async function reevaluarEstatusPedido(supabase: Awaited<ReturnType<typeof create
   }
 }
 
-export async function cancelarOrdenProduccion(loteId: string) {
+export async function cancelarOrdenProduccion(loteId: string): Promise<AccionResultado> {
   await requerirPerfil(["admin", "supervisor"]);
   const supabase = await createClient();
 
@@ -167,13 +169,13 @@ export async function cancelarOrdenProduccion(loteId: string) {
     .select("estatus, pedido_id")
     .eq("id", loteId)
     .single();
-  if (errorLote) throw new Error(errorLote.message);
+  if (errorLote) return accionError(errorLote.message);
   if (lote.estatus === "cancelada") {
-    throw new Error("Esta orden ya está cancelada.");
+    return accionError("Esta orden ya está cancelada.");
   }
 
   const { error } = await supabase.from("lotes_produccion").update({ estatus: "cancelada" }).eq("id", loteId);
-  if (error) throw new Error(error.message);
+  if (error) return accionError(error.message);
 
   if (lote.pedido_id) {
     await reevaluarEstatusPedido(supabase, lote.pedido_id);
@@ -183,9 +185,10 @@ export async function cancelarOrdenProduccion(loteId: string) {
   revalidatePath("/produccion");
   revalidatePath(`/produccion/${loteId}`);
   revalidatePath("/pedidos");
+  return accionOk(undefined);
 }
 
-export async function agregarEtapaLote(input: AgregarEtapaLoteInput) {
+export async function agregarEtapaLote(input: AgregarEtapaLoteInput): Promise<AccionResultado> {
   await requerirPerfil(["admin", "supervisor"]);
   const datos = agregarEtapaLoteSchema.parse(input);
   const supabase = await createClient();
@@ -195,7 +198,7 @@ export async function agregarEtapaLote(input: AgregarEtapaLoteInput) {
     .select("id")
     .eq("lote_id", datos.loteId);
 
-  if (!items?.length) throw new Error("La orden no tiene productos configurados.");
+  if (!items?.length) return accionError("La orden no tiene productos configurados.");
 
   const { data: existentes } = await supabase
     .from("lote_etapas")
@@ -215,12 +218,13 @@ export async function agregarEtapaLote(input: AgregarEtapaLoteInput) {
     }))
   );
 
-  if (error) throw new Error(error.message);
+  if (error) return accionError(error.message);
   revalidatePath(`/produccion/${datos.loteId}/etapas`);
   revalidatePath(`/produccion/${datos.loteId}`);
+  return accionOk(undefined);
 }
 
-export async function quitarEtapaLote(loteId: string, ordenSecuencia: number) {
+export async function quitarEtapaLote(loteId: string, ordenSecuencia: number): Promise<AccionResultado> {
   await requerirPerfil(["admin", "supervisor"]);
   const supabase = await createClient();
 
@@ -231,7 +235,7 @@ export async function quitarEtapaLote(loteId: string, ordenSecuencia: number) {
     .eq("orden_secuencia", ordenSecuencia);
 
   if (filas?.some((f) => f.cantidad_completada > 0)) {
-    throw new Error("No se puede quitar una etapa que ya tiene avance registrado.");
+    return accionError("No se puede quitar una etapa que ya tiene avance registrado.");
   }
 
   const { error } = await supabase
@@ -240,12 +244,13 @@ export async function quitarEtapaLote(loteId: string, ordenSecuencia: number) {
     .eq("lote_id", loteId)
     .eq("orden_secuencia", ordenSecuencia);
 
-  if (error) throw new Error(error.message);
+  if (error) return accionError(error.message);
   revalidatePath(`/produccion/${loteId}/etapas`);
   revalidatePath(`/produccion/${loteId}`);
+  return accionOk(undefined);
 }
 
-export async function crearIncidencia(input: IncidenciaInput) {
+export async function crearIncidencia(input: IncidenciaInput): Promise<AccionResultado> {
   const perfil = await requerirPerfil();
   const datos = incidenciaSchema.parse(input);
   const supabase = await createClient();
@@ -259,22 +264,25 @@ export async function crearIncidencia(input: IncidenciaInput) {
     foto_url: datos.fotoUrl || null,
   });
 
-  if (error) throw new Error(error.message);
+  if (error) return accionError(error.message);
   revalidatePath(`/produccion/${datos.loteId}`);
+  return accionOk(undefined);
 }
 
-export async function resolverIncidencia(id: string, loteId: string) {
+export async function resolverIncidencia(id: string, loteId: string): Promise<AccionResultado> {
   await requerirPerfil(["admin", "supervisor"]);
   const supabase = await createClient();
   const { error } = await supabase.from("incidencias_produccion").update({ resuelto: true }).eq("id", id);
-  if (error) throw new Error(error.message);
+  if (error) return accionError(error.message);
   revalidatePath(`/produccion/${loteId}`);
+  return accionOk(undefined);
 }
 
-export async function actualizarNotasOrden(loteId: string, notas: string) {
+export async function actualizarNotasOrden(loteId: string, notas: string): Promise<AccionResultado> {
   await requerirPerfil(["admin", "supervisor"]);
   const supabase = await createClient();
   const { error } = await supabase.from("lotes_produccion").update({ notas: notas || null }).eq("id", loteId);
-  if (error) throw new Error(error.message);
+  if (error) return accionError(error.message);
   revalidatePath(`/produccion/${loteId}`);
+  return accionOk(undefined);
 }

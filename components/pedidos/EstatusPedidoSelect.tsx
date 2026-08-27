@@ -21,12 +21,12 @@ export function EstatusPedidoSelect({ id, estatus }: { id: string; estatus: Esta
   function cambiar(valor: string | null) {
     if (!valor || valor === estatus) return;
     startTransition(async () => {
-      try {
-        await actualizarEstatusPedido(id, valor as EstatusPedido);
-        router.refresh();
-      } catch (err) {
-        toast.error(err instanceof Error ? err.message : "Error al actualizar");
+      const res = await actualizarEstatusPedido(id, valor as EstatusPedido);
+      if (!res.ok) {
+        toast.error(res.error);
+        return;
       }
+      router.refresh();
     });
   }
 

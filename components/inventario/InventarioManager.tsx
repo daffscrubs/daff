@@ -103,27 +103,27 @@ export function InventarioManager({
   function crear(e: React.FormEvent) {
     e.preventDefault();
     startTransition(async () => {
-      try {
-        await crearModelo({
-          nombre,
-          descripcion,
-          categoria,
-          costoUnitario: costoUnitario ? Number(costoUnitario) : undefined,
-          precioVenta: precioVenta ? Number(precioVenta) : undefined,
-          tallaIds,
-        });
-        toast.success("Producto creado");
-        setNombre("");
-        setDescripcion("");
-        setCategoria("");
-        setCostoUnitario("");
-        setPrecioVenta("");
-        setTallaIds([]);
-        setAbierto(false);
-        router.refresh();
-      } catch (err) {
-        toast.error(err instanceof Error ? err.message : "Error al crear el producto");
+      const res = await crearModelo({
+        nombre,
+        descripcion,
+        categoria,
+        costoUnitario: costoUnitario ? Number(costoUnitario) : undefined,
+        precioVenta: precioVenta ? Number(precioVenta) : undefined,
+        tallaIds,
+      });
+      if (!res.ok) {
+        toast.error(res.error);
+        return;
       }
+      toast.success("Producto creado");
+      setNombre("");
+      setDescripcion("");
+      setCategoria("");
+      setCostoUnitario("");
+      setPrecioVenta("");
+      setTallaIds([]);
+      setAbierto(false);
+      router.refresh();
     });
   }
 

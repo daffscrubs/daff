@@ -126,18 +126,22 @@ export function FormPedido({
     }
     const diasCredito = esCredito ? Number(diasCreditoInput) || 0 : 0;
     startTransition(async () => {
-      try {
-        if (modoEdicion) {
-          await actualizarPedido(pedidoId, { clienteId, fechaCompromiso, notas, diasCredito, items });
-          toast.success("Pedido actualizado");
-          router.push(`/pedidos/${pedidoId}`);
-        } else {
-          const id = await crearPedido({ clienteId, fechaCompromiso, notas, diasCredito, items });
-          toast.success("Pedido creado");
-          router.push(`/pedidos/${id}`);
+      if (modoEdicion) {
+        const res = await actualizarPedido(pedidoId, { clienteId, fechaCompromiso, notas, diasCredito, items });
+        if (!res.ok) {
+          toast.error(res.error);
+          return;
         }
-      } catch (err) {
-        toast.error(err instanceof Error ? err.message : "Error al guardar el pedido");
+        toast.success("Pedido actualizado");
+        router.push(`/pedidos/${pedidoId}`);
+      } else {
+        const res = await crearPedido({ clienteId, fechaCompromiso, notas, diasCredito, items });
+        if (!res.ok) {
+          toast.error(res.error);
+          return;
+        }
+        toast.success("Pedido creado");
+        router.push(`/pedidos/${res.data}`);
       }
     });
   }

@@ -11,8 +11,9 @@ import {
   type MaterialInput,
   type MovimientoInput,
 } from "@/lib/validaciones/materiales.schema";
+import { accionError, accionOk, type AccionResultado } from "@/lib/tipos/accion";
 
-export async function crearMaterial(input: MaterialInput) {
+export async function crearMaterial(input: MaterialInput): Promise<AccionResultado> {
   await requerirPerfil(["admin", "supervisor"]);
   const datos = materialSchema.parse(input);
   const supabase = await createClient();
@@ -25,8 +26,9 @@ export async function crearMaterial(input: MaterialInput) {
     costo_unitario: datos.costoUnitario ?? null,
   });
 
-  if (error) throw new Error(error.message);
+  if (error) return accionError(error.message);
   revalidatePath("/materiales");
+  return accionOk(undefined);
 }
 
 export async function actualizarCostoMaterial(
@@ -34,18 +36,19 @@ export async function actualizarCostoMaterial(
   costoUnitario: number,
   stockMinimo: number,
   categoria: string
-) {
+): Promise<AccionResultado> {
   await requerirPerfil(["admin", "supervisor"]);
   const supabase = await createClient();
   const { error } = await supabase
     .from("materiales")
     .update({ costo_unitario: costoUnitario, stock_minimo: stockMinimo, categoria: categoria || null })
     .eq("id", id);
-  if (error) throw new Error(error.message);
+  if (error) return accionError(error.message);
   revalidatePath("/materiales");
+  return accionOk(undefined);
 }
 
-export async function crearMovimiento(input: MovimientoInput) {
+export async function crearMovimiento(input: MovimientoInput): Promise<AccionResultado> {
   const perfil = await requerirPerfil(["admin", "supervisor"]);
   const datos = movimientoSchema.parse(input);
   const supabase = await createClient();
@@ -59,12 +62,13 @@ export async function crearMovimiento(input: MovimientoInput) {
     registrado_por: perfil.id,
   });
 
-  if (error) throw new Error(error.message);
+  if (error) return accionError(error.message);
   revalidatePath("/materiales");
   revalidatePath(`/materiales/${datos.materialId}`);
+  return accionOk(undefined);
 }
 
-export async function guardarConsumoEstimado(input: ConsumoEstimadoInput) {
+export async function guardarConsumoEstimado(input: ConsumoEstimadoInput): Promise<AccionResultado> {
   await requerirPerfil(["admin", "supervisor"]);
   const datos = consumoEstimadoSchema.parse(input);
   const supabase = await createClient();
@@ -76,11 +80,12 @@ export async function guardarConsumoEstimado(input: ConsumoEstimadoInput) {
       { onConflict: "lote_id,material_id" }
     );
 
-  if (error) throw new Error(error.message);
+  if (error) return accionError(error.message);
   revalidatePath(`/produccion/${datos.loteId}`);
+  return accionOk(undefined);
 }
 
-export async function eliminarConsumoMaterial(id: string, loteId: string) {
+export async function eliminarConsumoMaterial(id: string, loteId: string): Promise<AccionResultado> {
   await requerirPerfil(["admin", "supervisor"]);
   const supabase = await createClient();
   const { data, error } = await supabase
@@ -89,12 +94,13 @@ export async function eliminarConsumoMaterial(id: string, loteId: string) {
     .eq("id", id)
     .is("cantidad_real_registrada_en", null)
     .select("id");
-  if (error) throw new Error(error.message);
-  if (!data?.length) throw new Error("No se puede quitar: el consumo real de este insumo ya fue registrado.");
+  if (error) return accionError(error.message);
+  if (!data?.length) return accionError("No se puede quitar: el consumo real de este insumo ya fue registrado.");
   revalidatePath(`/produccion/${loteId}`);
+  return accionOk(undefined);
 }
 
-export async function registrarConsumoReal(id: string, loteId: string, cantidadReal: number) {
+export async function registrarConsumoReal(id: string, loteId: string, cantidadReal: number): Promise<AccionResultado> {
   await requerirPerfil(["admin", "supervisor"]);
   const supabase = await createClient();
   const { data, error } = await supabase
@@ -103,7 +109,8 @@ export async function registrarConsumoReal(id: string, loteId: string, cantidadR
     .eq("id", id)
     .is("cantidad_real_registrada_en", null)
     .select("id");
-  if (error) throw new Error(error.message);
-  if (!data?.length) throw new Error("El consumo real de este insumo ya fue registrado y no se puede modificar.");
+  if (error) return accionError(error.message);
+  if (!data?.length) return accionError("El consumo real de este insumo ya fue registrado y no se puede modificar.");
   revalidatePath(`/produccion/${loteId}`);
+  return accionOk(undefined);
 }

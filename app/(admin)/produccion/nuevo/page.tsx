@@ -6,7 +6,7 @@ export default async function NuevoLotePage() {
   const supabase = await createClient();
 
   const [
-    folioSugerido,
+    resultadoFolio,
     { data: pedidos },
     { data: itemsPedido },
     { data: modelos },
@@ -22,6 +22,8 @@ export default async function NuevoLotePage() {
     supabase.from("modelo_tallas").select("*"),
     supabase.from("materiales").select("*").order("nombre"),
   ]);
+
+  const folioSugerido = resultadoFolio.ok ? resultadoFolio.data : "";
 
   return (
     <div className="space-y-6">

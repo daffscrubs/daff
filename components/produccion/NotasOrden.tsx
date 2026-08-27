@@ -14,13 +14,13 @@ export function NotasOrden({ loteId, notasIniciales }: { loteId: string; notasIn
 
   function guardar() {
     startTransition(async () => {
-      try {
-        await actualizarNotasOrden(loteId, notas);
-        toast.success("Notas guardadas");
-        router.refresh();
-      } catch (err) {
-        toast.error(err instanceof Error ? err.message : "Error al guardar");
+      const res = await actualizarNotasOrden(loteId, notas);
+      if (!res.ok) {
+        toast.error(res.error);
+        return;
       }
+      toast.success("Notas guardadas");
+      router.refresh();
     });
   }
 

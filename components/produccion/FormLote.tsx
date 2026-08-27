@@ -112,19 +112,19 @@ export function FormLote({
     }
     const insumosValidos = insumos.filter((i) => i.materialId);
     startTransition(async () => {
-      try {
-        const id = await crearOrdenProduccion({
-          folio,
-          pedidoId: pedidoId || null,
-          fechaFinEstimada: fechaFinEstimada || undefined,
-          items,
-          insumos: insumosValidos,
-        });
-        toast.success("Orden de producción creada");
-        router.push(`/produccion/${id}/etapas`);
-      } catch (err) {
-        toast.error(err instanceof Error ? err.message : "Error al crear la orden de producción");
+      const res = await crearOrdenProduccion({
+        folio,
+        pedidoId: pedidoId || null,
+        fechaFinEstimada: fechaFinEstimada || undefined,
+        items,
+        insumos: insumosValidos,
+      });
+      if (!res.ok) {
+        toast.error(res.error);
+        return;
       }
+      toast.success("Orden de producción creada");
+      router.push(`/produccion/${res.data}/etapas`);
     });
   }
 

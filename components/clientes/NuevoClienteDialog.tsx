@@ -28,7 +28,8 @@ export function NuevoClienteDialog() {
         <FormCliente
           textoBoton="Crear cliente"
           onGuardar={async (datos) => {
-            await crearCliente(datos);
+            const res = await crearCliente(datos);
+            if (!res.ok) throw new Error(res.error);
             toast.success("Cliente creado");
             setAbierto(false);
             router.refresh();

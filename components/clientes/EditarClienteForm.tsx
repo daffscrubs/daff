@@ -14,7 +14,8 @@ export function EditarClienteForm({ id, valoresIniciales }: { id: string; valore
       valoresIniciales={valoresIniciales}
       textoBoton="Guardar cambios"
       onGuardar={async (datos) => {
-        await actualizarCliente(id, datos);
+        const res = await actualizarCliente(id, datos);
+        if (!res.ok) throw new Error(res.error);
         toast.success("Cliente actualizado");
         router.refresh();
       }}

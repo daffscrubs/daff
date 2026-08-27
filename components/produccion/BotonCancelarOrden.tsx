@@ -23,13 +23,13 @@ export function BotonCancelarOrden({ loteId }: { loteId: string }) {
 
   function cancelar() {
     startTransition(async () => {
-      try {
-        await cancelarOrdenProduccion(loteId);
-        toast.success("Orden cancelada");
-        router.refresh();
-      } catch (err) {
-        toast.error(err instanceof Error ? err.message : "Error al cancelar");
+      const res = await cancelarOrdenProduccion(loteId);
+      if (!res.ok) {
+        toast.error(res.error);
+        return;
       }
+      toast.success("Orden cancelada");
+      router.refresh();
     });
   }
 

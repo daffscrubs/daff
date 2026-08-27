@@ -87,13 +87,13 @@ export function EditarOrdenForm({
       return;
     }
     startTransition(async () => {
-      try {
-        await actualizarOrdenProduccion(loteId, { fechaFinEstimada, items });
-        toast.success("Orden actualizada");
-        router.push(`/produccion/${loteId}`);
-      } catch (err) {
-        toast.error(err instanceof Error ? err.message : "Error al guardar la orden");
+      const res = await actualizarOrdenProduccion(loteId, { fechaFinEstimada, items });
+      if (!res.ok) {
+        toast.error(res.error);
+        return;
       }
+      toast.success("Orden actualizada");
+      router.push(`/produccion/${loteId}`);
     });
   }
 

@@ -36,27 +36,27 @@ export function TallasManager({ tallas }: { tallas: Talla[] }) {
   function crear(e: React.FormEvent) {
     e.preventDefault();
     startTransition(async () => {
-      try {
-        await crearTalla({ codigo, orden: Number(orden) });
-        toast.success("Talla creada");
-        setCodigo("");
-        setOrden("");
-        setAbierto(false);
-        router.refresh();
-      } catch (err) {
-        toast.error(err instanceof Error ? err.message : "Error al crear la talla");
+      const res = await crearTalla({ codigo, orden: Number(orden) });
+      if (!res.ok) {
+        toast.error(res.error);
+        return;
       }
+      toast.success("Talla creada");
+      setCodigo("");
+      setOrden("");
+      setAbierto(false);
+      router.refresh();
     });
   }
 
   function eliminar(id: string) {
     startTransition(async () => {
-      try {
-        await eliminarTalla(id);
-        router.refresh();
-      } catch (err) {
-        toast.error(err instanceof Error ? err.message : "Error al eliminar");
+      const res = await eliminarTalla(id);
+      if (!res.ok) {
+        toast.error(res.error);
+        return;
       }
+      router.refresh();
     });
   }
 

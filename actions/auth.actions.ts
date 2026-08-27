@@ -2,11 +2,12 @@
 
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { accionError, accionOk, type AccionResultado } from "@/lib/tipos/accion";
 
 const MAX_INTENTOS = 5;
 const BLOQUEO_MINUTOS = 15;
 
-export async function iniciarSesion(identificador: string, email: string, password: string) {
+export async function iniciarSesion(identificador: string, email: string, password: string): Promise<AccionResultado> {
   const admin = createAdminClient();
   const idNormalizado = identificador.toLowerCase().trim();
 
@@ -18,7 +19,7 @@ export async function iniciarSesion(identificador: string, email: string, passwo
 
   if (registro?.bloqueado_hasta && new Date(registro.bloqueado_hasta) > new Date()) {
     const minutosRestantes = Math.ceil((new Date(registro.bloqueado_hasta).getTime() - Date.now()) / 60000);
-    return { error: `Demasiados intentos fallidos. Intenta de nuevo en ${minutosRestantes} minuto(s).` };
+    return accionError(`Demasiados intentos fallidos. Intenta de nuevo en ${minutosRestantes} minuto(s).`);
   }
 
   const supabase = await createClient();
@@ -36,14 +37,14 @@ export async function iniciarSesion(identificador: string, email: string, passwo
     });
 
     if (bloqueado) {
-      return { error: `Demasiados intentos fallidos. Intenta de nuevo en ${BLOQUEO_MINUTOS} minutos.` };
+      return accionError(`Demasiados intentos fallidos. Intenta de nuevo en ${BLOQUEO_MINUTOS} minutos.`);
     }
-    return { error: "Usuario o contraseña incorrectos." };
+    return accionError("Usuario o contraseña incorrectos.");
   }
 
   if (registro) {
     await admin.from("intentos_login").delete().eq("identificador", idNormalizado);
   }
 
-  return { error: null };
+  return accionOk(undefined);
 }

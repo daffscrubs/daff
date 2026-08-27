@@ -125,8 +125,9 @@ export function ComprasTable({
                   <BotonEliminarConfirmacion
                     entidad="compra"
                     onEliminar={async () => {
-                      await eliminarCompra(seleccionada.id);
-                      setSeleccionada(null);
+                      const res = await eliminarCompra(seleccionada.id);
+                      if (res.ok) setSeleccionada(null);
+                      return res;
                     }}
                   />
                 </div>

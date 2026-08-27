@@ -39,16 +39,16 @@ export function EtapasManager({ etapas, esAdmin }: { etapas: Etapa[]; esAdmin: b
   function crear(e: React.FormEvent) {
     e.preventDefault();
     startTransition(async () => {
-      try {
-        await crearEtapa({ nombre, descripcion });
-        toast.success("Etapa creada");
-        setNombre("");
-        setDescripcion("");
-        setAbierto(false);
-        router.refresh();
-      } catch (err) {
-        toast.error(err instanceof Error ? err.message : "Error al crear la etapa");
+      const res = await crearEtapa({ nombre, descripcion });
+      if (!res.ok) {
+        toast.error(res.error);
+        return;
       }
+      toast.success("Etapa creada");
+      setNombre("");
+      setDescripcion("");
+      setAbierto(false);
+      router.refresh();
     });
   }
 

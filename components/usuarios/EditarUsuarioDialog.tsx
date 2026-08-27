@@ -3,7 +3,7 @@
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
-import { actualizarUsuario, obtenerUsuarioParaEditar } from "@/actions/usuarios.actions";
+import { actualizarUsuario, type UsuarioParaEditar } from "@/actions/usuarios.actions";
 import {
   Dialog,
   DialogContent,
@@ -24,7 +24,7 @@ import {
 } from "@/components/ui/select";
 import type { RolUsuario } from "@/types/database.types";
 
-export type UsuarioParaEditar = Awaited<ReturnType<typeof obtenerUsuarioParaEditar>>;
+export type { UsuarioParaEditar };
 
 const ROLES: { value: RolUsuario; label: string }[] = [
   { value: "colaborador", label: "Colaborador (piso)" },
@@ -66,20 +66,20 @@ export function EditarUsuarioDialog({
     e.preventDefault();
     if (!detalle?.perfil) return;
     startTransition(async () => {
-      try {
-        await actualizarUsuario(detalle.perfil.id, {
-          nombreCompleto,
-          rol,
-          usuarioCorto: rol === "colaborador" ? usuarioCorto.toLowerCase() : undefined,
-          email: rol !== "colaborador" ? email : undefined,
-          nuevaContrasena: nuevaContrasena || undefined,
-        });
-        toast.success("Usuario actualizado");
-        onOpenChange(false);
-        router.refresh();
-      } catch (err) {
-        toast.error(err instanceof Error ? err.message : "Error al guardar");
+      const res = await actualizarUsuario(detalle.perfil.id, {
+        nombreCompleto,
+        rol,
+        usuarioCorto: rol === "colaborador" ? usuarioCorto.toLowerCase() : undefined,
+        email: rol !== "colaborador" ? email : undefined,
+        nuevaContrasena: nuevaContrasena || undefined,
+      });
+      if (!res.ok) {
+        toast.error(res.error);
+        return;
       }
+      toast.success("Usuario actualizado");
+      onOpenChange(false);
+      router.refresh();
     });
   }
 

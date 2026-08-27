@@ -57,21 +57,21 @@ export function AjusteAvanceForm({
   function enviar(e: React.FormEvent) {
     e.preventDefault();
     startTransition(async () => {
-      try {
-        await crearAjusteAvance({
-          colaboradorId,
-          loteId,
-          loteEtapaId,
-          cantidad: Number(cantidad),
-          observaciones,
-        });
-        toast.success("Ajuste aplicado");
-        setCantidad("");
-        setObservaciones("");
-        router.refresh();
-      } catch (err) {
-        toast.error(err instanceof Error ? err.message : "Error al ajustar");
+      const res = await crearAjusteAvance({
+        colaboradorId,
+        loteId,
+        loteEtapaId,
+        cantidad: Number(cantidad),
+        observaciones,
+      });
+      if (!res.ok) {
+        toast.error(res.error);
+        return;
       }
+      toast.success("Ajuste aplicado");
+      setCantidad("");
+      setObservaciones("");
+      router.refresh();
     });
   }
 

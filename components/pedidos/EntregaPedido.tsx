@@ -41,15 +41,15 @@ export function EntregaPedido({
   function entregar(e: React.FormEvent) {
     e.preventDefault();
     startTransition(async () => {
-      try {
-        await entregarPedido({ pedidoId, recibidoPor: nombreRecibe });
-        toast.success("Pedido entregado");
-        setAbierto(false);
-        setNombreRecibe("");
-        router.refresh();
-      } catch (err) {
-        toast.error(err instanceof Error ? err.message : "Error al entregar el pedido");
+      const res = await entregarPedido({ pedidoId, recibidoPor: nombreRecibe });
+      if (!res.ok) {
+        toast.error(res.error);
+        return;
       }
+      toast.success("Pedido entregado");
+      setAbierto(false);
+      setNombreRecibe("");
+      router.refresh();
     });
   }
 

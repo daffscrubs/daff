@@ -48,13 +48,13 @@ function FilaConsumo({
 
   function guardar() {
     startTransition(async () => {
-      try {
-        await registrarConsumoReal(consumo.id, loteId, Number(real) || 0);
-        toast.success("Consumo real guardado");
-        router.refresh();
-      } catch (err) {
-        toast.error(err instanceof Error ? err.message : "Error al guardar");
+      const res = await registrarConsumoReal(consumo.id, loteId, Number(real) || 0);
+      if (!res.ok) {
+        toast.error(res.error);
+        return;
       }
+      toast.success("Consumo real guardado");
+      router.refresh();
     });
   }
 
@@ -135,27 +135,27 @@ export function InsumosOrden({
       return;
     }
     startTransition(async () => {
-      try {
-        await guardarConsumoEstimado({ loteId, materialId, cantidadEstimada: Number(cantidadEstimada) });
-        toast.success("Insumo asignado");
-        setMaterialId("");
-        setCantidadEstimada("");
-        router.refresh();
-      } catch (err) {
-        toast.error(err instanceof Error ? err.message : "Error al asignar");
+      const res = await guardarConsumoEstimado({ loteId, materialId, cantidadEstimada: Number(cantidadEstimada) });
+      if (!res.ok) {
+        toast.error(res.error);
+        return;
       }
+      toast.success("Insumo asignado");
+      setMaterialId("");
+      setCantidadEstimada("");
+      router.refresh();
     });
   }
 
   function quitar(id: string) {
     startTransition(async () => {
-      try {
-        await eliminarConsumoMaterial(id, loteId);
-        toast.success("Insumo eliminado");
-        router.refresh();
-      } catch (err) {
-        toast.error(err instanceof Error ? err.message : "Error al quitar");
+      const res = await eliminarConsumoMaterial(id, loteId);
+      if (!res.ok) {
+        toast.error(res.error);
+        return;
       }
+      toast.success("Insumo eliminado");
+      router.refresh();
     });
   }
 

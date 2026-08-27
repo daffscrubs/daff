@@ -9,6 +9,7 @@ import {
   type CompraInput,
   type GastoInput,
 } from "@/lib/validaciones/compras.schema";
+import { accionError, accionOk, type AccionResultado } from "@/lib/tipos/accion";
 
 async function sugerirFolioCompra(supabase: Awaited<ReturnType<typeof createClient>>) {
   // Folio numérico simple y consecutivo (1, 2, 3...). Se toma el máximo folio
@@ -22,7 +23,7 @@ async function sugerirFolioCompra(supabase: Awaited<ReturnType<typeof createClie
   return String(maxNumerico + 1);
 }
 
-export async function crearCompra(input: CompraInput) {
+export async function crearCompra(input: CompraInput): Promise<AccionResultado<string>> {
   const perfil = await requerirPerfil(["admin", "supervisor"]);
   const datos = compraSchema.parse(input);
   const supabase = await createClient();
@@ -43,7 +44,7 @@ export async function crearCompra(input: CompraInput) {
     .select("id")
     .single();
 
-  if (error) throw new Error(error.message);
+  if (error) return accionError(error.message);
 
   const { error: errorItems } = await supabase.from("compra_items").insert(
     datos.items.map((item) => ({
@@ -56,7 +57,7 @@ export async function crearCompra(input: CompraInput) {
 
   if (errorItems) {
     await supabase.from("compras").delete().eq("id", compra.id);
-    throw new Error(errorItems.message);
+    return accionError(errorItems.message);
   }
 
   // Cada material comprado genera su entrada de inventario y actualiza su
@@ -72,18 +73,18 @@ export async function crearCompra(input: CompraInput) {
       registrado_por: perfil.id,
       compra_id: compra.id,
     });
-    if (errorMovimiento) throw new Error(errorMovimiento.message);
+    if (errorMovimiento) return accionError(errorMovimiento.message);
 
     const { error: errorCosto } = await supabase
       .from("materiales")
       .update({ costo_unitario: item.costoUnitario })
       .eq("id", item.materialId);
-    if (errorCosto) throw new Error(errorCosto.message);
+    if (errorCosto) return accionError(errorCosto.message);
   }
 
   revalidatePath("/compras");
   revalidatePath("/materiales");
-  return compra.id as string;
+  return accionOk(compra.id as string);
 }
 
 // Revierte el efecto en inventario de una compra: registra una "salida"
@@ -98,12 +99,12 @@ async function revertirMovimientosCompra(
   compraId: string,
   perfilId: string,
   motivo: string
-) {
+): Promise<AccionResultado> {
   const { data: movimientos, error } = await supabase
     .from("movimientos_inventario")
     .select("material_id, cantidad, tipo")
     .eq("compra_id", compraId);
-  if (error) throw new Error(error.message);
+  if (error) return accionError(error.message);
 
   const netoPorMaterial = new Map<string, number>();
   for (const m of movimientos ?? []) {
@@ -122,11 +123,13 @@ async function revertirMovimientosCompra(
       registrado_por: perfilId,
       compra_id: compraId,
     });
-    if (errorReversa) throw new Error(errorReversa.message);
+    if (errorReversa) return accionError(errorReversa.message);
   }
+
+  return accionOk(undefined);
 }
 
-export async function actualizarCompra(id: string, input: CompraInput) {
+export async function actualizarCompra(id: string, input: CompraInput): Promise<AccionResultado> {
   const perfil = await requerirPerfil(["admin", "supervisor"]);
   const datos = compraSchema.parse(input);
   const supabase = await createClient();
@@ -136,14 +139,15 @@ export async function actualizarCompra(id: string, input: CompraInput) {
     .select("folio")
     .eq("id", id)
     .single();
-  if (errorCompra) throw new Error(errorCompra.message);
+  if (errorCompra) return accionError(errorCompra.message);
 
-  await revertirMovimientosCompra(
+  const reversion = await revertirMovimientosCompra(
     supabase,
     id,
     perfil.id,
     `Edición de compra ${compraActual.folio} — se reemplazan los materiales`
   );
+  if (!reversion.ok) return reversion;
 
   const total = datos.items.reduce((acc, i) => acc + i.cantidad * i.costoUnitario, 0);
 
@@ -156,10 +160,10 @@ export async function actualizarCompra(id: string, input: CompraInput) {
       notas: datos.notas || null,
     })
     .eq("id", id);
-  if (errorUpdate) throw new Error(errorUpdate.message);
+  if (errorUpdate) return accionError(errorUpdate.message);
 
   const { error: errorEliminar } = await supabase.from("compra_items").delete().eq("compra_id", id);
-  if (errorEliminar) throw new Error(errorEliminar.message);
+  if (errorEliminar) return accionError(errorEliminar.message);
 
   const { error: errorItems } = await supabase.from("compra_items").insert(
     datos.items.map((item) => ({
@@ -169,7 +173,7 @@ export async function actualizarCompra(id: string, input: CompraInput) {
       costo_unitario: item.costoUnitario,
     }))
   );
-  if (errorItems) throw new Error(errorItems.message);
+  if (errorItems) return accionError(errorItems.message);
 
   for (const item of datos.items) {
     const { error: errorMovimiento } = await supabase.from("movimientos_inventario").insert({
@@ -180,20 +184,21 @@ export async function actualizarCompra(id: string, input: CompraInput) {
       registrado_por: perfil.id,
       compra_id: id,
     });
-    if (errorMovimiento) throw new Error(errorMovimiento.message);
+    if (errorMovimiento) return accionError(errorMovimiento.message);
 
     const { error: errorCosto } = await supabase
       .from("materiales")
       .update({ costo_unitario: item.costoUnitario })
       .eq("id", item.materialId);
-    if (errorCosto) throw new Error(errorCosto.message);
+    if (errorCosto) return accionError(errorCosto.message);
   }
 
   revalidatePath("/compras");
   revalidatePath("/materiales");
+  return accionOk(undefined);
 }
 
-export async function eliminarCompra(id: string) {
+export async function eliminarCompra(id: string): Promise<AccionResultado> {
   const perfil = await requerirPerfil(["admin", "supervisor"]);
   const supabase = await createClient();
 
@@ -202,18 +207,20 @@ export async function eliminarCompra(id: string) {
     .select("folio")
     .eq("id", id)
     .single();
-  if (errorCompra) throw new Error(errorCompra.message);
+  if (errorCompra) return accionError(errorCompra.message);
 
-  await revertirMovimientosCompra(supabase, id, perfil.id, `Compra ${compra.folio} eliminada`);
+  const reversion = await revertirMovimientosCompra(supabase, id, perfil.id, `Compra ${compra.folio} eliminada`);
+  if (!reversion.ok) return reversion;
 
   const { error } = await supabase.from("compras").delete().eq("id", id);
-  if (error) throw new Error(error.message);
+  if (error) return accionError(error.message);
 
   revalidatePath("/compras");
   revalidatePath("/materiales");
+  return accionOk(undefined);
 }
 
-export async function crearGasto(input: GastoInput) {
+export async function crearGasto(input: GastoInput): Promise<AccionResultado> {
   const perfil = await requerirPerfil(["admin", "ventas"]);
   const datos = gastoSchema.parse(input);
   const supabase = await createClient();
@@ -227,6 +234,7 @@ export async function crearGasto(input: GastoInput) {
     registrado_por: perfil.id,
   });
 
-  if (error) throw new Error(error.message);
+  if (error) return accionError(error.message);
   revalidatePath("/compras/gastos");
+  return accionOk(undefined);
 }

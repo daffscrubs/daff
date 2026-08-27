@@ -10,8 +10,10 @@ import {
   type CrearUsuarioInput,
   type EditarUsuarioInput,
 } from "@/lib/validaciones/usuario.schema";
+import { accionError, accionOk, type AccionResultado } from "@/lib/tipos/accion";
+import type { Database } from "@/types/database.types";
 
-export async function crearUsuario(input: CrearUsuarioInput) {
+export async function crearUsuario(input: CrearUsuarioInput): Promise<AccionResultado> {
   await requerirPerfil(["admin"]);
 
   const datos = crearUsuarioSchema.parse(input);
@@ -27,7 +29,7 @@ export async function crearUsuario(input: CrearUsuarioInput) {
   });
 
   if (errorAuth || !usuarioCreado.user) {
-    throw new Error(errorAuth?.message ?? "No se pudo crear el usuario");
+    return accionError(errorAuth?.message ?? "No se pudo crear el usuario");
   }
 
   const { error: errorPerfil } = await admin.from("perfiles").insert({
@@ -39,44 +41,51 @@ export async function crearUsuario(input: CrearUsuarioInput) {
 
   if (errorPerfil) {
     await admin.auth.admin.deleteUser(usuarioCreado.user.id);
-    throw new Error(errorPerfil.message);
+    return accionError(errorPerfil.message);
   }
 
   revalidatePath("/usuarios");
+  return accionOk(undefined);
 }
 
-export async function eliminarUsuario(id: string) {
+export async function eliminarUsuario(id: string): Promise<AccionResultado> {
   const perfil = await requerirPerfil(["admin"]);
-  if (perfil.id === id) throw new Error("No puedes eliminar tu propio usuario.");
+  if (perfil.id === id) return accionError("No puedes eliminar tu propio usuario.");
 
   const admin = createAdminClient();
   const { error } = await admin.auth.admin.deleteUser(id);
   if (error) {
-    throw new Error(
+    return accionError(
       "No se puede eliminar: este usuario tiene actividad registrada (pedidos, producción, avances, etc). Desactívalo en su lugar."
     );
   }
 
   revalidatePath("/usuarios");
+  return accionOk(undefined);
 }
 
-export async function obtenerUsuarioParaEditar(id: string) {
+export interface UsuarioParaEditar {
+  perfil: Database["public"]["Tables"]["perfiles"]["Row"];
+  email: string;
+}
+
+export async function obtenerUsuarioParaEditar(id: string): Promise<AccionResultado<UsuarioParaEditar>> {
   await requerirPerfil(["admin"]);
   const admin = createAdminClient();
 
   const { data: perfil, error: errorPerfil } = await admin.from("perfiles").select("*").eq("id", id).single();
-  if (errorPerfil) throw new Error(errorPerfil.message);
+  if (errorPerfil) return accionError(errorPerfil.message);
 
   const { data: usuarioAuth, error: errorAuth } = await admin.auth.admin.getUserById(id);
-  if (errorAuth) throw new Error(errorAuth.message);
+  if (errorAuth) return accionError(errorAuth.message);
 
-  return {
+  return accionOk({
     perfil,
     email: usuarioAuth.user?.email ?? "",
-  };
+  });
 }
 
-export async function actualizarUsuario(id: string, input: EditarUsuarioInput) {
+export async function actualizarUsuario(id: string, input: EditarUsuarioInput): Promise<AccionResultado> {
   await requerirPerfil(["admin"]);
   const datos = editarUsuarioSchema.parse(input);
   const admin = createAdminClient();
@@ -85,7 +94,7 @@ export async function actualizarUsuario(id: string, input: EditarUsuarioInput) {
 
   if (datos.rol === "colaborador") {
     if (!datos.usuarioCorto || datos.usuarioCorto.length < 2) {
-      throw new Error("El usuario debe tener al menos 2 caracteres.");
+      return accionError("El usuario debe tener al menos 2 caracteres.");
     }
     actualizacionAuth.email = `${datos.usuarioCorto}@${dominioColaborador}`;
   } else if (datos.email) {
@@ -94,17 +103,17 @@ export async function actualizarUsuario(id: string, input: EditarUsuarioInput) {
 
   if (datos.nuevaContrasena) {
     if (datos.rol === "colaborador" && !/^\d{6}$/.test(datos.nuevaContrasena)) {
-      throw new Error("El PIN debe tener 6 dígitos.");
+      return accionError("El PIN debe tener 6 dígitos.");
     }
     if (datos.rol !== "colaborador" && datos.nuevaContrasena.length < 6) {
-      throw new Error("La contraseña debe tener al menos 6 caracteres.");
+      return accionError("La contraseña debe tener al menos 6 caracteres.");
     }
     actualizacionAuth.password = datos.nuevaContrasena;
   }
 
   if (Object.keys(actualizacionAuth).length) {
     const { error: errorAuth } = await admin.auth.admin.updateUserById(id, actualizacionAuth);
-    if (errorAuth) throw new Error(errorAuth.message);
+    if (errorAuth) return accionError(errorAuth.message);
   }
 
   const { error: errorPerfil } = await admin
@@ -116,7 +125,8 @@ export async function actualizarUsuario(id: string, input: EditarUsuarioInput) {
     })
     .eq("id", id);
 
-  if (errorPerfil) throw new Error(errorPerfil.message);
+  if (errorPerfil) return accionError(errorPerfil.message);
 
   revalidatePath("/usuarios");
+  return accionOk(undefined);
 }

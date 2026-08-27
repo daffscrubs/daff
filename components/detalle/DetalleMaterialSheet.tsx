@@ -49,12 +49,12 @@ export function DetalleMaterialSheet({
     if (!detalle?.material) return;
     const id = detalle.material.id;
     startTransition(async () => {
-      try {
-        await actualizarCostoMaterial(id, Number(costo) || 0, Number(stockMinimo) || 0, categoria);
-        toast.success("Material actualizado");
-      } catch (err) {
-        toast.error(err instanceof Error ? err.message : "Error al guardar");
+      const res = await actualizarCostoMaterial(id, Number(costo) || 0, Number(stockMinimo) || 0, categoria);
+      if (!res.ok) {
+        toast.error(res.error);
+        return;
       }
+      toast.success("Material actualizado");
     });
   }
 

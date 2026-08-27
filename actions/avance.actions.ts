@@ -9,6 +9,7 @@ import {
   type AjusteAvanceInput,
   type RegistrarAvanceInput,
 } from "@/lib/validaciones/avance.schema";
+import { accionError, accionOk, type AccionResultado } from "@/lib/tipos/accion";
 
 function mensajeError(error: { message: string }) {
   if (error.message.includes("excede el avance disponible")) {
@@ -20,7 +21,7 @@ function mensajeError(error: { message: string }) {
   return error.message;
 }
 
-export async function crearRegistroAvance(input: RegistrarAvanceInput) {
+export async function crearRegistroAvance(input: RegistrarAvanceInput): Promise<AccionResultado> {
   const perfil = await requerirPerfil();
   const datos = registrarAvanceSchema.parse(input);
   const supabase = await createClient();
@@ -36,14 +37,15 @@ export async function crearRegistroAvance(input: RegistrarAvanceInput) {
     foto_url: datos.fotoUrl || null,
   });
 
-  if (error) throw new Error(mensajeError(error));
+  if (error) return accionError(mensajeError(error));
 
   revalidatePath("/mi-dia");
   revalidatePath("/mi-historial");
   revalidatePath(`/produccion/${datos.loteId}`);
+  return accionOk(undefined);
 }
 
-export async function crearAjusteAvance(input: AjusteAvanceInput) {
+export async function crearAjusteAvance(input: AjusteAvanceInput): Promise<AccionResultado> {
   const perfil = await requerirPerfil(["admin", "supervisor"]);
   const datos = ajusteAvanceSchema.parse(input);
   const supabase = await createClient();
@@ -58,8 +60,9 @@ export async function crearAjusteAvance(input: AjusteAvanceInput) {
     observaciones: datos.observaciones,
   });
 
-  if (error) throw new Error(mensajeError(error));
+  if (error) return accionError(mensajeError(error));
 
   revalidatePath(`/produccion/${datos.loteId}`);
   revalidatePath("/reportes/productividad");
+  return accionOk(undefined);
 }

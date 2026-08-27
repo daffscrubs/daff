@@ -65,32 +65,32 @@ export function PlantillaItemsManager({
       return;
     }
     startTransition(async () => {
-      try {
-        await agregarPlantillaItem({
-          plantillaId,
-          modeloId,
-          tallaId,
-          cantidadSugerida: cantidad ? Number(cantidad) : undefined,
-        });
-        toast.success("Ítem agregado");
-        setModeloId("");
-        setTallaId("");
-        setCantidad("");
-        router.refresh();
-      } catch (err) {
-        toast.error(err instanceof Error ? err.message : "Error al agregar");
+      const res = await agregarPlantillaItem({
+        plantillaId,
+        modeloId,
+        tallaId,
+        cantidadSugerida: cantidad ? Number(cantidad) : undefined,
+      });
+      if (!res.ok) {
+        toast.error(res.error);
+        return;
       }
+      toast.success("Ítem agregado");
+      setModeloId("");
+      setTallaId("");
+      setCantidad("");
+      router.refresh();
     });
   }
 
   function eliminar(id: string) {
     startTransition(async () => {
-      try {
-        await eliminarPlantillaItem(id);
-        router.refresh();
-      } catch (err) {
-        toast.error(err instanceof Error ? err.message : "Error al eliminar");
+      const res = await eliminarPlantillaItem(id);
+      if (!res.ok) {
+        toast.error(res.error);
+        return;
       }
+      router.refresh();
     });
   }
 

@@ -15,9 +15,10 @@ import {
   type PlantillaItemInput,
   type TallaInput,
 } from "@/lib/validaciones/catalogos.schema";
+import { accionError, accionOk, type AccionResultado } from "@/lib/tipos/accion";
 
 // ---------- Modelos ----------
-export async function crearModelo(input: ModeloInput) {
+export async function crearModelo(input: ModeloInput): Promise<AccionResultado> {
   await requerirPerfil(["admin", "supervisor"]);
   const datos = modeloSchema.parse(input);
   const supabase = await createClient();
@@ -32,16 +33,17 @@ export async function crearModelo(input: ModeloInput) {
     })
     .select("id")
     .single();
-  if (error) throw new Error(error.message);
+  if (error) return accionError(error.message);
 
   if (datos.tallaIds?.length) {
     const { error: errorTallas } = await supabase
       .from("modelo_tallas")
       .insert(datos.tallaIds.map((tallaId) => ({ modelo_id: modelo.id, talla_id: tallaId })));
-    if (errorTallas) throw new Error(errorTallas.message);
+    if (errorTallas) return accionError(errorTallas.message);
   }
 
   revalidatePath("/inventario");
+  return accionOk(undefined);
 }
 
 export async function actualizarCostoModelo(
@@ -49,27 +51,28 @@ export async function actualizarCostoModelo(
   costoUnitario: number,
   precioVenta: number,
   categoria: string
-) {
+): Promise<AccionResultado> {
   await requerirPerfil(["admin", "supervisor"]);
   const supabase = await createClient();
   const { error } = await supabase
     .from("modelos")
     .update({ costo_unitario: costoUnitario, precio_venta: precioVenta, categoria: categoria || null })
     .eq("id", id);
-  if (error) throw new Error(error.message);
+  if (error) return accionError(error.message);
   revalidatePath("/inventario");
   revalidatePath(`/inventario/${id}`);
+  return accionOk(undefined);
 }
 
 export async function guardarTallasModelo(
   modeloId: string,
   tallas: { tallaId: string; precioVenta?: number }[]
-) {
+): Promise<AccionResultado> {
   await requerirPerfil(["admin", "supervisor"]);
   const supabase = await createClient();
 
   const { error: errorEliminar } = await supabase.from("modelo_tallas").delete().eq("modelo_id", modeloId);
-  if (errorEliminar) throw new Error(errorEliminar.message);
+  if (errorEliminar) return accionError(errorEliminar.message);
 
   if (tallas.length) {
     const { error: errorInsertar } = await supabase.from("modelo_tallas").insert(
@@ -79,14 +82,15 @@ export async function guardarTallasModelo(
         precio_venta: t.precioVenta ?? null,
       }))
     );
-    if (errorInsertar) throw new Error(errorInsertar.message);
+    if (errorInsertar) return accionError(errorInsertar.message);
   }
 
   revalidatePath("/inventario");
   revalidatePath(`/inventario/${modeloId}`);
+  return accionOk(undefined);
 }
 
-export async function eliminarModelo(id: string) {
+export async function eliminarModelo(id: string): Promise<AccionResultado> {
   await requerirPerfil(["admin", "supervisor"]);
   const supabase = await createClient();
 
@@ -99,30 +103,33 @@ export async function eliminarModelo(id: string) {
   await supabase.from("stock_productos").delete().eq("modelo_id", id);
 
   const { error } = await supabase.from("modelos").delete().eq("id", id);
-  if (error) throw new Error("No se puede eliminar: el producto tiene pedidos u órdenes de producción reales asociadas.");
+  if (error) return accionError("No se puede eliminar: el producto tiene pedidos u órdenes de producción reales asociadas.");
   revalidatePath("/inventario");
+  return accionOk(undefined);
 }
 
 // ---------- Tallas ----------
-export async function crearTalla(input: TallaInput) {
+export async function crearTalla(input: TallaInput): Promise<AccionResultado> {
   await requerirPerfil(["admin", "supervisor"]);
   const datos = tallaSchema.parse(input);
   const supabase = await createClient();
   const { error } = await supabase.from("tallas").insert(datos);
-  if (error) throw new Error(error.message);
+  if (error) return accionError(error.message);
   revalidatePath("/catalogos/tallas");
+  return accionOk(undefined);
 }
 
-export async function eliminarTalla(id: string) {
+export async function eliminarTalla(id: string): Promise<AccionResultado> {
   await requerirPerfil(["admin", "supervisor"]);
   const supabase = await createClient();
   const { error } = await supabase.from("tallas").delete().eq("id", id);
-  if (error) throw new Error("No se puede eliminar: la talla ya está en uso.");
+  if (error) return accionError("No se puede eliminar: la talla ya está en uso.");
   revalidatePath("/catalogos/tallas");
+  return accionOk(undefined);
 }
 
 // ---------- Etapas de proceso ----------
-export async function crearEtapa(input: EtapaInput) {
+export async function crearEtapa(input: EtapaInput): Promise<AccionResultado> {
   await requerirPerfil(["admin"]);
   const datos = etapaSchema.parse(input);
   const supabase = await createClient();
@@ -130,20 +137,22 @@ export async function crearEtapa(input: EtapaInput) {
     nombre: datos.nombre,
     descripcion: datos.descripcion || null,
   });
-  if (error) throw new Error(error.message);
+  if (error) return accionError(error.message);
   revalidatePath("/catalogos/etapas-proceso");
+  return accionOk(undefined);
 }
 
-export async function alternarEtapaActiva(id: string, activo: boolean) {
+export async function alternarEtapaActiva(id: string, activo: boolean): Promise<AccionResultado> {
   await requerirPerfil(["admin"]);
   const supabase = await createClient();
   const { error } = await supabase.from("etapas_proceso").update({ activo }).eq("id", id);
-  if (error) throw new Error(error.message);
+  if (error) return accionError(error.message);
   revalidatePath("/catalogos/etapas-proceso");
+  return accionOk(undefined);
 }
 
 // ---------- Plantillas de pedido ----------
-export async function crearPlantilla(input: PlantillaInput) {
+export async function crearPlantilla(input: PlantillaInput): Promise<AccionResultado<string>> {
   await requerirPerfil(["admin", "ventas"]);
   const datos = plantillaSchema.parse(input);
   const supabase = await createClient();
@@ -152,20 +161,21 @@ export async function crearPlantilla(input: PlantillaInput) {
     .insert({ nombre: datos.nombre, cliente_id: datos.clienteId ?? null })
     .select("id")
     .single();
-  if (error) throw new Error(error.message);
+  if (error) return accionError(error.message);
   revalidatePath("/catalogos/plantillas");
-  return data.id as string;
+  return accionOk(data.id as string);
 }
 
-export async function eliminarPlantilla(id: string) {
+export async function eliminarPlantilla(id: string): Promise<AccionResultado> {
   await requerirPerfil(["admin", "ventas"]);
   const supabase = await createClient();
   const { error } = await supabase.from("plantillas_pedido").delete().eq("id", id);
-  if (error) throw new Error(error.message);
+  if (error) return accionError(error.message);
   revalidatePath("/catalogos/plantillas");
+  return accionOk(undefined);
 }
 
-export async function agregarPlantillaItem(input: PlantillaItemInput) {
+export async function agregarPlantillaItem(input: PlantillaItemInput): Promise<AccionResultado> {
   await requerirPerfil(["admin", "ventas"]);
   const datos = plantillaItemSchema.parse(input);
   const supabase = await createClient();
@@ -175,14 +185,16 @@ export async function agregarPlantillaItem(input: PlantillaItemInput) {
     talla_id: datos.tallaId,
     cantidad_sugerida: datos.cantidadSugerida ?? null,
   });
-  if (error) throw new Error(error.message);
+  if (error) return accionError(error.message);
   revalidatePath("/catalogos/plantillas");
+  return accionOk(undefined);
 }
 
-export async function eliminarPlantillaItem(id: string) {
+export async function eliminarPlantillaItem(id: string): Promise<AccionResultado> {
   await requerirPerfil(["admin", "ventas"]);
   const supabase = await createClient();
   const { error } = await supabase.from("plantilla_items").delete().eq("id", id);
-  if (error) throw new Error(error.message);
+  if (error) return accionError(error.message);
   revalidatePath("/catalogos/plantillas");
+  return accionOk(undefined);
 }

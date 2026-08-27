@@ -23,13 +23,13 @@ export function BotonCancelarPedido({ id }: { id: string }) {
 
   function cancelar() {
     startTransition(async () => {
-      try {
-        await cancelarPedido(id);
-        toast.success("Pedido cancelado");
-        router.refresh();
-      } catch (err) {
-        toast.error(err instanceof Error ? err.message : "Error al cancelar");
+      const res = await cancelarPedido(id);
+      if (!res.ok) {
+        toast.error(res.error);
+        return;
       }
+      toast.success("Pedido cancelado");
+      router.refresh();
     });
   }
 

@@ -41,25 +41,25 @@ export function IncidenciasLote({
   function reportar(e: React.FormEvent) {
     e.preventDefault();
     startTransition(async () => {
-      try {
-        await crearIncidencia({ loteId, descripcion, gravedad });
-        toast.success("Incidencia reportada");
-        setDescripcion("");
-        router.refresh();
-      } catch (err) {
-        toast.error(err instanceof Error ? err.message : "Error al reportar");
+      const res = await crearIncidencia({ loteId, descripcion, gravedad });
+      if (!res.ok) {
+        toast.error(res.error);
+        return;
       }
+      toast.success("Incidencia reportada");
+      setDescripcion("");
+      router.refresh();
     });
   }
 
   function resolver(id: string) {
     startTransition(async () => {
-      try {
-        await resolverIncidencia(id, loteId);
-        router.refresh();
-      } catch (err) {
-        toast.error(err instanceof Error ? err.message : "Error al resolver");
+      const res = await resolverIncidencia(id, loteId);
+      if (!res.ok) {
+        toast.error(res.error);
+        return;
       }
+      router.refresh();
     });
   }
 

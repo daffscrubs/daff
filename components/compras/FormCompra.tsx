@@ -69,18 +69,15 @@ export function FormCompra({
       return;
     }
     startTransition(async () => {
-      try {
-        if (modoEdicion) {
-          await actualizarCompra(compraId, { proveedor, fecha, notas, items });
-          toast.success("Compra actualizada, se ajustó el inventario");
-        } else {
-          await crearCompra({ proveedor, fecha, notas, items });
-          toast.success("Compra registrada, se actualizó el inventario");
-        }
-        router.push("/compras");
-      } catch (err) {
-        toast.error(err instanceof Error ? err.message : "Error al guardar la compra");
+      const res = modoEdicion
+        ? await actualizarCompra(compraId, { proveedor, fecha, notas, items })
+        : await crearCompra({ proveedor, fecha, notas, items });
+      if (!res.ok) {
+        toast.error(res.error);
+        return;
       }
+      toast.success(modoEdicion ? "Compra actualizada, se ajustó el inventario" : "Compra registrada, se actualizó el inventario");
+      router.push("/compras");
     });
   }
 

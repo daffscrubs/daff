@@ -27,7 +27,6 @@ import {
   DialogContent,
   DialogHeader,
   DialogTitle,
-  DialogTrigger,
 } from "@/components/ui/dialog";
 import {
   Select,
@@ -75,14 +74,14 @@ export function DetalleProducto({ detalle }: { detalle: DetalleModelo }) {
 
   function guardarCosto() {
     startTransition(async () => {
-      try {
-        await actualizarCostoModelo(modelo!.id, Number(costo) || 0, Number(precioVenta) || 0, categoria);
-        toast.success("Costo y precio actualizados");
-        setEditandoPrecio(false);
-        router.refresh();
-      } catch (err) {
-        toast.error(err instanceof Error ? err.message : "Error al guardar");
+      const res = await actualizarCostoModelo(modelo!.id, Number(costo) || 0, Number(precioVenta) || 0, categoria);
+      if (!res.ok) {
+        toast.error(res.error);
+        return;
       }
+      toast.success("Costo y precio actualizados");
+      setEditandoPrecio(false);
+      router.refresh();
     });
   }
 
@@ -109,20 +108,20 @@ export function DetalleProducto({ detalle }: { detalle: DetalleModelo }) {
 
   function guardarTallas() {
     startTransitionTallas(async () => {
-      try {
-        await guardarTallasModelo(
-          modelo!.id,
-          tallaIds.map((tallaId) => ({
-            tallaId,
-            precioVenta: preciosPorTalla[tallaId] ? Number(preciosPorTalla[tallaId]) : undefined,
-          }))
-        );
-        toast.success("Tallas actualizadas");
-        setEditandoPrecio(false);
-        router.refresh();
-      } catch (err) {
-        toast.error(err instanceof Error ? err.message : "Error al guardar");
+      const res = await guardarTallasModelo(
+        modelo!.id,
+        tallaIds.map((tallaId) => ({
+          tallaId,
+          precioVenta: preciosPorTalla[tallaId] ? Number(preciosPorTalla[tallaId]) : undefined,
+        }))
+      );
+      if (!res.ok) {
+        toast.error(res.error);
+        return;
       }
+      toast.success("Tallas actualizadas");
+      setEditandoPrecio(false);
+      router.refresh();
     });
   }
 
@@ -145,13 +144,13 @@ export function DetalleProducto({ detalle }: { detalle: DetalleModelo }) {
 
   function eliminar() {
     startTransitionEliminar(async () => {
-      try {
-        await eliminarModelo(modelo!.id);
-        toast.success("Producto eliminado");
-        router.push("/inventario");
-      } catch (err) {
-        toast.error(err instanceof Error ? err.message : "Error al eliminar");
+      const res = await eliminarModelo(modelo!.id);
+      if (!res.ok) {
+        toast.error(res.error);
+        return;
       }
+      toast.success("Producto eliminado");
+      router.push("/inventario");
     });
   }
 
@@ -166,20 +165,20 @@ export function DetalleProducto({ detalle }: { detalle: DetalleModelo }) {
     e.preventDefault();
     if (!tallaAjuste) return;
     startTransitionAjuste(async () => {
-      try {
-        await crearMovimientoStockProducto({
-          modeloId: modelo!.id,
-          tallaId: tallaAjuste.id,
-          tipo: tipoAjuste,
-          cantidad: Number(cantidadAjuste),
-          motivo: motivoAjuste,
-        });
-        toast.success("Movimiento registrado");
-        setTallaAjuste(null);
-        router.refresh();
-      } catch (err) {
-        toast.error(err instanceof Error ? err.message : "Error al registrar");
+      const res = await crearMovimientoStockProducto({
+        modeloId: modelo!.id,
+        tallaId: tallaAjuste.id,
+        tipo: tipoAjuste,
+        cantidad: Number(cantidadAjuste),
+        motivo: motivoAjuste,
+      });
+      if (!res.ok) {
+        toast.error(res.error);
+        return;
       }
+      toast.success("Movimiento registrado");
+      setTallaAjuste(null);
+      router.refresh();
     });
   }
 

@@ -30,19 +30,19 @@ export function ImportarProductosDialog() {
       return;
     }
     startTransition(async () => {
-      try {
-        const formData = new FormData();
-        formData.set("archivo", archivo);
-        const res = await importarProductosExcel(formData);
-        setResultado(res);
-        if (res.creados) {
-          toast.success(`${res.creados} producto${res.creados === 1 ? "" : "s"} creado${res.creados === 1 ? "" : "s"}`);
-          router.refresh();
-        } else if (!res.errores.length) {
-          toast.error("No se encontraron filas para importar");
-        }
-      } catch (err) {
-        toast.error(err instanceof Error ? err.message : "Error al importar");
+      const formData = new FormData();
+      formData.set("archivo", archivo);
+      const res = await importarProductosExcel(formData);
+      if (!res.ok) {
+        toast.error(res.error);
+        return;
+      }
+      setResultado(res.data);
+      if (res.data.creados) {
+        toast.success(`${res.data.creados} producto${res.data.creados === 1 ? "" : "s"} creado${res.data.creados === 1 ? "" : "s"}`);
+        router.refresh();
+      } else if (!res.data.errores.length) {
+        toast.error("No se encontraron filas para importar");
       }
     });
   }

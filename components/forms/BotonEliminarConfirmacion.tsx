@@ -4,6 +4,7 @@ import { useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
+import type { AccionResultado } from "@/lib/tipos/accion";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -21,19 +22,19 @@ export function BotonEliminarConfirmacion({
   onEliminar,
 }: {
   entidad?: string;
-  onEliminar: () => Promise<void>;
+  onEliminar: () => Promise<AccionResultado>;
 }) {
   const [pendiente, startTransition] = useTransition();
   const router = useRouter();
 
   function ejecutar() {
     startTransition(async () => {
-      try {
-        await onEliminar();
-        router.refresh();
-      } catch (err) {
-        toast.error(err instanceof Error ? err.message : "Error al eliminar");
+      const res = await onEliminar();
+      if (!res.ok) {
+        toast.error(res.error);
+        return;
       }
+      router.refresh();
     });
   }
 

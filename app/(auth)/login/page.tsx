@@ -37,10 +37,10 @@ export default function LoginPage() {
   async function entrar(identificador: string, email: string, password: string) {
     setError(null);
     setCargando(true);
-    const { error } = await iniciarSesion(identificador, email, password);
+    const res = await iniciarSesion(identificador, email, password);
     setCargando(false);
-    if (error) {
-      setError(error);
+    if (!res.ok) {
+      setError(res.error);
       return;
     }
     router.refresh();

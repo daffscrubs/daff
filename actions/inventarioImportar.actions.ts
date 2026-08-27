@@ -5,6 +5,7 @@ import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import { requerirPerfil } from "@/lib/supabase/auth-helpers";
 import { filaVarianteImportadaSchema, type FilaVarianteImportada } from "@/lib/validaciones/inventarioImportar.schema";
+import { accionError, accionOk, type AccionResultado } from "@/lib/tipos/accion";
 
 export interface ResultadoImportacion {
   creados: number;
@@ -34,10 +35,10 @@ function leerNumero(fila: ExcelJS.Row, col: number): number | undefined {
   return Number.isFinite(num) ? num : NaN;
 }
 
-export async function importarProductosExcel(formData: FormData): Promise<ResultadoImportacion> {
+export async function importarProductosExcel(formData: FormData): Promise<AccionResultado<ResultadoImportacion>> {
   const perfil = await requerirPerfil(["admin", "supervisor"]);
   const archivo = formData.get("archivo");
-  if (!(archivo instanceof File)) throw new Error("Selecciona un archivo");
+  if (!(archivo instanceof File)) return accionError("Selecciona un archivo");
 
   const supabase = await createClient();
   const { data: tallasCatalogo } = await supabase.from("tallas").select("id, codigo");
@@ -49,11 +50,11 @@ export async function importarProductosExcel(formData: FormData): Promise<Result
     // eslint-disable-next-line @typescript-eslint/no-explicit-any -- exceljs's own .d.ts shadows the global Buffer type with a broken local stub
     await libro.xlsx.load(bytes as any);
   } catch {
-    throw new Error("No se pudo leer el archivo. Asegúrate de subir el .xlsx de la plantilla.");
+    return accionError("No se pudo leer el archivo. Asegúrate de subir el .xlsx de la plantilla.");
   }
 
   const hoja = libro.getWorksheet("Productos") ?? libro.worksheets[0];
-  if (!hoja) throw new Error('No se encontró la hoja "Productos" en el archivo.');
+  if (!hoja) return accionError('No se encontró la hoja "Productos" en el archivo.');
 
   const encabezados: string[] = [];
   hoja.getRow(1).eachCell({ includeEmpty: false }, (celda, colNumero) => {
@@ -68,7 +69,7 @@ export async function importarProductosExcel(formData: FormData): Promise<Result
   const colPrecio = encabezados.indexOf(COL_PRECIO);
 
   if (colNombre === -1) {
-    throw new Error(`El archivo no tiene la columna "${COL_NOMBRE}". Descarga la plantilla más reciente.`);
+    return accionError(`El archivo no tiene la columna "${COL_NOMBRE}". Descarga la plantilla más reciente.`);
   }
 
   const errores: { fila: number; mensaje: string }[] = [];
@@ -197,5 +198,5 @@ export async function importarProductosExcel(formData: FormData): Promise<Result
   }
 
   revalidatePath("/inventario");
-  return { creados, errores };
+  return accionOk({ creados, errores });
 }

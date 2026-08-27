@@ -42,14 +42,14 @@ export function FuncionesColaboradorDialog({
 
   function guardar() {
     startTransition(async () => {
-      try {
-        await guardarFuncionesColaborador(perfilId, seleccionadas);
-        toast.success("Funciones actualizadas");
-        setAbierto(false);
-        router.refresh();
-      } catch (err) {
-        toast.error(err instanceof Error ? err.message : "Error al guardar");
+      const res = await guardarFuncionesColaborador(perfilId, seleccionadas);
+      if (!res.ok) {
+        toast.error(res.error);
+        return;
       }
+      toast.success("Funciones actualizadas");
+      setAbierto(false);
+      router.refresh();
     });
   }
 

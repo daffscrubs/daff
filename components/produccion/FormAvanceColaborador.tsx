@@ -45,31 +45,34 @@ export function FormAvanceColaborador({
     }
 
     startTransition(async () => {
-      try {
-        let fotoUrl: string | null = null;
-        if (foto) {
-          const supabase = createClient();
-          const path = `${loteId}/${crypto.randomUUID()}-${foto.name}`;
-          const { error: errorSubida } = await supabase.storage
-            .from("evidencia-avance")
-            .upload(path, foto);
-          if (errorSubida) throw new Error("No se pudo subir la foto: " + errorSubida.message);
-          fotoUrl = path;
+      let fotoUrl: string | null = null;
+      if (foto) {
+        const supabase = createClient();
+        const path = `${loteId}/${crypto.randomUUID()}-${foto.name}`;
+        const { error: errorSubida } = await supabase.storage
+          .from("evidencia-avance")
+          .upload(path, foto);
+        if (errorSubida) {
+          toast.error("No se pudo subir la foto: " + errorSubida.message);
+          return;
         }
-
-        await crearRegistroAvance({
-          loteId,
-          loteEtapaId,
-          cantidad: cantidadNum,
-          observaciones,
-          fotoUrl,
-        });
-        toast.success("Avance registrado");
-        router.push("/mi-dia");
-        router.refresh();
-      } catch (err) {
-        toast.error(err instanceof Error ? err.message : "Error al registrar avance");
+        fotoUrl = path;
       }
+
+      const res = await crearRegistroAvance({
+        loteId,
+        loteEtapaId,
+        cantidad: cantidadNum,
+        observaciones,
+        fotoUrl,
+      });
+      if (!res.ok) {
+        toast.error(res.error);
+        return;
+      }
+      toast.success("Avance registrado");
+      router.push("/mi-dia");
+      router.refresh();
     });
   }
 

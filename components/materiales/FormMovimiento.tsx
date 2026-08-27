@@ -26,21 +26,21 @@ export function FormMovimiento({ materialId }: { materialId: string }) {
   function enviar(e: React.FormEvent) {
     e.preventDefault();
     startTransition(async () => {
-      try {
-        const cantidadNum = Number(cantidad);
-        await crearMovimiento({
-          materialId,
-          tipo,
-          cantidad: tipo === "ajuste" ? cantidadNum : Math.abs(cantidadNum),
-          motivo,
-        });
-        toast.success("Movimiento registrado");
-        setCantidad("");
-        setMotivo("");
-        router.refresh();
-      } catch (err) {
-        toast.error(err instanceof Error ? err.message : "Error al registrar");
+      const cantidadNum = Number(cantidad);
+      const res = await crearMovimiento({
+        materialId,
+        tipo,
+        cantidad: tipo === "ajuste" ? cantidadNum : Math.abs(cantidadNum),
+        motivo,
+      });
+      if (!res.ok) {
+        toast.error(res.error);
+        return;
       }
+      toast.success("Movimiento registrado");
+      setCantidad("");
+      setMotivo("");
+      router.refresh();
     });
   }
 

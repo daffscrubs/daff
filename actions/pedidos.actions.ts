@@ -5,6 +5,7 @@ import { createClient } from "@/lib/supabase/server";
 import { requerirPerfil } from "@/lib/supabase/auth-helpers";
 import { pagoPedidoSchema, pedidoSchema, type PagoPedidoInput, type PedidoInput } from "@/lib/validaciones/pedidos.schema";
 import type { EstatusPedido } from "@/types/database.types";
+import { accionError, accionOk, type AccionResultado } from "@/lib/tipos/accion";
 
 async function generarFolioPedido(supabase: Awaited<ReturnType<typeof createClient>>) {
   const anio = new Date().getFullYear();
@@ -18,7 +19,7 @@ async function generarFolioPedido(supabase: Awaited<ReturnType<typeof createClie
   return `PED-${anio}-${consecutivo}`;
 }
 
-export async function crearPedido(input: PedidoInput) {
+export async function crearPedido(input: PedidoInput): Promise<AccionResultado<string>> {
   const perfil = await requerirPerfil(["admin", "ventas"]);
   const datos = pedidoSchema.parse(input);
   const supabase = await createClient();
@@ -38,7 +39,7 @@ export async function crearPedido(input: PedidoInput) {
     .select("id")
     .single();
 
-  if (errorPedido) throw new Error(errorPedido.message);
+  if (errorPedido) return accionError(errorPedido.message);
 
   const { error: errorItems } = await supabase.from("items_pedido").insert(
     datos.items.map((item) => ({
@@ -53,36 +54,39 @@ export async function crearPedido(input: PedidoInput) {
 
   if (errorItems) {
     await supabase.from("pedidos").delete().eq("id", pedido.id);
-    throw new Error(errorItems.message);
+    return accionError(errorItems.message);
   }
 
   revalidatePath("/pedidos");
-  return pedido.id as string;
+  return accionOk(pedido.id as string);
 }
 
-export async function actualizarEstatusPedido(id: string, estatus: EstatusPedido) {
+export async function actualizarEstatusPedido(id: string, estatus: EstatusPedido): Promise<AccionResultado> {
   await requerirPerfil(["admin", "ventas"]);
   const supabase = await createClient();
   const { error } = await supabase.from("pedidos").update({ estatus }).eq("id", id);
-  if (error) throw new Error(error.message);
+  if (error) return accionError(error.message);
   revalidatePath("/pedidos");
   revalidatePath(`/pedidos/${id}`);
+  return accionOk(undefined);
 }
 
-async function requerirPedidoEditable(supabase: Awaited<ReturnType<typeof createClient>>, id: string) {
+async function requerirPedidoEditable(supabase: Awaited<ReturnType<typeof createClient>>, id: string): Promise<AccionResultado> {
   const { data: pedido, error } = await supabase.from("pedidos").select("estatus").eq("id", id).single();
-  if (error) throw new Error(error.message);
+  if (error) return accionError(error.message);
   if (pedido.estatus === "cancelado") {
-    throw new Error("No se puede modificar un pedido cancelado.");
+    return accionError("No se puede modificar un pedido cancelado.");
   }
+  return accionOk(undefined);
 }
 
-export async function actualizarPedido(id: string, input: PedidoInput) {
+export async function actualizarPedido(id: string, input: PedidoInput): Promise<AccionResultado> {
   await requerirPerfil(["admin", "ventas"]);
   const datos = pedidoSchema.parse(input);
   const supabase = await createClient();
 
-  await requerirPedidoEditable(supabase, id);
+  const editable = await requerirPedidoEditable(supabase, id);
+  if (!editable.ok) return editable;
 
   const { error: errorPedido } = await supabase
     .from("pedidos")
@@ -94,10 +98,10 @@ export async function actualizarPedido(id: string, input: PedidoInput) {
     })
     .eq("id", id);
 
-  if (errorPedido) throw new Error(errorPedido.message);
+  if (errorPedido) return accionError(errorPedido.message);
 
   const { error: errorEliminar } = await supabase.from("items_pedido").delete().eq("pedido_id", id);
-  if (errorEliminar) throw new Error(errorEliminar.message);
+  if (errorEliminar) return accionError(errorEliminar.message);
 
   const { error: errorItems } = await supabase.from("items_pedido").insert(
     datos.items.map((item) => ({
@@ -110,17 +114,19 @@ export async function actualizarPedido(id: string, input: PedidoInput) {
     }))
   );
 
-  if (errorItems) throw new Error(errorItems.message);
+  if (errorItems) return accionError(errorItems.message);
 
   revalidatePath("/pedidos");
   revalidatePath(`/pedidos/${id}`);
+  return accionOk(undefined);
 }
 
-export async function cancelarPedido(id: string) {
+export async function cancelarPedido(id: string): Promise<AccionResultado> {
   await requerirPerfil(["admin", "ventas"]);
   const supabase = await createClient();
 
-  await requerirPedidoEditable(supabase, id);
+  const editable = await requerirPedidoEditable(supabase, id);
+  if (!editable.ok) return editable;
 
   // Cancelar el pedido debe cancelar también su producción activa: de lo
   // contrario un colaborador podría seguir registrando avance (y
@@ -129,7 +135,7 @@ export async function cancelarPedido(id: string) {
     .from("lotes_produccion")
     .select("id, estatus")
     .eq("pedido_id", id);
-  if (errorLotes) throw new Error(errorLotes.message);
+  if (errorLotes) return accionError(errorLotes.message);
 
   const idsActivos = (lotes ?? [])
     .filter((lote) => lote.estatus !== "terminada" && lote.estatus !== "cancelada")
@@ -140,17 +146,18 @@ export async function cancelarPedido(id: string) {
       .from("lotes_produccion")
       .update({ estatus: "cancelada" })
       .in("id", idsActivos);
-    if (errorCancelarLotes) throw new Error(errorCancelarLotes.message);
+    if (errorCancelarLotes) return accionError(errorCancelarLotes.message);
   }
 
   const { error } = await supabase.from("pedidos").update({ estatus: "cancelado" }).eq("id", id);
-  if (error) throw new Error(error.message);
+  if (error) return accionError(error.message);
   revalidatePath("/pedidos");
   revalidatePath(`/pedidos/${id}`);
   revalidatePath("/produccion");
+  return accionOk(undefined);
 }
 
-export async function registrarPagoPedido(input: PagoPedidoInput) {
+export async function registrarPagoPedido(input: PagoPedidoInput): Promise<AccionResultado> {
   const perfil = await requerirPerfil(["admin", "ventas"]);
   const datos = pagoPedidoSchema.parse(input);
   const supabase = await createClient();
@@ -163,7 +170,8 @@ export async function registrarPagoPedido(input: PagoPedidoInput) {
     registrado_por: perfil.id,
   });
 
-  if (error) throw new Error(error.message);
+  if (error) return accionError(error.message);
   revalidatePath(`/pedidos/${datos.pedidoId}`);
   revalidatePath("/pedidos");
+  return accionOk(undefined);
 }
