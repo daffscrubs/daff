@@ -21,10 +21,9 @@ type UnidadConMaterial = UnidadMaterial & {
 
 // El código va impreso (etiqueta + QR) y es lo único que alguien lee a mano si
 // el QR no escanea, así que se deriva del nombre del material + un
-// consecutivo — no un UUID plano. La columna tiene `unique`, así que un
-// choque real (dos materiales con nombre idéntico llegando al mismo
-// consecutivo) lo cacha el insert y se reporta con claridad.
-function generarCodigoUnidad(nombreMaterial: string, numeroUnidad: number): string {
+// consecutivo — no un UUID plano (ver el porqué del sufijo de material_id
+// abajo).
+function generarCodigoUnidad(materialId: string, nombreMaterial: string, numeroUnidad: number): string {
   const slug = nombreMaterial
     .normalize("NFD")
     .replace(/[\u0300-\u036f]/g, "")
@@ -32,7 +31,16 @@ function generarCodigoUnidad(nombreMaterial: string, numeroUnidad: number): stri
     .replace(/[^A-Z0-9]+/g, "-")
     .slice(0, 16)
     .replace(/^-+|-+$/g, "");
-  return `${slug || "MATERIAL"}-${String(numeroUnidad).padStart(4, "0")}`;
+  const sufijoMaterial = materialId.replace(/-/g, "").slice(0, 6).toUpperCase();
+  return `${slug || "MATERIAL"}-${sufijoMaterial}-${String(numeroUnidad).padStart(4, "0")}`;
+}
+
+// Red de seguridad además de la raíz corregida arriba: si de todos modos se
+// llega a chocar el código (por ejemplo códigos capturados a mano en el
+// futuro, o cualquier caso no previsto), esto da un mensaje claro en vez del
+// error crudo de Postgres.
+function esViolacionCodigoUnico(mensaje: string): boolean {
+  return mensaje.includes("unidades_material_codigo_key");
 }
 
 async function siguienteNumeroUnidad(
@@ -80,7 +88,7 @@ export async function crearUnidadesDesdeCompra(
       material_id: compraItem.material_id,
       compra_item_id: datos.compraItemId,
       numero_unidad: numeroUnidad,
-      codigo: generarCodigoUnidad(material.nombre, numeroUnidad),
+      codigo: generarCodigoUnidad(compraItem.material_id, material.nombre, numeroUnidad),
       cantidad_inicial: cantidad,
       cantidad_actual: cantidad,
       costo_unitario: compraItem.costo_unitario,
@@ -89,7 +97,12 @@ export async function crearUnidadesDesdeCompra(
   });
 
   const { data, error } = await supabase.from("unidades_material").insert(filas).select("id");
-  if (error) return accionError(error.message);
+  if (error) {
+    if (esViolacionCodigoUnico(error.message)) {
+      return accionError("No se pudo generar un código único para estas unidades. Intenta de nuevo.");
+    }
+    return accionError(error.message);
+  }
 
   revalidatePath("/materiales");
   revalidatePath(`/materiales/${compraItem.material_id}`);
@@ -114,7 +127,7 @@ export async function crearUnidadIndividual(
   }
 
   const numeroUnidad = await siguienteNumeroUnidad(supabase, datos.materialId);
-  const codigo = generarCodigoUnidad(material.nombre, numeroUnidad);
+  const codigo = generarCodigoUnidad(datos.materialId, material.nombre, numeroUnidad);
 
   const { data, error } = await supabase
     .from("unidades_material")
@@ -131,7 +144,12 @@ export async function crearUnidadIndividual(
     })
     .select("id, codigo")
     .single();
-  if (error) return accionError(error.message);
+  if (error) {
+    if (esViolacionCodigoUnico(error.message)) {
+      return accionError("No se pudo generar un código único para esta unidad. Intenta de nuevo.");
+    }
+    return accionError(error.message);
+  }
 
   revalidatePath("/materiales");
   revalidatePath(`/materiales/${datos.materialId}`);
