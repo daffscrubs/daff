@@ -10,7 +10,7 @@ export type Database = {
   // Allows to automatically instantiate createClient with right options
   // instead of createClient<Database, { PostgrestVersion: 'XX' }>(URL, KEY)
   __InternalSupabase: {
-    PostgrestVersion: "14.15"
+    PostgrestVersion: "14.17"
   }
   graphql_public: {
     Tables: {
@@ -235,6 +235,51 @@ export type Database = {
             columns: ["material_id"]
             isOneToOne: false
             referencedRelation: "materiales"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      consumo_unidad_orden: {
+        Row: {
+          cantidad_estimada: number | null
+          cantidad_real: number | null
+          cantidad_real_registrada_en: string | null
+          created_at: string
+          id: string
+          lote_id: string
+          unidad_id: string
+        }
+        Insert: {
+          cantidad_estimada?: number | null
+          cantidad_real?: number | null
+          cantidad_real_registrada_en?: string | null
+          created_at?: string
+          id?: string
+          lote_id: string
+          unidad_id: string
+        }
+        Update: {
+          cantidad_estimada?: number | null
+          cantidad_real?: number | null
+          cantidad_real_registrada_en?: string | null
+          created_at?: string
+          id?: string
+          lote_id?: string
+          unidad_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "consumo_unidad_orden_lote_id_fkey"
+            columns: ["lote_id"]
+            isOneToOne: false
+            referencedRelation: "lotes_produccion"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "consumo_unidad_orden_unidad_id_fkey"
+            columns: ["unidad_id"]
+            isOneToOne: false
+            referencedRelation: "unidades_material"
             referencedColumns: ["id"]
           },
         ]
@@ -1205,6 +1250,76 @@ export type Database = {
         }
         Relationships: []
       }
+      unidades_material: {
+        Row: {
+          cantidad_actual: number
+          cantidad_inicial: number
+          codigo: string
+          compra_item_id: string | null
+          costo_unitario: number | null
+          created_at: string
+          estatus: Database["public"]["Enums"]["estatus_unidad_material"]
+          fecha_recepcion: string
+          id: string
+          material_id: string
+          numero_unidad: number
+          proveedor: string | null
+          registrado_por: string | null
+        }
+        Insert: {
+          cantidad_actual: number
+          cantidad_inicial: number
+          codigo: string
+          compra_item_id?: string | null
+          costo_unitario?: number | null
+          created_at?: string
+          estatus?: Database["public"]["Enums"]["estatus_unidad_material"]
+          fecha_recepcion?: string
+          id?: string
+          material_id: string
+          numero_unidad: number
+          proveedor?: string | null
+          registrado_por?: string | null
+        }
+        Update: {
+          cantidad_actual?: number
+          cantidad_inicial?: number
+          codigo?: string
+          compra_item_id?: string | null
+          costo_unitario?: number | null
+          created_at?: string
+          estatus?: Database["public"]["Enums"]["estatus_unidad_material"]
+          fecha_recepcion?: string
+          id?: string
+          material_id?: string
+          numero_unidad?: number
+          proveedor?: string | null
+          registrado_por?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "unidades_material_compra_item_id_fkey"
+            columns: ["compra_item_id"]
+            isOneToOne: false
+            referencedRelation: "compra_items"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "unidades_material_material_id_fkey"
+            columns: ["material_id"]
+            isOneToOne: false
+            referencedRelation: "materiales"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "unidades_material_registrado_por_fkey"
+            columns: ["registrado_por"]
+            isOneToOne: false
+            referencedRelation: "perfiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
     }
     Views: {
       [_ in never]: never
@@ -1225,6 +1340,7 @@ export type Database = {
         | "listo"
         | "entregado"
         | "cancelado"
+      estatus_unidad_material: "disponible" | "agotado" | "de_baja"
       origen_avance: "colaborador" | "ajuste_supervisor"
       rol_usuario: "admin" | "ventas" | "supervisor" | "colaborador"
       tipo_movimiento: "entrada" | "salida" | "ajuste"
@@ -1368,6 +1484,7 @@ export const Constants = {
         "entregado",
         "cancelado",
       ],
+      estatus_unidad_material: ["disponible", "agotado", "de_baja"],
       origen_avance: ["colaborador", "ajuste_supervisor"],
       rol_usuario: ["admin", "ventas", "supervisor", "colaborador"],
       tipo_movimiento: ["entrada", "salida", "ajuste"],
@@ -1382,3 +1499,4 @@ export type EstatusOrden = Database["public"]["Enums"]["estatus_orden"]
 export type OrigenAvance = Database["public"]["Enums"]["origen_avance"]
 export type TipoMovimiento = Database["public"]["Enums"]["tipo_movimiento"]
 export type EstatusEntrega = Database["public"]["Enums"]["estatus_entrega"]
+export type EstatusUnidadMaterial = Database["public"]["Enums"]["estatus_unidad_material"]
