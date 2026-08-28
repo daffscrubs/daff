@@ -8,6 +8,7 @@ import { IncidenciasLote } from "@/components/produccion/IncidenciasLote";
 import { AjusteAvanceForm } from "@/components/produccion/AjusteAvanceForm";
 import { NotasOrden } from "@/components/produccion/NotasOrden";
 import { InsumosOrden } from "@/components/produccion/InsumosOrden";
+import { UnidadesOrden } from "@/components/produccion/UnidadesOrden";
 import { HistorialOrden } from "@/components/produccion/HistorialOrden";
 import { BotonCancelarOrden } from "@/components/produccion/BotonCancelarOrden";
 import { construirHistorialOrden } from "@/lib/produccion/historial";
@@ -47,6 +48,7 @@ export default async function LoteDetallePage({
     { data: tallas },
     { data: consumos },
     { data: materiales },
+    { data: consumosUnidad },
   ] = await Promise.all([
     supabase.from("lotes_produccion").select("*").eq("id", loteId).single(),
     supabase.from("items_orden_produccion").select("*").eq("lote_id", loteId),
@@ -63,6 +65,10 @@ export default async function LoteDetallePage({
     supabase.from("tallas").select("id, codigo"),
     supabase.from("consumo_material_orden").select("*").eq("lote_id", loteId),
     supabase.from("materiales").select("*"),
+    supabase
+      .from("consumo_unidad_orden")
+      .select("*, unidades_material(codigo, materiales(nombre, unidad_medida))")
+      .eq("lote_id", loteId),
   ]);
 
   if (!lote) notFound();
@@ -145,9 +151,15 @@ export default async function LoteDetallePage({
       )}
 
       {puedeGestionar && (
-        <div>
-          <h2 className="mb-3 text-lg font-semibold">Insumos a utilizar</h2>
-          <InsumosOrden loteId={loteId} consumos={consumos ?? []} materiales={materiales ?? []} />
+        <div className="space-y-6">
+          <div>
+            <h2 className="mb-3 text-lg font-semibold">Insumos a utilizar</h2>
+            <InsumosOrden loteId={loteId} consumos={consumos ?? []} materiales={materiales ?? []} />
+          </div>
+          <div>
+            <h3 className="mb-3 text-base font-semibold">Unidades específicas (rollo/bolsa con QR)</h3>
+            <UnidadesOrden loteId={loteId} consumos={consumosUnidad ?? []} />
+          </div>
         </div>
       )}
 

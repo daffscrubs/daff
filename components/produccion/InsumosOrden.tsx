@@ -126,7 +126,16 @@ export function InsumosOrden({
 
   const nombreMaterial = (id: string) => materiales.find((m) => m.id === id)?.nombre ?? "—";
   const unidadMaterial = (id: string) => materiales.find((m) => m.id === id)?.unidad_medida ?? "";
-  const disponibles = materiales.filter((m) => !consumos.some((c) => c.material_id === m.id));
+  // Los materiales con seguimiento_por_unidad se asignan por rollo/bolsa
+  // específico (ver UnidadesOrden), no como cantidad agregada aquí — aunque el
+  // trigger de sincronización sí llena consumo_material_orden para ellos (para
+  // que reportes/PDF sigan viéndolos), esas filas se ocultan de esta tabla
+  // porque sus acciones (registrarConsumoReal/eliminarConsumoMaterial) las
+  // rechazaría el candado de materiales.actions.ts.
+  const consumosPorBulto = consumos.filter((c) => !materiales.find((m) => m.id === c.material_id)?.seguimiento_por_unidad);
+  const disponibles = materiales.filter(
+    (m) => !m.seguimiento_por_unidad && !consumos.some((c) => c.material_id === m.id)
+  );
 
   function agregar(e: React.FormEvent) {
     e.preventDefault();
@@ -193,7 +202,7 @@ export function InsumosOrden({
           </TableRow>
         </TableHeader>
         <TableBody>
-          {consumos.map((c) => (
+          {consumosPorBulto.map((c) => (
             <FilaConsumo
               key={c.id}
               consumo={c}
@@ -204,7 +213,7 @@ export function InsumosOrden({
               onQuitar={() => quitar(c.id)}
             />
           ))}
-          {!consumos.length && (
+          {!consumosPorBulto.length && (
             <TableRow>
               <TableCell colSpan={4} className="text-center text-muted-foreground">
                 Sin insumos asignados todavía.
