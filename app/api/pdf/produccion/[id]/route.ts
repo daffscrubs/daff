@@ -53,7 +53,11 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
     cantidad: item.cantidad_planeada,
   }));
 
-  const procesos = [...new Map((loteEtapas ?? []).map((le) => [le.orden_secuencia, le.etapa_id])).entries()]
+  const procesos = [
+    ...new Map(
+      (loteEtapas ?? []).filter((le) => !le.parent_lote_etapa_id).map((le) => [le.orden_secuencia!, le.etapa_id!])
+    ).entries(),
+  ]
     .sort(([a], [b]) => a - b)
     .map(([, etapaId]) => etapasCatalogo?.find((e) => e.id === etapaId)?.nombre ?? "—");
 

@@ -29,16 +29,18 @@ export function TimelineEtapasLote({
   return (
     <div className="space-y-6">
       {items.map((item) => {
-        const etapasDelItem = loteEtapas
-          .filter((le) => le.item_orden_id === item.id)
-          .sort((a, b) => a.orden_secuencia - b.orden_secuencia);
+        const etapasDelItem = loteEtapas.filter((le) => le.item_orden_id === item.id);
         const conDisponible = calcularDisponiblePorEtapa(etapasDelItem, item.cantidad_planeada);
         const nombreModelo = modelos.find((m) => m.id === item.modelo_id)?.nombre ?? "—";
         const codigoTalla = tallas.find((t) => t.id === item.talla_id)?.codigo ?? "—";
-        const etapaActual = etapasDelItem.find((e) => e.estatus !== "completa");
-        const etiquetaEtapaActual = etapasDelItem.length
+        const etapaActual = conDisponible.find((e) => e.estatus !== "completa");
+        const nombreEtapaActual = (e: (typeof conDisponible)[number]) => {
+          const base = nombreEtapa(e.etapaIdEfectivo);
+          return e.nombre_subproceso ? `${base} — ${e.nombre_subproceso}` : base;
+        };
+        const etiquetaEtapaActual = conDisponible.length
           ? etapaActual
-            ? nombreEtapa(etapaActual.etapa_id)
+            ? nombreEtapaActual(etapaActual)
             : "Completado"
           : "Sin etapas";
 
@@ -55,7 +57,8 @@ export function TimelineEtapasLote({
             <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
               {conDisponible.map((etapa) => {
                 const porcentaje = Math.min(100, Math.round((etapa.cantidad_completada / item.cantidad_planeada) * 100));
-                const { icon: Icon, color } = visualEtapa(nombreEtapa(etapa.etapa_id));
+                const nombreBase = nombreEtapa(etapa.etapaIdEfectivo);
+                const { icon: Icon, color } = visualEtapa(nombreBase);
                 const completa = etapa.estatus === "completa";
                 return (
                   <div key={etapa.id} className={`rounded-lg border p-3 ${completa ? "bg-muted/40" : ""}`}>
@@ -64,8 +67,13 @@ export function TimelineEtapasLote({
                         <Icon className="size-3.5" />
                       </div>
                       <div className="min-w-0">
-                        <p className="text-xs text-muted-foreground">Proceso {etapa.orden_secuencia}</p>
-                        <p className="truncate font-medium">{nombreEtapa(etapa.etapa_id)}</p>
+                        <p className="text-xs text-muted-foreground">Proceso {etapa.ordenSecuenciaEfectiva}</p>
+                        <p className="truncate font-medium">
+                          {nombreBase}
+                          {etapa.nombre_subproceso && (
+                            <span className="text-muted-foreground"> — {etapa.nombre_subproceso}</span>
+                          )}
+                        </p>
                       </div>
                     </div>
                     <div className="mt-2 h-2 w-full overflow-hidden rounded-full bg-muted">

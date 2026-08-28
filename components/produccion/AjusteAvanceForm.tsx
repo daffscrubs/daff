@@ -4,6 +4,7 @@ import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import { crearAjusteAvance } from "@/actions/avance.actions";
+import { filasCapturables, nombreVisibleEtapa } from "@/lib/produccion/avance";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -47,11 +48,15 @@ export function AjusteAvanceForm({
   const router = useRouter();
 
   const nombreEtapa = (id: string) => etapasCatalogo.find((e) => e.id === id)?.nombre ?? "—";
+  // Solo se puede ajustar donde se captura de verdad: un sub-proceso, o un
+  // proceso sin sub-procesos. El total de un proceso con sub-procesos es
+  // derivado (el mínimo entre ellos), el trigger rechaza ajustarlo directo.
+  const loteEtapasAjustables = filasCapturables(loteEtapas);
   const etiquetaLoteEtapa = (le: LoteEtapa) => {
     const item = items.find((i) => i.id === le.item_orden_id);
     const nombreModelo = item ? modelos.find((m) => m.id === item.modelo_id)?.nombre : "";
     const codigoTalla = item ? tallas.find((t) => t.id === item.talla_id)?.codigo : "";
-    return `${nombreModelo ?? ""} ${codigoTalla ?? ""} · ${nombreEtapa(le.etapa_id)}`.trim();
+    return `${nombreModelo ?? ""} ${codigoTalla ?? ""} · ${nombreVisibleEtapa(le, loteEtapas, nombreEtapa)}`.trim();
   };
 
   function enviar(e: React.FormEvent) {
@@ -97,7 +102,7 @@ export function AjusteAvanceForm({
       <div className="space-y-2">
         <Label>Proceso</Label>
         <Select
-          items={loteEtapas.map((le) => ({ value: le.id, label: etiquetaLoteEtapa(le) }))}
+          items={loteEtapasAjustables.map((le) => ({ value: le.id, label: etiquetaLoteEtapa(le) }))}
           value={loteEtapaId}
           onValueChange={(v) => setLoteEtapaId(v ?? "")}
         >
@@ -105,7 +110,7 @@ export function AjusteAvanceForm({
             <SelectValue placeholder="Selecciona producto y etapa" />
           </SelectTrigger>
           <SelectContent>
-            {loteEtapas.map((le) => (
+            {loteEtapasAjustables.map((le) => (
               <SelectItem key={le.id} value={le.id}>{etiquetaLoteEtapa(le)}</SelectItem>
             ))}
           </SelectContent>

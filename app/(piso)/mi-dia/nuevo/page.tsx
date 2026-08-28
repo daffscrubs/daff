@@ -15,7 +15,7 @@ export default async function NuevoAvancePage({
 
   const { data: loteEtapa } = await supabase
     .from("lote_etapas")
-    .select("*, etapas_proceso(nombre)")
+    .select("*")
     .eq("id", loteEtapaId)
     .single();
 
@@ -33,17 +33,26 @@ export default async function NuevoAvancePage({
 
   if (!lote || !item) notFound();
 
-  const ordenadas = (hermanas ?? []).slice().sort((a, b) => a.orden_secuencia - b.orden_secuencia);
-  const conDisponible = calcularDisponiblePorEtapa(ordenadas, item.cantidad_planeada);
+  const conDisponible = calcularDisponiblePorEtapa(hermanas ?? [], item.cantidad_planeada);
   const actual = conDisponible.find((e) => e.id === loteEtapaId);
+  if (!actual) notFound();
+
+  const { data: etapaCatalogo } = await supabase
+    .from("etapas_proceso")
+    .select("nombre")
+    .eq("id", actual.etapaIdEfectivo)
+    .single();
+  const nombreEtapa = actual.nombre_subproceso
+    ? `${etapaCatalogo?.nombre ?? "Etapa"} — ${actual.nombre_subproceso}`
+    : etapaCatalogo?.nombre ?? "Etapa";
 
   return (
     <FormAvanceColaborador
       loteId={loteEtapa.lote_id}
       loteEtapaId={loteEtapaId}
-      nombreEtapa={loteEtapa.etapas_proceso?.nombre ?? "Etapa"}
+      nombreEtapa={nombreEtapa}
       folioLote={`${lote.folio} · ${item.modelos?.nombre ?? ""} · Talla ${item.tallas?.codigo ?? ""}`}
-      disponible={actual?.disponible ?? 0}
+      disponible={actual.disponible}
     />
   );
 }

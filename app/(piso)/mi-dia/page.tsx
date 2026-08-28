@@ -29,13 +29,11 @@ export default async function MiDiaPage() {
   const tarjetas = (items ?? []).flatMap((item) => {
     const lote = loteDe(item.lote_id);
     if (!lote) return [];
-    const etapasDelItem = (loteEtapas ?? [])
-      .filter((le) => le.item_orden_id === item.id)
-      .sort((a, b) => a.orden_secuencia - b.orden_secuencia);
+    const etapasDelItem = (loteEtapas ?? []).filter((le) => le.item_orden_id === item.id);
     const conDisponible = calcularDisponiblePorEtapa(etapasDelItem, item.cantidad_planeada);
     return conDisponible
       .filter((e) => e.disponible > 0)
-      .filter((e) => !etapasPermitidas.length || etapasPermitidas.includes(e.etapa_id))
+      .filter((e) => !etapasPermitidas.length || etapasPermitidas.includes(e.etapaIdEfectivo))
       .map((e) => ({ lote, item, etapa: e }));
   });
 
@@ -50,8 +48,9 @@ export default async function MiDiaPage() {
 
       <div className="space-y-3">
         {tarjetas.map(({ lote, item, etapa }) => {
-          const nombre = nombreEtapa(etapa.etapa_id);
-          const { icon: Icon, color } = visualEtapa(nombre);
+          const nombreBase = nombreEtapa(etapa.etapaIdEfectivo);
+          const nombre = etapa.nombre_subproceso ? `${nombreBase} — ${etapa.nombre_subproceso}` : nombreBase;
+          const { icon: Icon, color } = visualEtapa(nombreBase);
           return (
             <Link key={etapa.id} href={`/mi-dia/nuevo?loteEtapaId=${etapa.id}`}>
               <Card className="transition-all active:scale-[0.99] active:bg-muted">

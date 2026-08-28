@@ -581,29 +581,35 @@ export type Database = {
         Row: {
           cantidad_completada: number
           estatus: string
-          etapa_id: string
+          etapa_id: string | null
           id: string
           item_orden_id: string
           lote_id: string
-          orden_secuencia: number
+          nombre_subproceso: string | null
+          orden_secuencia: number | null
+          parent_lote_etapa_id: string | null
         }
         Insert: {
           cantidad_completada?: number
           estatus?: string
-          etapa_id: string
+          etapa_id?: string | null
           id?: string
           item_orden_id: string
           lote_id: string
-          orden_secuencia: number
+          nombre_subproceso?: string | null
+          orden_secuencia?: number | null
+          parent_lote_etapa_id?: string | null
         }
         Update: {
           cantidad_completada?: number
           estatus?: string
-          etapa_id?: string
+          etapa_id?: string | null
           id?: string
           item_orden_id?: string
           lote_id?: string
-          orden_secuencia?: number
+          nombre_subproceso?: string | null
+          orden_secuencia?: number | null
+          parent_lote_etapa_id?: string | null
         }
         Relationships: [
           {
@@ -625,6 +631,13 @@ export type Database = {
             columns: ["lote_id"]
             isOneToOne: false
             referencedRelation: "lotes_produccion"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "lote_etapas_parent_lote_etapa_id_fkey"
+            columns: ["parent_lote_etapa_id"]
+            isOneToOne: false
+            referencedRelation: "lote_etapas"
             referencedColumns: ["id"]
           },
         ]

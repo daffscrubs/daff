@@ -29,6 +29,22 @@ export const agregarEtapaLoteSchema = z.object({
   etapaId: z.string().uuid("Selecciona una etapa"),
 });
 
+// Sub-procesos opcionales dentro de un proceso (ej. Confección con Manga,
+// Delantero, Trasero, Cuello). Se configuran por orden, no en el catálogo.
+export const agregarSubprocesosLoteSchema = z.object({
+  loteId: z.string().uuid(),
+  ordenSecuencia: z.coerce.number().int().positive(),
+  nombres: z
+    .array(z.string().trim().min(1, "El nombre no puede estar vacío"))
+    .min(1, "Agrega al menos un sub-proceso"),
+});
+
+export const quitarSubprocesoLoteSchema = z.object({
+  loteId: z.string().uuid(),
+  ordenSecuencia: z.coerce.number().int().positive(),
+  nombreSubproceso: z.string().trim().min(1),
+});
+
 export const incidenciaSchema = z.object({
   loteId: z.string().uuid(),
   loteEtapaId: z.string().uuid().optional().nullable(),
@@ -42,4 +58,6 @@ export type InsumoOrdenInput = z.infer<typeof insumoOrdenSchema>;
 export type OrdenProduccionInput = z.infer<typeof ordenProduccionSchema>;
 export type EditarOrdenProduccionInput = z.infer<typeof editarOrdenProduccionSchema>;
 export type AgregarEtapaLoteInput = z.infer<typeof agregarEtapaLoteSchema>;
+export type AgregarSubprocesosLoteInput = z.infer<typeof agregarSubprocesosLoteSchema>;
+export type QuitarSubprocesoLoteInput = z.infer<typeof quitarSubprocesoLoteSchema>;
 export type IncidenciaInput = z.infer<typeof incidenciaSchema>;

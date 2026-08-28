@@ -5,13 +5,17 @@ import { createClient } from "@/lib/supabase/server";
 import { requerirPerfil } from "@/lib/supabase/auth-helpers";
 import {
   agregarEtapaLoteSchema,
+  agregarSubprocesosLoteSchema,
   editarOrdenProduccionSchema,
   incidenciaSchema,
   ordenProduccionSchema,
+  quitarSubprocesoLoteSchema,
   type AgregarEtapaLoteInput,
+  type AgregarSubprocesosLoteInput,
   type EditarOrdenProduccionInput,
   type IncidenciaInput,
   type OrdenProduccionInput,
+  type QuitarSubprocesoLoteInput,
 } from "@/lib/validaciones/produccion.schema";
 import { fechaISOLocal } from "@/lib/fechas";
 import { accionError, accionOk, type AccionResultado } from "@/lib/tipos/accion";
@@ -247,6 +251,88 @@ export async function quitarEtapaLote(loteId: string, ordenSecuencia: number): P
   if (error) return accionError(error.message);
   revalidatePath(`/produccion/${loteId}/etapas`);
   revalidatePath(`/produccion/${loteId}`);
+  return accionOk(undefined);
+}
+
+// Sub-procesos opcionales dentro de un proceso (ej. Confección con Manga,
+// Delantero, Trasero, Cuello). Un proceso puede tener varios productos (uno
+// por item_orden_id de la orden), así que agregar un sub-proceso significa
+// agregar una fila hija por cada producto que ya tiene ese proceso.
+export async function agregarSubprocesosLote(input: AgregarSubprocesosLoteInput): Promise<AccionResultado> {
+  await requerirPerfil(["admin", "supervisor"]);
+  const datos = agregarSubprocesosLoteSchema.parse(input);
+  const nombres = [...new Set(datos.nombres.map((n) => n.trim()).filter(Boolean))];
+  if (!nombres.length) return accionError("Agrega al menos un sub-proceso.");
+
+  const supabase = await createClient();
+
+  const { data: padres, error: errorPadres } = await supabase
+    .from("lote_etapas")
+    .select("id, lote_id, item_orden_id, cantidad_completada")
+    .eq("lote_id", datos.loteId)
+    .eq("orden_secuencia", datos.ordenSecuencia);
+
+  if (errorPadres) return accionError(errorPadres.message);
+  if (!padres?.length) return accionError("Proceso no encontrado.");
+  if (padres.some((p) => p.cantidad_completada > 0)) {
+    return accionError("No se pueden agregar sub-procesos a un proceso que ya tiene avance registrado.");
+  }
+
+  const filas = padres.flatMap((padre) =>
+    nombres.map((nombre) => ({
+      lote_id: padre.lote_id,
+      item_orden_id: padre.item_orden_id,
+      parent_lote_etapa_id: padre.id,
+      nombre_subproceso: nombre,
+    }))
+  );
+
+  const { error } = await supabase.from("lote_etapas").insert(filas);
+  if (error) {
+    if (error.message.includes("lote_etapas_padre_nombre_subproceso_key")) {
+      return accionError("Ya existe un sub-proceso con ese nombre en este proceso.");
+    }
+    return accionError(error.message);
+  }
+
+  revalidatePath(`/produccion/${datos.loteId}/etapas`);
+  revalidatePath(`/produccion/${datos.loteId}`);
+  return accionOk(undefined);
+}
+
+export async function quitarSubprocesoLote(input: QuitarSubprocesoLoteInput): Promise<AccionResultado> {
+  await requerirPerfil(["admin", "supervisor"]);
+  const datos = quitarSubprocesoLoteSchema.parse(input);
+  const supabase = await createClient();
+
+  const { data: padres } = await supabase
+    .from("lote_etapas")
+    .select("id")
+    .eq("lote_id", datos.loteId)
+    .eq("orden_secuencia", datos.ordenSecuencia);
+
+  const idsPadres = (padres ?? []).map((p) => p.id);
+  if (!idsPadres.length) return accionError("Proceso no encontrado.");
+
+  const { data: hijas } = await supabase
+    .from("lote_etapas")
+    .select("cantidad_completada")
+    .in("parent_lote_etapa_id", idsPadres)
+    .eq("nombre_subproceso", datos.nombreSubproceso);
+
+  if (hijas?.some((h) => h.cantidad_completada > 0)) {
+    return accionError("No se puede quitar un sub-proceso que ya tiene avance registrado.");
+  }
+
+  const { error } = await supabase
+    .from("lote_etapas")
+    .delete()
+    .in("parent_lote_etapa_id", idsPadres)
+    .eq("nombre_subproceso", datos.nombreSubproceso);
+
+  if (error) return accionError(error.message);
+  revalidatePath(`/produccion/${datos.loteId}/etapas`);
+  revalidatePath(`/produccion/${datos.loteId}`);
   return accionOk(undefined);
 }
 

@@ -1,5 +1,6 @@
 import type { Database } from "@/types/database.types";
 import type { RegistroReporte } from "@/components/produccion/ReporteProductividadTable";
+import { etapaIdEfectivoDe } from "@/lib/produccion/avance";
 
 type RegistroConPerfil = Database["public"]["Tables"]["registros_avance_colaborador"]["Row"] & {
   perfiles: { nombre_completo: string } | null;
@@ -30,6 +31,8 @@ export function construirRegistrosReporte({
     const nombreModelo = item ? modelos.find((m) => m.id === item.modelo_id)?.nombre : undefined;
     const codigoTalla = item ? tallas.find((t) => t.id === item.talla_id)?.codigo : undefined;
     const folioOrden = lotes.find((l) => l.id === r.lote_id)?.folio ?? "—";
+    const nombreEtapaBase = nombreEtapa(le ? etapaIdEfectivoDe(le, loteEtapas) : undefined);
+    const etapaVisible = le?.nombre_subproceso ? `${nombreEtapaBase} — ${le.nombre_subproceso}` : nombreEtapaBase;
 
     return {
       id: r.id,
@@ -41,7 +44,7 @@ export function construirRegistrosReporte({
       foto_url: r.foto_url,
       colaboradorId: r.colaborador_id,
       colaborador: r.perfiles?.nombre_completo ?? "—",
-      etapa: nombreEtapa(le?.etapa_id),
+      etapa: etapaVisible,
       producto: nombreModelo ? `${nombreModelo} ${codigoTalla ?? ""}`.trim() : "—",
       folioOrden,
     };
