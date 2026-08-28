@@ -2,9 +2,21 @@ import type { Database } from "@/types/database.types";
 import type { RegistroReporte } from "@/components/produccion/ReporteProductividadTable";
 import { etapaIdEfectivoDe } from "@/lib/produccion/avance";
 
-type RegistroConPerfil = Database["public"]["Tables"]["registros_avance_colaborador"]["Row"] & {
+// Pick con solo los campos que esta función lee, en vez del Row completo de
+// cada tabla: así una pantalla puede pedirle a Supabase nada más esas
+// columnas (menos bytes) sin dejar de poder llamar esta función — un Row
+// completo sigue cumpliendo estos tipos sin problema.
+type RegistroConPerfil = Pick<
+  Database["public"]["Tables"]["registros_avance_colaborador"]["Row"],
+  "id" | "fecha" | "created_at" | "cantidad" | "origen" | "observaciones" | "foto_url" | "colaborador_id" | "lote_id" | "lote_etapa_id"
+> & {
   perfiles: { nombre_completo: string } | null;
 };
+type LoteEtapaParaReporte = Pick<
+  Database["public"]["Tables"]["lote_etapas"]["Row"],
+  "id" | "item_orden_id" | "etapa_id" | "parent_lote_etapa_id" | "nombre_subproceso"
+>;
+type ItemOrdenParaReporte = Pick<Database["public"]["Tables"]["items_orden_produccion"]["Row"], "id" | "modelo_id" | "talla_id">;
 
 export function construirRegistrosReporte({
   registros,
@@ -17,8 +29,8 @@ export function construirRegistrosReporte({
 }: {
   registros: RegistroConPerfil[];
   etapasCatalogo: Database["public"]["Tables"]["etapas_proceso"]["Row"][];
-  loteEtapas: Database["public"]["Tables"]["lote_etapas"]["Row"][];
-  items: Database["public"]["Tables"]["items_orden_produccion"]["Row"][];
+  loteEtapas: LoteEtapaParaReporte[];
+  items: ItemOrdenParaReporte[];
   lotes: { id: string; folio: string }[];
   modelos: { id: string; nombre: string }[];
   tallas: { id: string; codigo: string }[];

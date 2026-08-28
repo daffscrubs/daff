@@ -60,8 +60,14 @@ export function filasCapturables(filas: LoteEtapa[]): LoteEtapa[] {
   return filas.filter((f) => f.parent_lote_etapa_id || !idsConHijas.has(f.id));
 }
 
+// Pick con solo lo que estas dos funciones leen (no cantidad_completada,
+// orden_secuencia, etc. que sí necesita calcularDisponiblePorEtapa arriba) —
+// así una pantalla que solo necesita mostrar el nombre visible de la etapa
+// puede pedirle a Supabase nada más estas columnas.
+type LoteEtapaMinima = Pick<LoteEtapa, "id" | "etapa_id" | "parent_lote_etapa_id" | "nombre_subproceso">;
+
 /** etapa_id propio de la fila, o el de su padre si es un sub-proceso. */
-export function etapaIdEfectivoDe(fila: LoteEtapa, todas: LoteEtapa[]): string {
+export function etapaIdEfectivoDe(fila: LoteEtapaMinima, todas: LoteEtapaMinima[]): string {
   if (fila.etapa_id) return fila.etapa_id;
   const padre = todas.find((f) => f.id === fila.parent_lote_etapa_id);
   return padre?.etapa_id ?? "";
@@ -69,8 +75,8 @@ export function etapaIdEfectivoDe(fila: LoteEtapa, todas: LoteEtapa[]): string {
 
 /** "Confección" para un proceso normal, "Confección — Manga" para un sub-proceso. */
 export function nombreVisibleEtapa(
-  fila: LoteEtapa,
-  todas: LoteEtapa[],
+  fila: LoteEtapaMinima,
+  todas: LoteEtapaMinima[],
   nombreEtapaCatalogo: (etapaId: string) => string
 ): string {
   const base = nombreEtapaCatalogo(etapaIdEfectivoDe(fila, todas));

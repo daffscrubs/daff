@@ -21,6 +21,18 @@ import { piezasPorColaboradorSemana } from "@/lib/dashboard/piezasPorColaborador
 export default async function DashboardPage() {
   const supabase = await createClient();
 
+  // Las dos tandas de consultas de antes no dependían una de otra (ninguna
+  // columna de la primera se usaba para armar la segunda) — estaban
+  // serializadas sin necesidad, duplicando el tiempo de espera. Se combinan
+  // en un solo Promise.all para que las ~15 consultas salgan en paralelo de
+  // una vez. También se quitó la consulta de "avances" (fecha, cantidad)
+  // que era un segundo escaneo completo de registros_avance_colaborador:
+  // esos mismos datos ya vienen en registrosAvance de abajo, así que se
+  // derivan en JS (mismo filtro origen='colaborador', mismo resultado) en
+  // vez de pedirlos dos veces a la base. Los `select("*")` que solo se
+  // usaban parcialmente (materiales, items_pedido, items_orden_produccion,
+  // lote_etapas) se acotaron a las columnas que realmente se leen más abajo
+  // — mismos datos mostrados, menos bytes que viajan.
   const [
     { count: pedidosActivos },
     { count: lotesEnProceso },
@@ -29,25 +41,6 @@ export default async function DashboardPage() {
     { data: itemsPedido },
     { data: compras },
     { data: gastos },
-    { data: avances },
-  ] = await Promise.all([
-    supabase
-      .from("pedidos")
-      .select("id", { count: "exact", head: true })
-      .in("estatus", ["confirmado", "en_produccion"]),
-    supabase
-      .from("lotes_produccion")
-      .select("id", { count: "exact", head: true })
-      .in("estatus", ["planeada", "en_proceso"]),
-    supabase.from("materiales").select("*"),
-    supabase.from("pedidos").select("id, fecha_pedido"),
-    supabase.from("items_pedido").select("*"),
-    supabase.from("compras").select("fecha, total"),
-    supabase.from("gastos").select("fecha, monto"),
-    supabase.from("registros_avance_colaborador").select("fecha, cantidad").eq("origen", "colaborador"),
-  ]);
-
-  const [
     { data: registrosAvance },
     { data: etapasCatalogo },
     { data: loteEtapas },
@@ -58,12 +51,27 @@ export default async function DashboardPage() {
     { data: colaboradores },
   ] = await Promise.all([
     supabase
+      .from("pedidos")
+      .select("id", { count: "exact", head: true })
+      .in("estatus", ["confirmado", "en_produccion"]),
+    supabase
+      .from("lotes_produccion")
+      .select("id", { count: "exact", head: true })
+      .in("estatus", ["planeada", "en_proceso"]),
+    supabase.from("materiales").select("id, nombre, unidad_medida, stock_actual, stock_minimo"),
+    supabase.from("pedidos").select("id, fecha_pedido"),
+    supabase.from("items_pedido").select("pedido_id, cantidad, precio_unitario"),
+    supabase.from("compras").select("fecha, total"),
+    supabase.from("gastos").select("fecha, monto"),
+    supabase
       .from("registros_avance_colaborador")
-      .select("*, perfiles!registros_avance_colaborador_colaborador_id_fkey(nombre_completo)")
+      .select(
+        "id, fecha, created_at, cantidad, origen, observaciones, foto_url, colaborador_id, lote_id, lote_etapa_id, perfiles!registros_avance_colaborador_colaborador_id_fkey(nombre_completo)"
+      )
       .order("created_at", { ascending: false }),
     supabase.from("etapas_proceso").select("*"),
-    supabase.from("lote_etapas").select("*"),
-    supabase.from("items_orden_produccion").select("*"),
+    supabase.from("lote_etapas").select("id, item_orden_id, etapa_id, parent_lote_etapa_id, nombre_subproceso"),
+    supabase.from("items_orden_produccion").select("id, modelo_id, talla_id"),
     supabase.from("lotes_produccion").select("id, folio"),
     supabase.from("modelos").select("id, nombre"),
     supabase.from("tallas").select("id, codigo"),
@@ -91,7 +99,12 @@ export default async function DashboardPage() {
   }));
   const comprasParaMetricas = (compras ?? []).map((c) => ({ fecha: c.fecha, monto: c.total }));
   const gastosParaMetricas = (gastos ?? []).map((g) => ({ fecha: g.fecha, monto: g.monto }));
-  const avancesParaMetricas = (avances ?? []).map((a) => ({ fecha: a.fecha, monto: a.cantidad }));
+  // Antes era una consulta aparte a registros_avance_colaborador; ahora se
+  // deriva de registrosAvance (mismo filtro, mismos datos) para no pedirle
+  // dos veces la misma tabla a la base.
+  const avancesParaMetricas = (registrosAvance ?? [])
+    .filter((r) => r.origen === "colaborador")
+    .map((r) => ({ fecha: r.fecha, monto: r.cantidad }));
 
   const kpis = [
     { href: "/pedidos", label: "Pedidos activos", valor: pedidosActivos ?? 0, icon: ClipboardList, color: "text-blue-600 bg-blue-100 dark:bg-blue-950" },

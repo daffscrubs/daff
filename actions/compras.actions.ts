@@ -104,17 +104,29 @@ export async function crearCompra(
   // costo unitario al precio de esta compra (costo más reciente). El
   // movimiento queda ligado a la compra (compra_id) para poder revertirlo
   // correctamente si la compra se edita o se elimina después.
-  for (const item of datos.items) {
-    const { error: errorMovimiento } = await supabase.from("movimientos_inventario").insert({
-      material_id: item.materialId,
-      tipo: "entrada",
-      cantidad: item.cantidad,
-      motivo: `Compra ${folio} — ${datos.proveedor}`,
-      registrado_por: perfil.id,
-      compra_id: compra.id,
-    });
-    if (errorMovimiento) return accionError(errorMovimiento.message);
+  //
+  // Los movimientos se mandan en un solo insert de varias filas (antes era
+  // una llamada a la base por cada material de la compra) — el trigger
+  // fn_aplicar_movimiento_inventario sigue disparándose una vez por fila
+  // igual que antes, solo cambia que viajan juntas en un round-trip en vez
+  // de uno por material. El costo_unitario sí se deja secuencial: cada
+  // material lleva un valor distinto y agruparlo en paralelo cambiaría en
+  // qué punto se detiene el proceso si un material falla a medio camino.
+  if (datos.items.length) {
+    const { error: errorMovimientos } = await supabase.from("movimientos_inventario").insert(
+      datos.items.map((item) => ({
+        material_id: item.materialId,
+        tipo: "entrada" as const,
+        cantidad: item.cantidad,
+        motivo: `Compra ${folio} — ${datos.proveedor}`,
+        registrado_por: perfil.id,
+        compra_id: compra.id,
+      }))
+    );
+    if (errorMovimientos) return accionError(errorMovimientos.message);
+  }
 
+  for (const item of datos.items) {
     const { error: errorCosto } = await supabase
       .from("materiales")
       .update({ costo_unitario: item.costoUnitario })
@@ -178,16 +190,19 @@ async function revertirMovimientosCompra(
     netoPorMaterial.set(m.material_id, (netoPorMaterial.get(m.material_id) ?? 0) + signo * m.cantidad);
   }
 
-  for (const [materialId, neto] of netoPorMaterial) {
-    if (neto <= 0) continue;
-    const { error: errorReversa } = await supabase.from("movimientos_inventario").insert({
+  const filasReversa = [...netoPorMaterial]
+    .filter(([, neto]) => neto > 0)
+    .map(([materialId, neto]) => ({
       material_id: materialId,
-      tipo: "salida",
+      tipo: "salida" as const,
       cantidad: neto,
       motivo,
       registrado_por: perfilId,
       compra_id: compraId,
-    });
+    }));
+
+  if (filasReversa.length) {
+    const { error: errorReversa } = await supabase.from("movimientos_inventario").insert(filasReversa);
     if (errorReversa) return accionError(errorReversa.message);
   }
 
@@ -243,17 +258,21 @@ export async function actualizarCompra(id: string, input: CompraInput): Promise<
   );
   if (errorItems) return accionError(errorItems.message);
 
-  for (const item of datos.items) {
-    const { error: errorMovimiento } = await supabase.from("movimientos_inventario").insert({
-      material_id: item.materialId,
-      tipo: "entrada",
-      cantidad: item.cantidad,
-      motivo: `Compra ${compraActual.folio} — ${datos.proveedor} (editada)`,
-      registrado_por: perfil.id,
-      compra_id: id,
-    });
-    if (errorMovimiento) return accionError(errorMovimiento.message);
+  if (datos.items.length) {
+    const { error: errorMovimientos } = await supabase.from("movimientos_inventario").insert(
+      datos.items.map((item) => ({
+        material_id: item.materialId,
+        tipo: "entrada" as const,
+        cantidad: item.cantidad,
+        motivo: `Compra ${compraActual.folio} — ${datos.proveedor} (editada)`,
+        registrado_por: perfil.id,
+        compra_id: id,
+      }))
+    );
+    if (errorMovimientos) return accionError(errorMovimientos.message);
+  }
 
+  for (const item of datos.items) {
     const { error: errorCosto } = await supabase
       .from("materiales")
       .update({ costo_unitario: item.costoUnitario })
