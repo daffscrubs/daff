@@ -164,6 +164,56 @@ async function reevaluarEstatusPedido(supabase: Awaited<ReturnType<typeof create
   }
 }
 
+// Cancelar una orden no borra su historial (items, etapas, avances quedan
+// como registro), pero el consumo REAL ya registrado sobre unidades
+// específicas (rollos/bolsas) sí debe revertirse: esos materiales no se
+// van a usar después de todo. El trigger fn_descontar_unidad_material solo
+// resta al registrar consumo_real por primera vez, nunca revierte en un
+// DELETE/UPDATE posterior -- así que sin esto, un rollo marcado "agotado"
+// por una orden de prueba se queda agotado para siempre aunque la orden se
+// cancele. Solo se toca cantidad_actual/estatus de la unidad (nunca se
+// borra ni edita la fila de consumo_unidad_orden, que queda como el
+// registro histórico de qué se llegó a registrar).
+async function revertirConsumoUnidadesLote(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  loteId: string
+): Promise<AccionResultado<string[]>> {
+  const { data: consumos, error: errorConsumos } = await supabase
+    .from("consumo_unidad_orden")
+    .select("unidad_id, cantidad_real, unidades_material(material_id)")
+    .eq("lote_id", loteId)
+    .not("cantidad_real_registrada_en", "is", null);
+  if (errorConsumos) return accionError(errorConsumos.message);
+
+  const materialIds = new Set<string>();
+
+  for (const consumo of consumos ?? []) {
+    if (!consumo.cantidad_real) continue;
+    if (consumo.unidades_material?.material_id) materialIds.add(consumo.unidades_material.material_id);
+
+    const { data: unidad, error: errorUnidad } = await supabase
+      .from("unidades_material")
+      .select("cantidad_actual, estatus")
+      .eq("id", consumo.unidad_id)
+      .single();
+    if (errorUnidad) return accionError(errorUnidad.message);
+
+    const nuevaCantidad = unidad.cantidad_actual + consumo.cantidad_real;
+    const { error: errorUpdate } = await supabase
+      .from("unidades_material")
+      .update({
+        cantidad_actual: nuevaCantidad,
+        // Solo revive una unidad que se agotó por esta orden; si alguien la
+        // dio de baja por otro motivo, eso se queda como estaba.
+        estatus: unidad.estatus === "agotado" && nuevaCantidad > 0 ? "disponible" : unidad.estatus,
+      })
+      .eq("id", consumo.unidad_id);
+    if (errorUpdate) return accionError(errorUpdate.message);
+  }
+
+  return accionOk([...materialIds]);
+}
+
 export async function cancelarOrdenProduccion(loteId: string): Promise<AccionResultado> {
   await requerirPerfil(["admin", "supervisor"]);
   const supabase = await createClient();
@@ -178,6 +228,9 @@ export async function cancelarOrdenProduccion(loteId: string): Promise<AccionRes
     return accionError("Esta orden ya está cancelada.");
   }
 
+  const reversion = await revertirConsumoUnidadesLote(supabase, loteId);
+  if (!reversion.ok) return reversion;
+
   const { error } = await supabase.from("lotes_produccion").update({ estatus: "cancelada" }).eq("id", loteId);
   if (error) return accionError(error.message);
 
@@ -189,6 +242,10 @@ export async function cancelarOrdenProduccion(loteId: string): Promise<AccionRes
   revalidatePath("/produccion");
   revalidatePath(`/produccion/${loteId}`);
   revalidatePath("/pedidos");
+  revalidatePath("/materiales");
+  for (const materialId of reversion.data) {
+    revalidatePath(`/materiales/${materialId}`);
+  }
   return accionOk(undefined);
 }
 
