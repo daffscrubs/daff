@@ -39,7 +39,17 @@ export function EscanerQRDialog({
   onDetectado: (codigo: string) => void;
   titulo?: string;
 }) {
+  // El <video> real nunca se muestra: en Safari (iPad/Mac, confirmado por un
+  // usuario) se queda en negro en pantalla aunque sí esté decodificando
+  // cuadros (bug conocido de WebKit al componer <video> dentro de un
+  // ancestro con transform — el diálogo se centra con translate(-50%,-50%)
+  // de forma permanente). En vez de pelear con eso, el video queda oculto
+  // (visualmente, sin display:none para que Safari no lo pausee) y cada
+  // cuadro se copia a un <canvas> visible, que sí compone bien en cualquier
+  // navegador. La detección de QR sigue leyendo del <video> directamente
+  // (eso nunca falló, solo el pintado en pantalla).
   const videoRef = useRef<HTMLVideoElement>(null);
+  const canvasRef = useRef<HTMLCanvasElement>(null);
   const detenerRef = useRef<(() => void) | null>(null);
   // El callback del caller casi siempre es una función nueva en cada render;
   // guardarlo en un ref evita reiniciar la cámara cada vez que el padre
@@ -56,10 +66,31 @@ export function EscanerQRDialog({
     if (!abierto) return;
     let cancelado = false;
     let rafId: number | null = null;
+    let espejoRafId: number | null = null;
     let stream: MediaStream | null = null;
+
+    function iniciarEspejo() {
+      const video = videoRef.current;
+      const canvas = canvasRef.current;
+      if (!video || !canvas) return;
+      const ctx = canvas.getContext("2d");
+      if (!ctx) return;
+
+      function dibujar() {
+        if (cancelado || !video || !canvas) return;
+        if (video.readyState >= video.HAVE_CURRENT_DATA && video.videoWidth) {
+          if (canvas.width !== video.videoWidth) canvas.width = video.videoWidth;
+          if (canvas.height !== video.videoHeight) canvas.height = video.videoHeight;
+          ctx!.drawImage(video, 0, 0, canvas.width, canvas.height);
+        }
+        espejoRafId = requestAnimationFrame(dibujar);
+      }
+      espejoRafId = requestAnimationFrame(dibujar);
+    }
 
     function detenerTodo() {
       if (rafId != null) cancelAnimationFrame(rafId);
+      if (espejoRafId != null) cancelAnimationFrame(espejoRafId);
       stream?.getTracks().forEach((t) => t.stop());
     }
 
@@ -76,6 +107,7 @@ export function EscanerQRDialog({
           if (cancelado || !videoRef.current) return;
           videoRef.current.srcObject = stream;
           await videoRef.current.play();
+          iniciarEspejo();
           const detector = new window.BarcodeDetector({ formats: ["qr_code"] });
 
           const detectarFrame = async () => {
@@ -98,14 +130,13 @@ export function EscanerQRDialog({
           const controles = await lector.decodeFromVideoDevice(undefined, videoRef.current ?? undefined, (resultado) => {
             if (resultado) detectado(resultado.getText());
           });
-          detenerRef.current = () => controles.stop();
-          // Safari (iPad/Mac) a veces deja el <video> "reproduciendo" según
-          // su propio estado interno pero sin pintar cuadro alguno (pantalla
-          // negra) si @zxing/browser adjuntó el stream antes de que el
-          // elemento estuviera listo. Un play() explícito de más no hace
-          // daño (si ya está reproduciendo, el navegador simplemente lo
-          // ignora) y en Safari suele destrabarlo.
-          videoRef.current?.play().catch(() => {});
+          detenerRef.current = () => {
+            controles.stop();
+            detenerTodo();
+          };
+          // @zxing/browser ya deja el video reproduciendo; solo falta
+          // empezar a copiar sus cuadros al canvas visible.
+          iniciarEspejo();
         }
       } catch (err) {
         setError(
@@ -142,19 +173,12 @@ export function EscanerQRDialog({
         </DialogHeader>
         <div className="space-y-4">
           <div className="overflow-hidden rounded-lg bg-black">
-            {/* El diálogo se centra con transform: translate(-50%,-50%) de forma
-                permanente (no solo durante la animación de apertura). Safari
-                tiene un bug conocido: un <video> dentro de un ancestro con
-                transform se puede quedar en negro aunque sí esté reproduciendo
-                -- translateZ(0) fuerza que el video tenga su propia capa de
-                composición y evita el problema. */}
-            <video
-              ref={videoRef}
-              className="aspect-square w-full object-cover"
-              style={{ transform: "translateZ(0)" }}
-              muted
-              playsInline
-            />
+            <canvas ref={canvasRef} className="aspect-square w-full object-cover" />
+            {/* sr-only en vez de display:none: un <video> completamente
+                oculto puede dejar de decodificar cuadros en algunos
+                navegadores. Nunca se muestra, solo alimenta el canvas y la
+                detección de QR. */}
+            <video ref={videoRef} className="sr-only" muted playsInline />
           </div>
           {error && <p className="text-sm text-destructive">{error}</p>}
           <form className="space-y-2" onSubmit={enviarManual}>
