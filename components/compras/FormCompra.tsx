@@ -3,7 +3,8 @@
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
-import { actualizarCompra, crearCompra } from "@/actions/compras.actions";
+import { actualizarCompra, crearCompra, type ItemCompraConSeguimiento } from "@/actions/compras.actions";
+import { DividirUnidadesForm } from "@/components/compras/DividirUnidadesForm";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -44,6 +45,7 @@ export function FormCompra({
   const [notas, setNotas] = useState(valoresIniciales?.notas ?? "");
   const [items, setItems] = useState<CompraItemInput[]>(valoresIniciales?.items ?? []);
   const [pendiente, startTransition] = useTransition();
+  const [itemsParaDividir, setItemsParaDividir] = useState<ItemCompraConSeguimiento[] | null>(null);
   const router = useRouter();
 
   const unidadMaterial = (id: string) => materiales.find((m) => m.id === id)?.unidad_medida ?? "";
@@ -69,16 +71,33 @@ export function FormCompra({
       return;
     }
     startTransition(async () => {
-      const res = modoEdicion
-        ? await actualizarCompra(compraId, { proveedor, fecha, notas, items })
-        : await crearCompra({ proveedor, fecha, notas, items });
+      if (modoEdicion) {
+        const res = await actualizarCompra(compraId, { proveedor, fecha, notas, items });
+        if (!res.ok) {
+          toast.error(res.error);
+          return;
+        }
+        toast.success("Compra actualizada, se ajustó el inventario");
+        router.push("/compras");
+        return;
+      }
+
+      const res = await crearCompra({ proveedor, fecha, notas, items });
       if (!res.ok) {
         toast.error(res.error);
         return;
       }
-      toast.success(modoEdicion ? "Compra actualizada, se ajustó el inventario" : "Compra registrada, se actualizó el inventario");
-      router.push("/compras");
+      toast.success("Compra registrada, se actualizó el inventario");
+      if (res.data.itemsParaDividir.length) {
+        setItemsParaDividir(res.data.itemsParaDividir);
+      } else {
+        router.push("/compras");
+      }
     });
+  }
+
+  if (itemsParaDividir) {
+    return <DividirUnidadesForm itemsParaDividir={itemsParaDividir} onTerminado={() => router.push("/compras")} />;
   }
 
   return (

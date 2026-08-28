@@ -1,6 +1,7 @@
 import { notFound } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { FormMovimiento } from "@/components/materiales/FormMovimiento";
+import { UnidadesDeMaterial } from "@/components/materiales/UnidadesDeMaterial";
 import { Badge } from "@/components/ui/badge";
 import {
   Table,
@@ -19,13 +20,14 @@ export default async function MaterialDetallePage({
   const { id } = await params;
   const supabase = await createClient();
 
-  const [{ data: material }, { data: movimientos }] = await Promise.all([
+  const [{ data: material }, { data: movimientos }, { data: unidades }] = await Promise.all([
     supabase.from("materiales").select("*").eq("id", id).single(),
     supabase
       .from("movimientos_inventario")
       .select("*")
       .eq("material_id", id)
       .order("created_at", { ascending: false }),
+    supabase.from("unidades_material").select("*").eq("material_id", id).order("numero_unidad"),
   ]);
 
   if (!material) notFound();
@@ -46,6 +48,10 @@ export default async function MaterialDetallePage({
           )}
         </div>
       </div>
+
+      {material.seguimiento_por_unidad && (
+        <UnidadesDeMaterial unidades={unidades ?? []} unidadMedida={material.unidad_medida} />
+      )}
 
       <FormMovimiento materialId={id} />
 

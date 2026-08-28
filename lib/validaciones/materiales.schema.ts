@@ -6,6 +6,7 @@ export const materialSchema = z.object({
   unidadMedida: z.string().min(1, "Requerido"),
   stockMinimo: z.coerce.number().min(0).default(0),
   costoUnitario: z.coerce.number().min(0).optional(),
+  seguimientoPorUnidad: z.coerce.boolean().default(false),
 });
 
 export const movimientoSchema = z

@@ -47,6 +47,7 @@ export async function crearMaterial(input: MaterialInput): Promise<AccionResulta
     unidad_medida: datos.unidadMedida,
     stock_minimo: datos.stockMinimo,
     costo_unitario: datos.costoUnitario ?? null,
+    seguimiento_por_unidad: datos.seguimientoPorUnidad,
   });
 
   if (error) return accionError(error.message);
@@ -58,13 +59,32 @@ export async function actualizarCostoMaterial(
   id: string,
   costoUnitario: number,
   stockMinimo: number,
-  categoria: string
+  categoria: string,
+  seguimientoPorUnidad: boolean
 ): Promise<AccionResultado> {
   await requerirPerfil(["admin", "supervisor"]);
   const supabase = await createClient();
+
+  if (!seguimientoPorUnidad) {
+    const { count } = await supabase
+      .from("unidades_material")
+      .select("id", { count: "exact", head: true })
+      .eq("material_id", id);
+    if (count && count > 0) {
+      return accionError(
+        "No se puede quitar el seguimiento por unidad: este material ya tiene unidades con código QR generadas."
+      );
+    }
+  }
+
   const { error } = await supabase
     .from("materiales")
-    .update({ costo_unitario: costoUnitario, stock_minimo: stockMinimo, categoria: categoria || null })
+    .update({
+      costo_unitario: costoUnitario,
+      stock_minimo: stockMinimo,
+      categoria: categoria || null,
+      seguimiento_por_unidad: seguimientoPorUnidad,
+    })
     .eq("id", id);
   if (error) return accionError(error.message);
   revalidatePath("/materiales");

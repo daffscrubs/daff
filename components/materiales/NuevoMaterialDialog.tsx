@@ -22,6 +22,7 @@ export function NuevoMaterialDialog() {
   const [unidadMedida, setUnidadMedida] = useState("");
   const [stockMinimo, setStockMinimo] = useState("0");
   const [costoUnitario, setCostoUnitario] = useState("");
+  const [seguimientoPorUnidad, setSeguimientoPorUnidad] = useState(false);
   const [pendiente, startTransition] = useTransition();
   const router = useRouter();
 
@@ -34,6 +35,7 @@ export function NuevoMaterialDialog() {
         unidadMedida,
         stockMinimo: Number(stockMinimo || 0),
         costoUnitario: costoUnitario ? Number(costoUnitario) : undefined,
+        seguimientoPorUnidad,
       });
       if (!res.ok) {
         toast.error(res.error);
@@ -45,6 +47,7 @@ export function NuevoMaterialDialog() {
       setUnidadMedida("");
       setStockMinimo("0");
       setCostoUnitario("");
+      setSeguimientoPorUnidad(false);
       setAbierto(false);
       router.refresh();
     });
@@ -80,6 +83,20 @@ export function NuevoMaterialDialog() {
             <Label htmlFor="costoUnitario">Costo unitario (opcional)</Label>
             <Input id="costoUnitario" type="number" min={0} step="0.01" value={costoUnitario} onChange={(e) => setCostoUnitario(e.target.value)} />
           </div>
+          <label className="flex items-center gap-2 rounded-lg border p-2 text-sm">
+            <input
+              type="checkbox"
+              checked={seguimientoPorUnidad}
+              onChange={(e) => setSeguimientoPorUnidad(e.target.checked)}
+              className="size-4"
+            />
+            <span>
+              <Label className="cursor-pointer font-normal">Seguimiento por unidad (rollo/bolsa con QR)</Label>
+              <p className="text-xs text-muted-foreground">
+                Cada compra se dividirá en unidades individuales con su propio código QR.
+              </p>
+            </span>
+          </label>
           <Button type="submit" className="w-full" disabled={pendiente}>
             {pendiente ? "Creando..." : "Crear material"}
           </Button>

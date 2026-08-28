@@ -11,6 +11,40 @@ import {
 } from "@/lib/validaciones/compras.schema";
 import { accionError, accionOk, type AccionResultado } from "@/lib/tipos/accion";
 
+export interface ItemCompraConSeguimiento {
+  compraItemId: string;
+  materialId: string;
+  materialNombre: string;
+  cantidadComprada: number;
+}
+
+// compra_items no tiene "on delete cascade" hacia unidades_material (a
+// propósito: perder la trazabilidad de qué compra originó un rollo/bolsa con
+// QR ya generado sería peor que bloquear la edición). Editar o eliminar una
+// compra borra/reemplaza sus compra_items, así que si alguno ya tiene
+// unidades generadas, Postgres rechazaría el DELETE con un error crudo de
+// llave foránea — se revisa antes y se avisa con claridad.
+async function requerirCompraSinUnidadesGeneradas(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  compraId: string
+): Promise<AccionResultado> {
+  const { data: items } = await supabase.from("compra_items").select("id").eq("compra_id", compraId);
+  const itemIds = (items ?? []).map((i) => i.id);
+  if (!itemIds.length) return accionOk(undefined);
+
+  const { count, error } = await supabase
+    .from("unidades_material")
+    .select("id", { count: "exact", head: true })
+    .in("compra_item_id", itemIds);
+  if (error) return accionError(error.message);
+  if (count && count > 0) {
+    return accionError(
+      "No se puede modificar esta compra: ya se generaron unidades con código QR para uno de sus materiales."
+    );
+  }
+  return accionOk(undefined);
+}
+
 async function sugerirFolioCompra(supabase: Awaited<ReturnType<typeof createClient>>) {
   // Folio numérico simple y consecutivo (1, 2, 3...). Se toma el máximo folio
   // numérico existente (ignorando folios antiguos con otro formato) en vez de
@@ -23,7 +57,9 @@ async function sugerirFolioCompra(supabase: Awaited<ReturnType<typeof createClie
   return String(maxNumerico + 1);
 }
 
-export async function crearCompra(input: CompraInput): Promise<AccionResultado<string>> {
+export async function crearCompra(
+  input: CompraInput
+): Promise<AccionResultado<{ id: string; itemsParaDividir: ItemCompraConSeguimiento[] }>> {
   const perfil = await requerirPerfil(["admin", "supervisor"]);
   const datos = compraSchema.parse(input);
   const supabase = await createClient();
@@ -46,14 +82,17 @@ export async function crearCompra(input: CompraInput): Promise<AccionResultado<s
 
   if (error) return accionError(error.message);
 
-  const { error: errorItems } = await supabase.from("compra_items").insert(
-    datos.items.map((item) => ({
-      compra_id: compra.id,
-      material_id: item.materialId,
-      cantidad: item.cantidad,
-      costo_unitario: item.costoUnitario,
-    }))
-  );
+  const { data: itemsCreados, error: errorItems } = await supabase
+    .from("compra_items")
+    .insert(
+      datos.items.map((item) => ({
+        compra_id: compra.id,
+        material_id: item.materialId,
+        cantidad: item.cantidad,
+        costo_unitario: item.costoUnitario,
+      }))
+    )
+    .select("id, material_id, cantidad");
 
   if (errorItems) {
     await supabase.from("compras").delete().eq("id", compra.id);
@@ -82,9 +121,31 @@ export async function crearCompra(input: CompraInput): Promise<AccionResultado<s
     if (errorCosto) return accionError(errorCosto.message);
   }
 
+  // De los materiales recién comprados, cuáles se controlan por unidad —
+  // para que el formulario pueda ofrecer "Dividir en unidades" justo
+  // después de guardar, sin que el cliente tenga que adivinarlo.
+  const materialIds = [...new Set((itemsCreados ?? []).map((i) => i.material_id))];
+  const { data: materialesConSeguimiento } = materialIds.length
+    ? await supabase
+        .from("materiales")
+        .select("id, nombre")
+        .in("id", materialIds)
+        .eq("seguimiento_por_unidad", true)
+    : { data: [] };
+
+  const nombrePorMaterial = new Map((materialesConSeguimiento ?? []).map((m) => [m.id, m.nombre]));
+  const itemsParaDividir: ItemCompraConSeguimiento[] = (itemsCreados ?? [])
+    .filter((i) => nombrePorMaterial.has(i.material_id))
+    .map((i) => ({
+      compraItemId: i.id as string,
+      materialId: i.material_id as string,
+      materialNombre: nombrePorMaterial.get(i.material_id)!,
+      cantidadComprada: i.cantidad as number,
+    }));
+
   revalidatePath("/compras");
   revalidatePath("/materiales");
-  return accionOk(compra.id as string);
+  return accionOk({ id: compra.id as string, itemsParaDividir });
 }
 
 // Revierte el efecto en inventario de una compra: registra una "salida"
@@ -140,6 +201,9 @@ export async function actualizarCompra(id: string, input: CompraInput): Promise<
     .eq("id", id)
     .single();
   if (errorCompra) return accionError(errorCompra.message);
+
+  const sinUnidades = await requerirCompraSinUnidadesGeneradas(supabase, id);
+  if (!sinUnidades.ok) return sinUnidades;
 
   const reversion = await revertirMovimientosCompra(
     supabase,
@@ -208,6 +272,9 @@ export async function eliminarCompra(id: string): Promise<AccionResultado> {
     .eq("id", id)
     .single();
   if (errorCompra) return accionError(errorCompra.message);
+
+  const sinUnidades = await requerirCompraSinUnidadesGeneradas(supabase, id);
+  if (!sinUnidades.ok) return sinUnidades;
 
   const reversion = await revertirMovimientosCompra(supabase, id, perfil.id, `Compra ${compra.folio} eliminada`);
   if (!reversion.ok) return reversion;

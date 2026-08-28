@@ -35,6 +35,7 @@ export function DetalleMaterialSheet({
   const [costo, setCosto] = useState("");
   const [stockMinimo, setStockMinimo] = useState("");
   const [categoria, setCategoria] = useState("");
+  const [seguimientoPorUnidad, setSeguimientoPorUnidad] = useState(false);
   const [inicializadoPara, setInicializadoPara] = useState<string | null>(null);
   const [pendiente, startTransition] = useTransition();
 
@@ -43,13 +44,20 @@ export function DetalleMaterialSheet({
     setCosto(detalle.material.costo_unitario != null ? String(detalle.material.costo_unitario) : "");
     setStockMinimo(String(detalle.material.stock_minimo));
     setCategoria(detalle.material.categoria ?? "");
+    setSeguimientoPorUnidad(detalle.material.seguimiento_por_unidad);
   }
 
   function guardar() {
     if (!detalle?.material) return;
     const id = detalle.material.id;
     startTransition(async () => {
-      const res = await actualizarCostoMaterial(id, Number(costo) || 0, Number(stockMinimo) || 0, categoria);
+      const res = await actualizarCostoMaterial(
+        id,
+        Number(costo) || 0,
+        Number(stockMinimo) || 0,
+        categoria,
+        seguimientoPorUnidad
+      );
       if (!res.ok) {
         toast.error(res.error);
         return;
@@ -127,6 +135,20 @@ export function DetalleMaterialSheet({
                   />
                 </div>
               </div>
+              <label className="flex items-center gap-2 rounded-lg border p-2 text-sm">
+                <input
+                  type="checkbox"
+                  checked={seguimientoPorUnidad}
+                  onChange={(e) => setSeguimientoPorUnidad(e.target.checked)}
+                  className="size-4"
+                />
+                <span>
+                  <Label className="cursor-pointer font-normal">Seguimiento por unidad (rollo/bolsa con QR)</Label>
+                  <p className="text-xs text-muted-foreground">
+                    Cada compra se dividirá en unidades individuales con su propio código QR.
+                  </p>
+                </span>
+              </label>
               <div className="flex gap-2">
                 <Button onClick={guardar} disabled={pendiente} size="sm" className="flex-1">
                   Guardar cambios
