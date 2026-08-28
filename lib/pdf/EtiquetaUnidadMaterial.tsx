@@ -55,9 +55,6 @@ export function EtiquetaUnidadMaterial({ etiquetas }: { etiquetas: EtiquetaUnida
           <View style={estilos.info}>
             <Text style={estilos.nombreMaterial}>{etiqueta.nombreMaterial}</Text>
             <Text style={estilos.linea}>Unidad #{String(etiqueta.numeroUnidad).padStart(4, "0")}</Text>
-            <Text style={estilos.linea}>
-              {etiqueta.cantidadInicial} {etiqueta.unidadMedida}
-            </Text>
             <Text style={estilos.codigo}>{etiqueta.codigo}</Text>
           </View>
         </Page>

@@ -4,7 +4,8 @@ import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import { Download, Plus } from "lucide-react";
-import { crearUnidadIndividual } from "@/actions/unidadesMaterial.actions";
+import { crearUnidadIndividual, eliminarUnidadMaterial } from "@/actions/unidadesMaterial.actions";
+import { BotonEliminarConfirmacion } from "@/components/forms/BotonEliminarConfirmacion";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -175,7 +176,9 @@ function AgregarUnidadExistenteDialog({
             </div>
             <p className="text-xs text-muted-foreground">
               Si tienes varios rollos/bolsas con exactamente la misma cantidad (ej. 20 rollos de 25m cada
-              uno), créalos todos aquí de una vez — cada uno sale con su propio código y QR.
+              uno), créalos todos aquí de una vez — cada uno sale con su propio código y QR. Si solo quieres
+              contar rollos completos sin medir cuánto tiene cada uno por dentro, pon 1 en &ldquo;Cantidad
+              por unidad&rdquo; y el número de rollos en &ldquo;Cuántas unidades iguales&rdquo;.
             </p>
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-2">
@@ -270,7 +273,7 @@ export function UnidadesDeMaterial({
               </TableCell>
               <TableCell className="text-muted-foreground">{u.fecha_recepcion}</TableCell>
               <TableCell className="text-muted-foreground">{u.proveedor ?? "—"}</TableCell>
-              <TableCell className="text-right">
+              <TableCell className="text-right whitespace-nowrap">
                 <Button
                   variant="ghost"
                   size="sm"
@@ -279,6 +282,7 @@ export function UnidadesDeMaterial({
                 >
                   Etiqueta
                 </Button>
+                <BotonEliminarConfirmacion entidad="unidad" onEliminar={() => eliminarUnidadMaterial(u.id)} />
               </TableCell>
             </TableRow>
           ))}

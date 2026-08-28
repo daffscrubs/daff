@@ -245,3 +245,35 @@ export async function registrarConsumoRealUnidad(id: string, loteId: string, can
   revalidatePath(`/produccion/${loteId}`);
   return accionOk(undefined);
 }
+
+// Corrige un error de captura (ej. cantidad_inicial mal puesta al dar de alta
+// inventario inicial) antes de que la unidad se use. En cuanto se asignó a
+// una orden ya no es un error de captura sino historial real de producción,
+// así que se bloquea igual que el resto de "eliminar" de este módulo.
+export async function eliminarUnidadMaterial(id: string): Promise<AccionResultado> {
+  await requerirPerfil(["admin", "supervisor"]);
+  const supabase = await createClient();
+
+  const { data: unidad, error: errorUnidad } = await supabase
+    .from("unidades_material")
+    .select("material_id")
+    .eq("id", id)
+    .single();
+  if (errorUnidad) return accionError(errorUnidad.message);
+
+  const { count, error: errorConteo } = await supabase
+    .from("consumo_unidad_orden")
+    .select("id", { count: "exact", head: true })
+    .eq("unidad_id", id);
+  if (errorConteo) return accionError(errorConteo.message);
+  if (count && count > 0) {
+    return accionError("No se puede eliminar: esta unidad ya fue asignada a una orden de producción.");
+  }
+
+  const { error } = await supabase.from("unidades_material").delete().eq("id", id);
+  if (error) return accionError(error.message);
+
+  revalidatePath("/materiales");
+  revalidatePath(`/materiales/${unidad.material_id}`);
+  return accionOk(undefined);
+}
