@@ -30,6 +30,7 @@ function FilaConsumo({
   loteId,
   nombreMaterial,
   unidadMaterial,
+  esHeredado,
   onQuitar,
   bloqueado,
 }: {
@@ -37,6 +38,7 @@ function FilaConsumo({
   loteId: string;
   nombreMaterial: string;
   unidadMaterial: string;
+  esHeredado: boolean;
   onQuitar: () => void;
   bloqueado: boolean;
 }) {
@@ -70,6 +72,34 @@ function FilaConsumo({
         </TableCell>
         <TableCell className="text-right">
           <Badge variant="secondary">Registrado</Badge>
+        </TableCell>
+      </TableRow>
+    );
+  }
+
+  // El material se cambió a seguimiento por unidad DESPUÉS de que este
+  // consumo agregado ya existía: el trigger de la migración 0023 sigue
+  // sincronizando esta fila si además se asignan unidades específicas, pero
+  // registrar el consumo real por aquí (el camino viejo) ya lo rechaza
+  // materiales.actions.ts. La única acción válida es quitarlo y, si aplica,
+  // volver a capturarlo desde "Unidades específicas".
+  if (esHeredado) {
+    return (
+      <TableRow>
+        <TableCell>{nombreMaterial}</TableCell>
+        <TableCell>
+          {consumo.cantidad_estimada ?? "—"} {unidadMaterial}
+        </TableCell>
+        <TableCell colSpan={2}>
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <p className="text-sm text-muted-foreground">
+              Este material ahora se controla por unidad — quítalo y regístralo desde &ldquo;Unidades
+              específicas&rdquo;.
+            </p>
+            <Button variant="ghost" size="sm" disabled={pendiente || bloqueado} onClick={onQuitar}>
+              Quitar
+            </Button>
+          </div>
         </TableCell>
       </TableRow>
     );
@@ -126,13 +156,13 @@ export function InsumosOrden({
 
   const nombreMaterial = (id: string) => materiales.find((m) => m.id === id)?.nombre ?? "—";
   const unidadMaterial = (id: string) => materiales.find((m) => m.id === id)?.unidad_medida ?? "";
+  const esPorUnidad = (id: string) => materiales.find((m) => m.id === id)?.seguimiento_por_unidad ?? false;
   // Los materiales con seguimiento_por_unidad se asignan por rollo/bolsa
-  // específico (ver UnidadesOrden), no como cantidad agregada aquí — aunque el
-  // trigger de sincronización sí llena consumo_material_orden para ellos (para
-  // que reportes/PDF sigan viéndolos), esas filas se ocultan de esta tabla
-  // porque sus acciones (registrarConsumoReal/eliminarConsumoMaterial) las
-  // rechazaría el candado de materiales.actions.ts.
-  const consumosPorBulto = consumos.filter((c) => !materiales.find((m) => m.id === c.material_id)?.seguimiento_por_unidad);
+  // específico (ver UnidadesOrden), no como cantidad agregada aquí. Pero un
+  // consumo agregado ya existente para un material que se cambió a
+  // seguimiento por unidad DESPUÉS de capturarlo (un registro "heredado") se
+  // sigue mostrando aquí para poder quitarlo — esconderlo del todo lo dejaría
+  // invisible e imposible de limpiar.
   const disponibles = materiales.filter(
     (m) => !m.seguimiento_por_unidad && !consumos.some((c) => c.material_id === m.id)
   );
@@ -202,18 +232,19 @@ export function InsumosOrden({
           </TableRow>
         </TableHeader>
         <TableBody>
-          {consumosPorBulto.map((c) => (
+          {consumos.map((c) => (
             <FilaConsumo
               key={c.id}
               consumo={c}
               loteId={loteId}
               nombreMaterial={nombreMaterial(c.material_id)}
               unidadMaterial={unidadMaterial(c.material_id)}
+              esHeredado={esPorUnidad(c.material_id)}
               bloqueado={pendiente}
               onQuitar={() => quitar(c.id)}
             />
           ))}
-          {!consumosPorBulto.length && (
+          {!consumos.length && (
             <TableRow>
               <TableCell colSpan={4} className="text-center text-muted-foreground">
                 Sin insumos asignados todavía.

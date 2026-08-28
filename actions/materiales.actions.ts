@@ -131,19 +131,17 @@ export async function guardarConsumoEstimado(input: ConsumoEstimadoInput): Promi
   return accionOk(undefined);
 }
 
+// A diferencia de guardarConsumoEstimado/registrarConsumoReal, aquí NO se
+// exige requerirMaterialPorBulto: quitar un consumo agregado es siempre
+// seguro (el DELETE ya está protegido por cantidad_real_registrada_en) y es
+// justo la salida que necesita alguien con un registro "huérfano" — un
+// consumo que se capturó por bulto antes de activar seguimiento_por_unidad
+// en ese material, y que ahora ni aparece en la tabla de por bulto ni se
+// puede editar por ahí. Bloquear también el DELETE lo dejaría atorado para
+// siempre.
 export async function eliminarConsumoMaterial(id: string, loteId: string): Promise<AccionResultado> {
   await requerirPerfil(["admin", "supervisor"]);
   const supabase = await createClient();
-
-  const { data: consumo, error: errorConsumo } = await supabase
-    .from("consumo_material_orden")
-    .select("material_id")
-    .eq("id", id)
-    .single();
-  if (errorConsumo) return accionError(errorConsumo.message);
-
-  const chequeo = await requerirMaterialPorBulto(supabase, consumo.material_id);
-  if (!chequeo.ok) return chequeo;
 
   const { data, error } = await supabase
     .from("consumo_material_orden")
