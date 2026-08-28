@@ -50,7 +50,7 @@ export default async function MaterialDetallePage({
       </div>
 
       {material.seguimiento_por_unidad && (
-        <UnidadesDeMaterial unidades={unidades ?? []} unidadMedida={material.unidad_medida} />
+        <UnidadesDeMaterial materialId={id} unidades={unidades ?? []} unidadMedida={material.unidad_medida} />
       )}
 
       <FormMovimiento materialId={id} />
