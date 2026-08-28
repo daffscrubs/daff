@@ -144,10 +144,17 @@ export function InsumosOrden({
   loteId,
   consumos,
   materiales,
+  materialesConUnidadAsignada,
 }: {
   loteId: string;
   consumos: Consumo[];
   materiales: Material[];
+  /** material_id de materiales por unidad que YA tienen al menos un rollo/
+   * bolsa asignado a esta orden (ver UnidadesOrden). En cuanto un material
+   * llega a esta lista, su fila aquí se oculta -- el trigger de la migración
+   * 0023 la mantiene sincronizada con las unidades reales, así que se maneja
+   * desde "Unidades específicas", no aquí. */
+  materialesConUnidadAsignada: string[];
 }) {
   const [materialId, setMaterialId] = useState("");
   const [cantidadEstimada, setCantidadEstimada] = useState("");
@@ -157,12 +164,16 @@ export function InsumosOrden({
   const nombreMaterial = (id: string) => materiales.find((m) => m.id === id)?.nombre ?? "—";
   const unidadMaterial = (id: string) => materiales.find((m) => m.id === id)?.unidad_medida ?? "";
   const esPorUnidad = (id: string) => materiales.find((m) => m.id === id)?.seguimiento_por_unidad ?? false;
+  const tieneUnidadAsignada = (id: string) => materialesConUnidadAsignada.includes(id);
   // Los materiales con seguimiento_por_unidad se asignan por rollo/bolsa
-  // específico (ver UnidadesOrden), no como cantidad agregada aquí. Pero un
-  // consumo agregado ya existente para un material que se cambió a
-  // seguimiento por unidad DESPUÉS de capturarlo (un registro "heredado") se
-  // sigue mostrando aquí para poder quitarlo — esconderlo del todo lo dejaría
-  // invisible e imposible de limpiar.
+  // específico (ver UnidadesOrden), no como cantidad agregada aquí. Un
+  // consumo agregado que ya existía para un material ANTES de cambiarlo a
+  // seguimiento por unidad ("heredado") se muestra aquí para poder quitarlo
+  // -- pero solo mientras nadie haya asignado todavía ninguna unidad a esta
+  // orden. En cuanto se asigna la primera, el trigger empieza a mantener este
+  // mismo renglón sincronizado con las unidades reales, y se oculta de aquí
+  // para no invitar a "quitarlo" (eso rompería la sincronización).
+  const consumosVisibles = consumos.filter((c) => !(esPorUnidad(c.material_id) && tieneUnidadAsignada(c.material_id)));
   const disponibles = materiales.filter(
     (m) => !m.seguimiento_por_unidad && !consumos.some((c) => c.material_id === m.id)
   );
@@ -232,7 +243,7 @@ export function InsumosOrden({
           </TableRow>
         </TableHeader>
         <TableBody>
-          {consumos.map((c) => (
+          {consumosVisibles.map((c) => (
             <FilaConsumo
               key={c.id}
               consumo={c}
@@ -244,7 +255,7 @@ export function InsumosOrden({
               onQuitar={() => quitar(c.id)}
             />
           ))}
-          {!consumos.length && (
+          {!consumosVisibles.length && (
             <TableRow>
               <TableCell colSpan={4} className="text-center text-muted-foreground">
                 Sin insumos asignados todavía.

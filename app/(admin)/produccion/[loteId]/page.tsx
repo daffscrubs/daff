@@ -67,7 +67,7 @@ export default async function LoteDetallePage({
     supabase.from("materiales").select("*"),
     supabase
       .from("consumo_unidad_orden")
-      .select("*, unidades_material(codigo, materiales(nombre, unidad_medida))")
+      .select("*, unidades_material(material_id, codigo, materiales(nombre, unidad_medida))")
       .eq("lote_id", loteId),
   ]);
 
@@ -154,7 +154,14 @@ export default async function LoteDetallePage({
         <div className="space-y-6">
           <div>
             <h2 className="mb-3 text-lg font-semibold">Insumos a utilizar</h2>
-            <InsumosOrden loteId={loteId} consumos={consumos ?? []} materiales={materiales ?? []} />
+            <InsumosOrden
+              loteId={loteId}
+              consumos={consumos ?? []}
+              materiales={materiales ?? []}
+              materialesConUnidadAsignada={[
+                ...new Set((consumosUnidad ?? []).map((c) => c.unidades_material?.material_id).filter((id): id is string => !!id)),
+              ]}
+            />
           </div>
           <div>
             <h3 className="mb-3 text-base font-semibold">Unidades específicas (rollo/bolsa con QR)</h3>
