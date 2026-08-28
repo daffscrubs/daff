@@ -67,7 +67,9 @@ export default async function LoteDetallePage({
     supabase.from("materiales").select("*"),
     supabase
       .from("consumo_unidad_orden")
-      .select("*, unidades_material(material_id, codigo, materiales(nombre, unidad_medida))")
+      .select(
+        "*, unidades_material(material_id, codigo, cantidad_actual, materiales(nombre, unidad_medida, mide_cantidad_por_unidad))"
+      )
       .eq("lote_id", loteId),
   ]);
 

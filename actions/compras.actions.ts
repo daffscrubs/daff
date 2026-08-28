@@ -16,6 +16,7 @@ export interface ItemCompraConSeguimiento {
   materialId: string;
   materialNombre: string;
   cantidadComprada: number;
+  mideCantidadPorUnidad: boolean;
 }
 
 // compra_items no tiene "on delete cascade" hacia unidades_material (a
@@ -128,19 +129,22 @@ export async function crearCompra(
   const { data: materialesConSeguimiento } = materialIds.length
     ? await supabase
         .from("materiales")
-        .select("id, nombre")
+        .select("id, nombre, mide_cantidad_por_unidad")
         .in("id", materialIds)
         .eq("seguimiento_por_unidad", true)
     : { data: [] };
 
-  const nombrePorMaterial = new Map((materialesConSeguimiento ?? []).map((m) => [m.id, m.nombre]));
+  const datosPorMaterial = new Map(
+    (materialesConSeguimiento ?? []).map((m) => [m.id, { nombre: m.nombre, mideCantidad: m.mide_cantidad_por_unidad }])
+  );
   const itemsParaDividir: ItemCompraConSeguimiento[] = (itemsCreados ?? [])
-    .filter((i) => nombrePorMaterial.has(i.material_id))
+    .filter((i) => datosPorMaterial.has(i.material_id))
     .map((i) => ({
       compraItemId: i.id as string,
       materialId: i.material_id as string,
-      materialNombre: nombrePorMaterial.get(i.material_id)!,
+      materialNombre: datosPorMaterial.get(i.material_id)!.nombre,
       cantidadComprada: i.cantidad as number,
+      mideCantidadPorUnidad: datosPorMaterial.get(i.material_id)!.mideCantidad,
     }));
 
   revalidatePath("/compras");

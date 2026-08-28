@@ -16,7 +16,7 @@ import type { Database } from "@/types/database.types";
 
 type UnidadMaterial = Database["public"]["Tables"]["unidades_material"]["Row"];
 type UnidadConMaterial = UnidadMaterial & {
-  materiales: { nombre: string; unidad_medida: string } | null;
+  materiales: { nombre: string; unidad_medida: string; mide_cantidad_por_unidad: boolean } | null;
 };
 
 // El código va impreso (etiqueta + QR) y es lo único que alguien lee a mano si
@@ -160,7 +160,7 @@ export async function buscarUnidadPorCodigo(codigo: string): Promise<AccionResul
   const supabase = await createClient();
   const { data, error } = await supabase
     .from("unidades_material")
-    .select("*, materiales(nombre, unidad_medida)")
+    .select("*, materiales(nombre, unidad_medida, mide_cantidad_por_unidad)")
     .eq("codigo", codigo.trim())
     .maybeSingle();
   if (error) return accionError(error.message);
@@ -234,6 +234,27 @@ export async function eliminarUnidadDeOrden(id: string, loteId: string): Promise
 export async function registrarConsumoRealUnidad(id: string, loteId: string, cantidadReal: number): Promise<AccionResultado> {
   await requerirPerfil(["admin", "supervisor"]);
   const supabase = await createClient();
+
+  // Chequeo proactivo: el trigger fn_descontar_unidad_material también lo
+  // rechaza (última línea de defensa), pero sin esto el usuario vería el
+  // error crudo de Postgres en vez de un mensaje claro.
+  const { data: consumo, error: errorConsumo } = await supabase
+    .from("consumo_unidad_orden")
+    .select("unidad_id")
+    .eq("id", id)
+    .single();
+  if (errorConsumo) return accionError(errorConsumo.message);
+
+  const { data: unidad, error: errorUnidad } = await supabase
+    .from("unidades_material")
+    .select("cantidad_actual")
+    .eq("id", consumo.unidad_id)
+    .single();
+  if (errorUnidad) return accionError(errorUnidad.message);
+  if (cantidadReal > unidad.cantidad_actual) {
+    return accionError(`El consumo real (${cantidadReal}) excede lo que le queda a esta unidad (${unidad.cantidad_actual}).`);
+  }
+
   const { data, error } = await supabase
     .from("consumo_unidad_orden")
     .update({ cantidad_real: cantidadReal, cantidad_real_registrada_en: new Date().toISOString() })

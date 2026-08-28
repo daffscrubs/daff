@@ -48,17 +48,21 @@ const ESTATUS_VARIANTE: Record<EstatusUnidadMaterial, "default" | "secondary" | 
 // queda null). crearUnidadIndividual ya soportaba esto, solo faltaba el
 // diálogo que lo llamara.
 //
-// "Cantidad por unidad" vs "cuántas unidades": si Alejandro tiene 20 rollos
-// físicos de 25m cada uno, antes había que repetir el formulario 20 veces (y
-// si en vez de eso ponía "20" como cantidad, se creaba UN solo rollo de 20m
-// con un solo QR — justo la confusión que reportó). cantidadDeUnidades crea
-// N unidades idénticas de un jalón, cada una con su propio número y código.
+// Cuando el material NO mide cantidad dentro de cada unidad (el caso más
+// común: unidad_medida ya ES "Rollo"/"Bolsa"), no se pide "cantidad por
+// unidad" en absoluto -- pedirlo causó confusión repetida (la gente ponía
+// "cuántos rollos tengo" ahí, generando un solo rollo con una cantidad
+// absurda). Cada unidad se crea fija en 1. Solo si el material sí mide
+// cantidad (ej. metros dentro de un rollo de tela) se pide esa cantidad, más
+// "cuántas unidades iguales" para crear varias de un jalón.
 function AgregarUnidadExistenteDialog({
   materialId,
   costoUnitarioMaterial,
+  mideCantidadPorUnidad,
 }: {
   materialId: string;
   costoUnitarioMaterial: number | null;
+  mideCantidadPorUnidad: boolean;
 }) {
   const costoPorDefecto = costoUnitarioMaterial != null ? String(costoUnitarioMaterial) : "";
   const [abierto, setAbierto] = useState(false);
@@ -85,7 +89,7 @@ function AgregarUnidadExistenteDialog({
     startTransition(async () => {
       const res = await crearUnidadIndividual({
         materialId,
-        cantidadInicial: Number(cantidadInicial),
+        cantidadInicial: mideCantidadPorUnidad ? Number(cantidadInicial) : 1,
         cantidadDeUnidades: Number(cantidadDeUnidades) || 1,
         costoUnitario: costoUnitario ? Number(costoUnitario) : undefined,
         proveedor: proveedor || undefined,
@@ -147,22 +151,43 @@ function AgregarUnidadExistenteDialog({
           </div>
         ) : (
           <form className="space-y-4" onSubmit={crear}>
-            <div className="grid grid-cols-2 gap-4">
+            {mideCantidadPorUnidad ? (
+              <>
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <Label htmlFor="cantidadInicialUnidad">Cantidad por unidad</Label>
+                    <Input
+                      id="cantidadInicialUnidad"
+                      type="number"
+                      min={0.01}
+                      step="0.01"
+                      placeholder="Ej. 25 (lo que tiene CADA rollo)"
+                      value={cantidadInicial}
+                      onChange={(e) => setCantidadInicial(e.target.value)}
+                      required
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="cantidadDeUnidades">Cuántas unidades iguales</Label>
+                    <Input
+                      id="cantidadDeUnidades"
+                      type="number"
+                      min={1}
+                      step="1"
+                      value={cantidadDeUnidades}
+                      onChange={(e) => setCantidadDeUnidades(e.target.value)}
+                      required
+                    />
+                  </div>
+                </div>
+                <p className="text-xs text-muted-foreground">
+                  Si tienes varios rollos/bolsas con exactamente la misma cantidad (ej. 20 rollos de 25m cada
+                  uno), créalos todos aquí de una vez — cada uno sale con su propio código y QR.
+                </p>
+              </>
+            ) : (
               <div className="space-y-2">
-                <Label htmlFor="cantidadInicialUnidad">Cantidad por unidad</Label>
-                <Input
-                  id="cantidadInicialUnidad"
-                  type="number"
-                  min={0.01}
-                  step="0.01"
-                  placeholder="Ej. 25 (lo que tiene CADA rollo)"
-                  value={cantidadInicial}
-                  onChange={(e) => setCantidadInicial(e.target.value)}
-                  required
-                />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="cantidadDeUnidades">Cuántas unidades iguales</Label>
+                <Label htmlFor="cantidadDeUnidades">Cuántas unidades (rollos/bolsas)</Label>
                 <Input
                   id="cantidadDeUnidades"
                   type="number"
@@ -172,14 +197,12 @@ function AgregarUnidadExistenteDialog({
                   onChange={(e) => setCantidadDeUnidades(e.target.value)}
                   required
                 />
+                <p className="text-xs text-muted-foreground">
+                  Cada rollo/bolsa se crea como 1 unidad completa, con su propio código y QR — sin pedir
+                  cantidad, porque este material no mide cantidad dentro de cada unidad.
+                </p>
               </div>
-            </div>
-            <p className="text-xs text-muted-foreground">
-              Si tienes varios rollos/bolsas con exactamente la misma cantidad (ej. 20 rollos de 25m cada
-              uno), créalos todos aquí de una vez — cada uno sale con su propio código y QR. Si solo quieres
-              contar rollos completos sin medir cuánto tiene cada uno por dentro, pon 1 en &ldquo;Cantidad
-              por unidad&rdquo; y el número de rollos en &ldquo;Cuántas unidades iguales&rdquo;.
-            </p>
+            )}
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-2">
                 <Label htmlFor="costoUnitarioUnidad">Costo unitario (opcional)</Label>
@@ -221,11 +244,13 @@ function AgregarUnidadExistenteDialog({
 export function UnidadesDeMaterial({
   materialId,
   costoUnitarioMaterial,
+  mideCantidadPorUnidad,
   unidades,
   unidadMedida,
 }: {
   materialId: string;
   costoUnitarioMaterial: number | null;
+  mideCantidadPorUnidad: boolean;
   unidades: UnidadMaterial[];
   unidadMedida: string;
 }) {
@@ -236,7 +261,11 @@ export function UnidadesDeMaterial({
       <div className="flex flex-wrap items-center justify-between gap-2">
         <h2 className="text-lg font-semibold">Unidades (rollos/bolsas)</h2>
         <div className="flex flex-wrap gap-2">
-          <AgregarUnidadExistenteDialog materialId={materialId} costoUnitarioMaterial={costoUnitarioMaterial} />
+          <AgregarUnidadExistenteDialog
+            materialId={materialId}
+            costoUnitarioMaterial={costoUnitarioMaterial}
+            mideCantidadPorUnidad={mideCantidadPorUnidad}
+          />
           {!!idsDisponibles.length && (
             <Button
               variant="outline"
@@ -254,7 +283,7 @@ export function UnidadesDeMaterial({
         <TableHeader>
           <TableRow>
             <TableHead>Código</TableHead>
-            <TableHead>Restante</TableHead>
+            {mideCantidadPorUnidad && <TableHead>Restante</TableHead>}
             <TableHead>Estatus</TableHead>
             <TableHead>Recepción</TableHead>
             <TableHead>Proveedor</TableHead>
@@ -265,9 +294,11 @@ export function UnidadesDeMaterial({
           {unidades.map((u) => (
             <TableRow key={u.id}>
               <TableCell className="font-mono text-xs">{u.codigo}</TableCell>
-              <TableCell>
-                {u.cantidad_actual} / {u.cantidad_inicial} {unidadMedida}
-              </TableCell>
+              {mideCantidadPorUnidad && (
+                <TableCell>
+                  {u.cantidad_actual} / {u.cantidad_inicial} {unidadMedida}
+                </TableCell>
+              )}
               <TableCell>
                 <Badge variant={ESTATUS_VARIANTE[u.estatus]}>{ESTATUS_LABEL[u.estatus]}</Badge>
               </TableCell>
@@ -288,7 +319,7 @@ export function UnidadesDeMaterial({
           ))}
           {!unidades.length && (
             <TableRow>
-              <TableCell colSpan={6} className="text-center text-muted-foreground">
+              <TableCell colSpan={mideCantidadPorUnidad ? 6 : 5} className="text-center text-muted-foreground">
                 Sin unidades registradas todavía.
               </TableCell>
             </TableRow>

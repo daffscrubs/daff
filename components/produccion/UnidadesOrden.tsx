@@ -27,7 +27,8 @@ import type { Database, EstatusUnidadMaterial } from "@/types/database.types";
 type ConsumoUnidad = Database["public"]["Tables"]["consumo_unidad_orden"]["Row"] & {
   unidades_material: {
     codigo: string;
-    materiales: { nombre: string; unidad_medida: string } | null;
+    cantidad_actual: number;
+    materiales: { nombre: string; unidad_medida: string; mide_cantidad_por_unidad: boolean } | null;
   } | null;
 };
 
@@ -38,7 +39,7 @@ type UnidadEncontrada = {
   codigo: string;
   cantidad_actual: number;
   estatus: EstatusUnidadMaterial;
-  materiales: { nombre: string; unidad_medida: string } | null;
+  materiales: { nombre: string; unidad_medida: string; mide_cantidad_por_unidad: boolean } | null;
 };
 
 function FilaUnidadConsumo({
@@ -46,11 +47,16 @@ function FilaUnidadConsumo({
   loteId,
   onQuitar,
   bloqueado,
+  columnasCantidad,
 }: {
   consumo: ConsumoUnidad;
   loteId: string;
   onQuitar: () => void;
   bloqueado: boolean;
+  /** Si la tabla completa muestra las columnas Estimado/Real (porque algún
+   * otro material de la lista sí mide cantidad) aunque esta fila no las use
+   * -- para no desalinear las columnas del resto de la tabla. */
+  columnasCantidad: boolean;
 }) {
   const valorGuardado = String(consumo.cantidad_real ?? 0);
   const [real, setReal] = useState(valorGuardado);
@@ -58,10 +64,11 @@ function FilaUnidadConsumo({
   const router = useRouter();
   const registrado = !!consumo.cantidad_real_registrada_en;
   const unidadMedida = consumo.unidades_material?.materiales?.unidad_medida ?? "";
+  const mideCantidad = consumo.unidades_material?.materiales?.mide_cantidad_por_unidad ?? true;
 
-  function guardar() {
+  function guardar(cantidad: number) {
     startTransition(async () => {
-      const res = await registrarConsumoRealUnidad(consumo.id, loteId, Number(real) || 0);
+      const res = await registrarConsumoRealUnidad(consumo.id, loteId, cantidad);
       if (!res.ok) {
         toast.error(res.error);
         return;
@@ -76,14 +83,48 @@ function FilaUnidadConsumo({
       <TableRow>
         <TableCell>{consumo.unidades_material?.materiales?.nombre ?? "—"}</TableCell>
         <TableCell className="font-mono text-xs">{consumo.unidades_material?.codigo ?? "—"}</TableCell>
-        <TableCell>
-          {consumo.cantidad_estimada ?? "—"} {unidadMedida}
+        {columnasCantidad &&
+          (mideCantidad ? (
+            <>
+              <TableCell>
+                {consumo.cantidad_estimada ?? "—"} {unidadMedida}
+              </TableCell>
+              <TableCell>
+                {consumo.cantidad_real} {unidadMedida}
+              </TableCell>
+            </>
+          ) : (
+            <TableCell colSpan={2} />
+          ))}
+        <TableCell className="text-right">
+          <Badge variant="secondary">{mideCantidad ? "Registrado" : "Usado"}</Badge>
         </TableCell>
-        <TableCell>
-          {consumo.cantidad_real} {unidadMedida}
+      </TableRow>
+    );
+  }
+
+  // El material no mide cantidad dentro de cada unidad: no tiene caso pedir
+  // un número, la unidad completa se usa de un jalón — un solo botón que
+  // marca la unidad entera como consumida.
+  if (!mideCantidad) {
+    return (
+      <TableRow>
+        <TableCell>{consumo.unidades_material?.materiales?.nombre ?? "—"}</TableCell>
+        <TableCell className="font-mono text-xs">{consumo.unidades_material?.codigo ?? "—"}</TableCell>
+        <TableCell className="text-right" colSpan={columnasCantidad ? 2 : 1}>
+          <Button
+            size="sm"
+            variant="outline"
+            disabled={pendiente || bloqueado}
+            onClick={() => guardar(consumo.cantidad_estimada ?? consumo.unidades_material?.cantidad_actual ?? 1)}
+          >
+            Marcar como usado
+          </Button>
         </TableCell>
         <TableCell className="text-right">
-          <Badge variant="secondary">Registrado</Badge>
+          <Button variant="ghost" size="sm" disabled={pendiente || bloqueado} onClick={onQuitar}>
+            Quitar
+          </Button>
         </TableCell>
       </TableRow>
     );
@@ -110,7 +151,7 @@ function FilaUnidadConsumo({
             size="sm"
             variant="outline"
             disabled={pendiente || bloqueado || real === valorGuardado}
-            onClick={guardar}
+            onClick={() => guardar(Number(real) || 0)}
           >
             Guardar
           </Button>
@@ -137,6 +178,9 @@ export function UnidadesOrden({ loteId, consumos }: { loteId: string; consumos: 
   const [cantidadEstimada, setCantidadEstimada] = useState("");
   const [pendiente, startTransition] = useTransition();
   const router = useRouter();
+  // Si algún material asignado mide cantidad, la tabla necesita las columnas
+  // Estimado/Real; si ninguno mide, se simplifica a Material+Código+acción.
+  const algunoMideCantidad = consumos.some((c) => c.unidades_material?.materiales?.mide_cantidad_por_unidad);
 
   function buscar(codigo: string) {
     startTransition(async () => {
@@ -151,13 +195,13 @@ export function UnidadesOrden({ loteId, consumos }: { loteId: string; consumos: 
     });
   }
 
-  function asignar() {
+  function asignar(cantidad: number) {
     if (!unidadEncontrada) return;
     startTransition(async () => {
       const res = await asignarUnidadAOrden({
         loteId,
         unidadId: unidadEncontrada.id,
-        cantidadEstimada: Number(cantidadEstimada) || 0,
+        cantidadEstimada: cantidad,
       });
       if (!res.ok) {
         toast.error(res.error);
@@ -182,6 +226,8 @@ export function UnidadesOrden({ loteId, consumos }: { loteId: string; consumos: 
     });
   }
 
+  const mideCantidadEncontrada = unidadEncontrada?.materiales?.mide_cantidad_por_unidad ?? true;
+
   return (
     <div className="space-y-4">
       {unidadEncontrada ? (
@@ -189,21 +235,28 @@ export function UnidadesOrden({ loteId, consumos }: { loteId: string; consumos: 
           <div className="flex-1">
             <p className="text-sm font-medium">{unidadEncontrada.materiales?.nombre ?? "—"}</p>
             <p className="font-mono text-xs text-muted-foreground">
-              {unidadEncontrada.codigo} · {unidadEncontrada.cantidad_actual}{" "}
-              {unidadEncontrada.materiales?.unidad_medida} disponibles
+              {unidadEncontrada.codigo}
+              {mideCantidadEncontrada &&
+                ` · ${unidadEncontrada.cantidad_actual} ${unidadEncontrada.materiales?.unidad_medida ?? ""} disponibles`}
             </p>
           </div>
-          <Input
-            type="number"
-            min={0}
-            step="0.01"
-            placeholder="Cantidad estimada"
-            className="sm:w-40"
-            value={cantidadEstimada}
-            onChange={(e) => setCantidadEstimada(e.target.value)}
-          />
+          {mideCantidadEncontrada && (
+            <Input
+              type="number"
+              min={0}
+              step="0.01"
+              placeholder="Cantidad estimada"
+              className="sm:w-40"
+              value={cantidadEstimada}
+              onChange={(e) => setCantidadEstimada(e.target.value)}
+            />
+          )}
           <div className="flex gap-2">
-            <Button size="sm" disabled={pendiente} onClick={asignar}>
+            <Button
+              size="sm"
+              disabled={pendiente}
+              onClick={() => asignar(mideCantidadEncontrada ? Number(cantidadEstimada) || 0 : unidadEncontrada.cantidad_actual)}
+            >
               Asignar
             </Button>
             <Button size="sm" variant="ghost" disabled={pendiente} onClick={() => setUnidadEncontrada(null)}>
@@ -230,18 +283,29 @@ export function UnidadesOrden({ loteId, consumos }: { loteId: string; consumos: 
           <TableRow>
             <TableHead>Material</TableHead>
             <TableHead>Código</TableHead>
-            <TableHead>Estimado</TableHead>
-            <TableHead>Real</TableHead>
+            {algunoMideCantidad && (
+              <>
+                <TableHead>Estimado</TableHead>
+                <TableHead>Real</TableHead>
+              </>
+            )}
             <TableHead />
           </TableRow>
         </TableHeader>
         <TableBody>
           {consumos.map((c) => (
-            <FilaUnidadConsumo key={c.id} consumo={c} loteId={loteId} bloqueado={pendiente} onQuitar={() => quitar(c.id)} />
+            <FilaUnidadConsumo
+              key={c.id}
+              consumo={c}
+              loteId={loteId}
+              bloqueado={pendiente}
+              columnasCantidad={algunoMideCantidad}
+              onQuitar={() => quitar(c.id)}
+            />
           ))}
           {!consumos.length && (
             <TableRow>
-              <TableCell colSpan={5} className="text-center text-muted-foreground">
+              <TableCell colSpan={algunoMideCantidad ? 5 : 3} className="text-center text-muted-foreground">
                 Sin unidades asignadas todavía.
               </TableCell>
             </TableRow>

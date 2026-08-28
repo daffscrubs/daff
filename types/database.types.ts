@@ -702,6 +702,7 @@ export type Database = {
           costo_unitario: number | null
           created_at: string
           id: string
+          mide_cantidad_por_unidad: boolean
           nombre: string
           seguimiento_por_unidad: boolean
           stock_actual: number
@@ -713,6 +714,7 @@ export type Database = {
           costo_unitario?: number | null
           created_at?: string
           id?: string
+          mide_cantidad_por_unidad?: boolean
           nombre: string
           seguimiento_por_unidad?: boolean
           stock_actual?: number
@@ -724,6 +726,7 @@ export type Database = {
           costo_unitario?: number | null
           created_at?: string
           id?: string
+          mide_cantidad_por_unidad?: boolean
           nombre?: string
           seguimiento_por_unidad?: boolean
           stock_actual?: number

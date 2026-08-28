@@ -53,6 +53,7 @@ export default async function MaterialDetallePage({
         <UnidadesDeMaterial
           materialId={id}
           costoUnitarioMaterial={material.costo_unitario}
+          mideCantidadPorUnidad={material.mide_cantidad_por_unidad}
           unidades={unidades ?? []}
           unidadMedida={material.unidad_medida}
         />

@@ -23,6 +23,7 @@ export function NuevoMaterialDialog() {
   const [stockMinimo, setStockMinimo] = useState("0");
   const [costoUnitario, setCostoUnitario] = useState("");
   const [seguimientoPorUnidad, setSeguimientoPorUnidad] = useState(false);
+  const [medirCantidadPorUnidad, setMedirCantidadPorUnidad] = useState(false);
   const [pendiente, startTransition] = useTransition();
   const router = useRouter();
 
@@ -36,6 +37,7 @@ export function NuevoMaterialDialog() {
         stockMinimo: Number(stockMinimo || 0),
         costoUnitario: costoUnitario ? Number(costoUnitario) : undefined,
         seguimientoPorUnidad,
+        medirCantidadPorUnidad,
       });
       if (!res.ok) {
         toast.error(res.error);
@@ -48,6 +50,7 @@ export function NuevoMaterialDialog() {
       setStockMinimo("0");
       setCostoUnitario("");
       setSeguimientoPorUnidad(false);
+      setMedirCantidadPorUnidad(false);
       setAbierto(false);
       router.refresh();
     });
@@ -97,6 +100,23 @@ export function NuevoMaterialDialog() {
               </p>
             </span>
           </label>
+          {seguimientoPorUnidad && (
+            <label className="ml-6 flex items-center gap-2 rounded-lg border p-2 text-sm">
+              <input
+                type="checkbox"
+                checked={medirCantidadPorUnidad}
+                onChange={(e) => setMedirCantidadPorUnidad(e.target.checked)}
+                className="size-4"
+              />
+              <span>
+                <Label className="cursor-pointer font-normal">Medir cantidad dentro de cada unidad</Label>
+                <p className="text-xs text-muted-foreground">
+                  Actívalo solo si necesitas saber cuánto le queda a cada rollo/bolsa (ej. metros de tela).
+                  Si lo dejas apagado, cada unidad es 1 ítem completo — disponible o usado, sin números.
+                </p>
+              </span>
+            </label>
+          )}
           <Button type="submit" className="w-full" disabled={pendiente}>
             {pendiente ? "Creando..." : "Crear material"}
           </Button>

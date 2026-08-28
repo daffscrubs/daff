@@ -45,6 +45,13 @@ export function DividirUnidadesForm({
   const [filasPorItem, setFilasPorItem] = useState<Record<string, FilaDivision[]>>(() =>
     Object.fromEntries(itemsParaDividir.map((item) => [item.compraItemId, [filaVacia()]]))
   );
+  // Para materiales que NO miden cantidad (la mayoría: cada rollo/bolsa es 1
+  // ítem completo), no tiene caso pedir "cantidad por unidad" — solo cuántas
+  // unidades salieron de la compra. Se sugiere el número comprado como punto
+  // de partida (1 unidad de compra = 1 rollo/bolsa es el caso típico).
+  const [cantidadSimplePorItem, setCantidadSimplePorItem] = useState<Record<string, string>>(() =>
+    Object.fromEntries(itemsParaDividir.map((item) => [item.compraItemId, String(Math.round(item.cantidadComprada))]))
+  );
   const [pendiente, startTransition] = useTransition();
   const [idsGenerados, setIdsGenerados] = useState<string[] | null>(null);
 
@@ -72,7 +79,9 @@ export function DividirUnidadesForm({
       const errores: string[] = [];
 
       for (const item of itemsParaDividir) {
-        const cantidades = expandirFilas(filasPorItem[item.compraItemId] ?? []);
+        const cantidades = item.mideCantidadPorUnidad
+          ? expandirFilas(filasPorItem[item.compraItemId] ?? [])
+          : Array(Number(cantidadSimplePorItem[item.compraItemId]) || 0).fill(1);
         if (!cantidades.length) continue;
 
         const res = await crearUnidadesDesdeCompra({ compraItemId: item.compraItemId, cantidades });
@@ -131,6 +140,33 @@ export function DividirUnidadesForm({
       </div>
 
       {itemsParaDividir.map((item) => {
+        if (!item.mideCantidadPorUnidad) {
+          return (
+            <div key={item.compraItemId} className="space-y-3 rounded-lg border p-3">
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <p className="font-medium">{item.materialNombre}</p>
+                <p className="text-sm text-muted-foreground">Comprado: {item.cantidadComprada}</p>
+              </div>
+              <div className="flex items-center gap-2">
+                <Input
+                  type="number"
+                  min={1}
+                  step="1"
+                  placeholder="Cuántas unidades"
+                  className="w-32"
+                  value={cantidadSimplePorItem[item.compraItemId] ?? ""}
+                  onChange={(e) =>
+                    setCantidadSimplePorItem((prev) => ({ ...prev, [item.compraItemId]: e.target.value }))
+                  }
+                />
+                <span className="text-sm text-muted-foreground">
+                  rollo(s)/bolsa(s) — cada uno se crea como 1 unidad completa, sin cantidad
+                </span>
+              </div>
+            </div>
+          );
+        }
+
         const filas = filasPorItem[item.compraItemId] ?? [];
         const total = totalDeFilas(filas);
         const coincide = total === item.cantidadComprada;

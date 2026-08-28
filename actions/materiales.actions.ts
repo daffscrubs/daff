@@ -48,6 +48,7 @@ export async function crearMaterial(input: MaterialInput): Promise<AccionResulta
     stock_minimo: datos.stockMinimo,
     costo_unitario: datos.costoUnitario ?? null,
     seguimiento_por_unidad: datos.seguimientoPorUnidad,
+    mide_cantidad_por_unidad: datos.medirCantidadPorUnidad,
   });
 
   if (error) return accionError(error.message);
@@ -60,7 +61,8 @@ export async function actualizarCostoMaterial(
   costoUnitario: number,
   stockMinimo: number,
   categoria: string,
-  seguimientoPorUnidad: boolean
+  seguimientoPorUnidad: boolean,
+  medirCantidadPorUnidad: boolean
 ): Promise<AccionResultado> {
   await requerirPerfil(["admin", "supervisor"]);
   const supabase = await createClient();
@@ -84,6 +86,7 @@ export async function actualizarCostoMaterial(
       stock_minimo: stockMinimo,
       categoria: categoria || null,
       seguimiento_por_unidad: seguimientoPorUnidad,
+      mide_cantidad_por_unidad: medirCantidadPorUnidad,
     })
     .eq("id", id);
   if (error) return accionError(error.message);

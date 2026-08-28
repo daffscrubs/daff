@@ -7,6 +7,11 @@ export const materialSchema = z.object({
   stockMinimo: z.coerce.number().min(0).default(0),
   costoUnitario: z.coerce.number().min(0).optional(),
   seguimientoPorUnidad: z.coerce.boolean().default(false),
+  // Solo aplica cuando seguimientoPorUnidad=true. false (default): cada
+  // unidad es 1 ítem completo, sin medir cantidad dentro de ella (ej. un
+  // rollo cuya unidad_medida ya ES "Rollo"). true: la unidad sí mide una
+  // cantidad continua dentro de cada rollo/bolsa (ej. metros de tela).
+  medirCantidadPorUnidad: z.coerce.boolean().default(false),
 });
 
 export const movimientoSchema = z
