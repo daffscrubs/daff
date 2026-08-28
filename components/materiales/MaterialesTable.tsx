@@ -27,7 +27,15 @@ import type { Database } from "@/types/database.types";
 
 type Material = Database["public"]["Tables"]["materiales"]["Row"];
 
-export function MaterialesTable({ materiales }: { materiales: Material[] }) {
+export function MaterialesTable({
+  materiales,
+  stockPorUnidades,
+}: {
+  materiales: Material[];
+  /** material_id -> suma de unidades disponibles, para los materiales con
+   * seguimiento_por_unidad (su stock_actual de bulto nunca se actualiza). */
+  stockPorUnidades: Record<string, number>;
+}) {
   const [busqueda, setBusqueda] = useState("");
   const [soloStockBajo, setSoloStockBajo] = useState(false);
   const [categoriaFiltro, setCategoriaFiltro] = useState("todas");
@@ -44,15 +52,23 @@ export function MaterialesTable({ materiales }: { materiales: Material[] }) {
     [categorias]
   );
 
+  // Un material por unidad nunca recibe movimientos_inventario -- su
+  // stock_actual de bulto queda congelado en 0. El stock real es la suma de
+  // sus unidades (calculada en el servidor y pasada como prop).
+  function stock(m: Material) {
+    return m.seguimiento_por_unidad ? stockPorUnidades[m.id] ?? 0 : m.stock_actual;
+  }
+
   const filtrados = useMemo(() => {
     const q = busqueda.trim().toLowerCase();
     return materiales.filter((m) => {
-      if (soloStockBajo && m.stock_actual > m.stock_minimo) return false;
+      if (soloStockBajo && stock(m) > m.stock_minimo) return false;
       if (categoriaFiltro !== "todas" && m.categoria !== categoriaFiltro) return false;
       if (!q) return true;
       return [m.nombre, m.categoria].filter(Boolean).some((v) => v!.toLowerCase().includes(q));
     });
-  }, [materiales, busqueda, soloStockBajo, categoriaFiltro]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- stock() ya lee stockPorUnidades, que sí está en las deps
+  }, [materiales, busqueda, soloStockBajo, categoriaFiltro, stockPorUnidades]);
 
   function abrirDetalle(id: string) {
     setAbierto(true);
@@ -112,10 +128,10 @@ export function MaterialesTable({ materiales }: { materiales: Material[] }) {
             <TableRow key={m.id} className="cursor-pointer" onClick={() => abrirDetalle(m.id)}>
               <TableCell className="font-medium">{m.nombre}</TableCell>
               <TableCell className="text-muted-foreground">{m.categoria ?? "—"}</TableCell>
-              <TableCell>{m.stock_actual} {m.unidad_medida}</TableCell>
+              <TableCell>{stock(m)} {m.unidad_medida}</TableCell>
               <TableCell className="text-muted-foreground">{m.stock_minimo} {m.unidad_medida}</TableCell>
               <TableCell>
-                {m.stock_actual <= m.stock_minimo && <Badge variant="destructive">Stock bajo</Badge>}
+                {stock(m) <= m.stock_minimo && <Badge variant="destructive">Stock bajo</Badge>}
               </TableCell>
             </TableRow>
           ))}

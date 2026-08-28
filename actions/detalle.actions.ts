@@ -56,7 +56,7 @@ export async function obtenerDetalleMaterial(id: string) {
   await requerirPerfil(["admin", "ventas", "supervisor"]);
   const supabase = await createClient();
 
-  const [{ data: material }, { data: movimientos }] = await Promise.all([
+  const [{ data: material }, { data: movimientos }, { data: unidades }] = await Promise.all([
     supabase.from("materiales").select("*").eq("id", id).single(),
     supabase
       .from("movimientos_inventario")
@@ -64,7 +64,16 @@ export async function obtenerDetalleMaterial(id: string) {
       .eq("material_id", id)
       .order("created_at", { ascending: false })
       .limit(20),
+    supabase.from("unidades_material").select("cantidad_actual, estatus").eq("material_id", id),
   ]);
 
-  return { material, movimientos: movimientos ?? [] };
+  // Un material por unidad nunca recibe movimientos_inventario -- su
+  // stock_actual queda congelado en 0. El stock real es la suma de sus
+  // unidades no dadas de baja (mismo criterio que obtenerDetalleModelo usa
+  // para existenciasTotal de productos terminados).
+  const stockPorUnidades = (unidades ?? [])
+    .filter((u) => u.estatus !== "de_baja")
+    .reduce((acc, u) => acc + u.cantidad_actual, 0);
+
+  return { material, movimientos: movimientos ?? [], stockPorUnidades };
 }

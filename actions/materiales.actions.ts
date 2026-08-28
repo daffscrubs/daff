@@ -99,6 +99,9 @@ export async function crearMovimiento(input: MovimientoInput): Promise<AccionRes
   const datos = movimientoSchema.parse(input);
   const supabase = await createClient();
 
+  const chequeo = await requerirMaterialPorBulto(supabase, datos.materialId);
+  if (!chequeo.ok) return chequeo;
+
   const { error } = await supabase.from("movimientos_inventario").insert({
     material_id: datos.materialId,
     tipo: datos.tipo,

@@ -1,10 +1,15 @@
 import { createClient } from "@/lib/supabase/server";
 import { NuevoMaterialDialog } from "@/components/materiales/NuevoMaterialDialog";
 import { MaterialesTable } from "@/components/materiales/MaterialesTable";
+import { stockPorUnidadesPorMaterial } from "@/lib/materiales/stock";
 
 export default async function MaterialesPage() {
   const supabase = await createClient();
-  const { data: materiales } = await supabase.from("materiales").select("*").order("nombre");
+  const [{ data: materiales }, { data: unidades }] = await Promise.all([
+    supabase.from("materiales").select("*").order("nombre"),
+    supabase.from("unidades_material").select("material_id, cantidad_actual, estatus"),
+  ]);
+  const stockPorUnidades = stockPorUnidadesPorMaterial(unidades ?? []);
 
   return (
     <div className="space-y-6">
@@ -16,7 +21,7 @@ export default async function MaterialesPage() {
         <NuevoMaterialDialog />
       </div>
 
-      <MaterialesTable materiales={materiales ?? []} />
+      <MaterialesTable materiales={materiales ?? []} stockPorUnidades={Object.fromEntries(stockPorUnidades)} />
     </div>
   );
 }

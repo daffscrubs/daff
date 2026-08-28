@@ -69,10 +69,15 @@ export function DetalleMaterialSheet({
     });
   }
 
+  // Un material por unidad nunca recibe movimientos_inventario -- su
+  // stock_actual de bulto queda congelado en 0. El stock real ya viene
+  // calculado desde obtenerDetalleMaterial (suma de sus unidades).
+  const stockActual = detalle?.material?.seguimiento_por_unidad
+    ? (detalle.stockPorUnidades ?? 0)
+    : (detalle?.material?.stock_actual ?? 0);
+
   const valorInventario =
-    detalle?.material?.costo_unitario != null
-      ? detalle.material.stock_actual * detalle.material.costo_unitario
-      : null;
+    detalle?.material?.costo_unitario != null ? stockActual * detalle.material.costo_unitario : null;
 
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
@@ -94,7 +99,7 @@ export function DetalleMaterialSheet({
                 <div className="rounded-lg border p-3">
                   <p className="text-xs text-muted-foreground">Stock actual</p>
                   <p className="text-2xl font-semibold">
-                    {detalle.material?.stock_actual} {detalle.material?.unidad_medida}
+                    {stockActual} {detalle.material?.unidad_medida}
                   </p>
                 </div>
                 <div className="rounded-lg border p-3">
@@ -182,35 +187,37 @@ export function DetalleMaterialSheet({
                     render={<Link href={`/materiales/${detalle.material.id}`} />}
                     nativeButton={false}
                   >
-                    Registrar movimiento
+                    {detalle.material.seguimiento_por_unidad ? "Ver unidades" : "Registrar movimiento"}
                   </Button>
                 )}
               </div>
 
-              <div>
-                <p className="mb-2 text-sm font-medium">Historial de movimientos</p>
-                <ul className="space-y-2">
-                  {detalle.movimientos.map((m) => (
-                    <li key={m.id} className="rounded-lg border p-2 text-sm">
-                      <div className="flex items-center justify-between">
-                        <span className="capitalize">{m.tipo}</span>
-                        <Badge variant={m.tipo === "salida" ? "destructive" : "secondary"}>
-                          {m.tipo === "salida" ? "-" : ""}
-                          {m.cantidad} {detalle.material?.unidad_medida}
-                        </Badge>
-                      </div>
-                      <p className="mt-1 text-xs text-muted-foreground">
-                        {new Date(m.created_at).toLocaleString("es-MX")}
-                        {m.lotes_produccion?.folio && ` · Orden ${m.lotes_produccion.folio}`}
-                        {m.motivo && ` · ${m.motivo}`}
-                      </p>
-                    </li>
-                  ))}
-                  {!detalle.movimientos.length && (
-                    <p className="text-sm text-muted-foreground">Sin movimientos todavía.</p>
-                  )}
-                </ul>
-              </div>
+              {!detalle.material?.seguimiento_por_unidad && (
+                <div>
+                  <p className="mb-2 text-sm font-medium">Historial de movimientos</p>
+                  <ul className="space-y-2">
+                    {detalle.movimientos.map((m) => (
+                      <li key={m.id} className="rounded-lg border p-2 text-sm">
+                        <div className="flex items-center justify-between">
+                          <span className="capitalize">{m.tipo}</span>
+                          <Badge variant={m.tipo === "salida" ? "destructive" : "secondary"}>
+                            {m.tipo === "salida" ? "-" : ""}
+                            {m.cantidad} {detalle.material?.unidad_medida}
+                          </Badge>
+                        </div>
+                        <p className="mt-1 text-xs text-muted-foreground">
+                          {new Date(m.created_at).toLocaleString("es-MX")}
+                          {m.lotes_produccion?.folio && ` · Orden ${m.lotes_produccion.folio}`}
+                          {m.motivo && ` · ${m.motivo}`}
+                        </p>
+                      </li>
+                    ))}
+                    {!detalle.movimientos.length && (
+                      <p className="text-sm text-muted-foreground">Sin movimientos todavía.</p>
+                    )}
+                  </ul>
+                </div>
+              )}
             </div>
           </>
         )}

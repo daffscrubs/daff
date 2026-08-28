@@ -17,6 +17,7 @@ import { PiezasPorColaboradorSemana } from "@/components/dashboard/PiezasPorCola
 import { totalesPorPedido } from "@/lib/pedidos/totales";
 import { construirRegistrosReporte } from "@/lib/produccion/registro-reporte";
 import { piezasPorColaboradorSemana } from "@/lib/dashboard/piezasPorColaborador";
+import { stockPorUnidadesPorMaterial, stockEfectivo } from "@/lib/materiales/stock";
 
 export default async function DashboardPage() {
   const supabase = await createClient();
@@ -49,6 +50,7 @@ export default async function DashboardPage() {
     { data: modelos },
     { data: tallas },
     { data: colaboradores },
+    { data: unidadesMaterial },
   ] = await Promise.all([
     supabase
       .from("pedidos")
@@ -58,7 +60,7 @@ export default async function DashboardPage() {
       .from("lotes_produccion")
       .select("id", { count: "exact", head: true })
       .in("estatus", ["planeada", "en_proceso"]),
-    supabase.from("materiales").select("id, nombre, unidad_medida, stock_actual, stock_minimo"),
+    supabase.from("materiales").select("id, nombre, unidad_medida, stock_actual, stock_minimo, seguimiento_por_unidad"),
     supabase.from("pedidos").select("id, fecha_pedido"),
     supabase.from("items_pedido").select("pedido_id, cantidad, precio_unitario"),
     supabase.from("compras").select("fecha, total"),
@@ -76,6 +78,7 @@ export default async function DashboardPage() {
     supabase.from("modelos").select("id, nombre"),
     supabase.from("tallas").select("id, codigo"),
     supabase.from("perfiles").select("id, nombre_completo").eq("rol", "colaborador").eq("activo", true).order("nombre_completo"),
+    supabase.from("unidades_material").select("material_id, cantidad_actual, estatus"),
   ]);
 
   const actividadColaboradores = construirRegistrosReporte({
@@ -90,7 +93,15 @@ export default async function DashboardPage() {
 
   const piezasSemana = piezasPorColaboradorSemana(actividadColaboradores);
 
-  const bajoStock = (materiales ?? []).filter((m) => m.stock_actual <= m.stock_minimo);
+  // Un material por unidad nunca recibe movimientos_inventario -- su
+  // stock_actual de bulto queda congelado en 0 desde que se activa el
+  // seguimiento por unidad. Comparar contra ese 0 marcaría "stock bajo" a
+  // cualquier material por unidad sin importar cuántos rollos/bolsas tenga
+  // en realidad, así que se compara contra la suma de sus unidades.
+  const stockPorUnidades = stockPorUnidadesPorMaterial(unidadesMaterial ?? []);
+  const bajoStock = (materiales ?? [])
+    .map((m) => ({ ...m, stockActual: stockEfectivo(m, stockPorUnidades) }))
+    .filter((m) => m.stockActual <= m.stock_minimo);
 
   const totalesPedidos = totalesPorPedido(itemsPedido ?? []);
   const pedidosParaMetricas = (pedidos ?? []).map((p) => ({
@@ -167,7 +178,7 @@ export default async function DashboardPage() {
                 </TableCell>
                 <TableCell>
                   <Badge variant="destructive">
-                    {m.stock_actual} / mínimo {m.stock_minimo} {m.unidad_medida}
+                    {m.stockActual} / mínimo {m.stock_minimo} {m.unidad_medida}
                   </Badge>
                 </TableCell>
               </TableRow>

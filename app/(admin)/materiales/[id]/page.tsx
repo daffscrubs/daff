@@ -11,6 +11,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import { stockPorUnidadesPorMaterial, stockEfectivo } from "@/lib/materiales/stock";
 
 export default async function MaterialDetallePage({
   params,
@@ -32,6 +33,12 @@ export default async function MaterialDetallePage({
 
   if (!material) notFound();
 
+  // Un material por unidad nunca recibe movimientos_inventario (esa es la
+  // vía de bulto) -- su stock_actual se queda congelado en 0 desde que se
+  // activa el seguimiento por unidad. El stock real es la suma de sus
+  // unidades no dadas de baja.
+  const stockActual = stockEfectivo(material, stockPorUnidadesPorMaterial(unidades ?? []));
+
   return (
     <div className="space-y-6">
       <div className="flex items-start justify-between">
@@ -41,15 +48,15 @@ export default async function MaterialDetallePage({
         </div>
         <div className="text-right">
           <p className="text-2xl font-semibold">
-            {material.stock_actual} {material.unidad_medida}
+            {stockActual} {material.unidad_medida}
           </p>
-          {material.stock_actual <= material.stock_minimo && (
+          {stockActual <= material.stock_minimo && (
             <Badge variant="destructive">Stock bajo (mínimo {material.stock_minimo})</Badge>
           )}
         </div>
       </div>
 
-      {material.seguimiento_por_unidad && (
+      {material.seguimiento_por_unidad ? (
         <UnidadesDeMaterial
           materialId={id}
           costoUnitarioMaterial={material.costo_unitario}
@@ -57,45 +64,47 @@ export default async function MaterialDetallePage({
           unidades={unidades ?? []}
           unidadMedida={material.unidad_medida}
         />
+      ) : (
+        <FormMovimiento materialId={id} />
       )}
 
-      <FormMovimiento materialId={id} />
-
-      <div>
-        <h2 className="mb-3 text-lg font-semibold">Historial de movimientos</h2>
-        <Table>
-          <TableHeader>
-            <TableRow>
-              <TableHead>Fecha</TableHead>
-              <TableHead>Tipo</TableHead>
-              <TableHead>Cantidad</TableHead>
-              <TableHead>Motivo</TableHead>
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {movimientos?.map((m) => (
-              <TableRow key={m.id}>
-                <TableCell className="text-muted-foreground">
-                  {new Date(m.created_at).toLocaleDateString("es-MX")}
-                </TableCell>
-                <TableCell className="capitalize">{m.tipo}</TableCell>
-                <TableCell className={m.tipo === "salida" ? "text-destructive" : ""}>
-                  {m.tipo === "salida" ? "-" : ""}
-                  {m.cantidad} {material.unidad_medida}
-                </TableCell>
-                <TableCell className="text-muted-foreground">{m.motivo ?? "—"}</TableCell>
-              </TableRow>
-            ))}
-            {!movimientos?.length && (
+      {!material.seguimiento_por_unidad && (
+        <div>
+          <h2 className="mb-3 text-lg font-semibold">Historial de movimientos</h2>
+          <Table>
+            <TableHeader>
               <TableRow>
-                <TableCell colSpan={4} className="text-center text-muted-foreground">
-                  Sin movimientos todavía.
-                </TableCell>
+                <TableHead>Fecha</TableHead>
+                <TableHead>Tipo</TableHead>
+                <TableHead>Cantidad</TableHead>
+                <TableHead>Motivo</TableHead>
               </TableRow>
-            )}
-          </TableBody>
-        </Table>
-      </div>
+            </TableHeader>
+            <TableBody>
+              {movimientos?.map((m) => (
+                <TableRow key={m.id}>
+                  <TableCell className="text-muted-foreground">
+                    {new Date(m.created_at).toLocaleDateString("es-MX")}
+                  </TableCell>
+                  <TableCell className="capitalize">{m.tipo}</TableCell>
+                  <TableCell className={m.tipo === "salida" ? "text-destructive" : ""}>
+                    {m.tipo === "salida" ? "-" : ""}
+                    {m.cantidad} {material.unidad_medida}
+                  </TableCell>
+                  <TableCell className="text-muted-foreground">{m.motivo ?? "—"}</TableCell>
+                </TableRow>
+              ))}
+              {!movimientos?.length && (
+                <TableRow>
+                  <TableCell colSpan={4} className="text-center text-muted-foreground">
+                    Sin movimientos todavía.
+                  </TableCell>
+                </TableRow>
+              )}
+            </TableBody>
+          </Table>
+        </div>
+      )}
     </div>
   );
 }
