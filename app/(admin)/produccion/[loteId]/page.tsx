@@ -156,14 +156,7 @@ export default async function LoteDetallePage({
         <div className="space-y-6">
           <div>
             <h2 className="mb-3 text-lg font-semibold">Insumos a utilizar</h2>
-            <InsumosOrden
-              loteId={loteId}
-              consumos={consumos ?? []}
-              materiales={materiales ?? []}
-              materialesConUnidadAsignada={[
-                ...new Set((consumosUnidad ?? []).map((c) => c.unidades_material?.material_id).filter((id): id is string => !!id)),
-              ]}
-            />
+            <InsumosOrden loteId={loteId} consumos={consumos ?? []} materiales={materiales ?? []} />
           </div>
           <div>
             <h3 className="mb-3 text-base font-semibold">Unidades específicas (rollo/bolsa con QR)</h3>

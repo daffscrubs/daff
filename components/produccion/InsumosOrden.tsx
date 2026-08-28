@@ -77,12 +77,12 @@ function FilaConsumo({
     );
   }
 
-  // El material se cambió a seguimiento por unidad DESPUÉS de que este
-  // consumo agregado ya existía: el trigger de la migración 0023 sigue
-  // sincronizando esta fila si además se asignan unidades específicas, pero
-  // registrar el consumo real por aquí (el camino viejo) ya lo rechaza
-  // materiales.actions.ts. La única acción válida es quitarlo y, si aplica,
-  // volver a capturarlo desde "Unidades específicas".
+  // Este material se controla por unidad: el estimado/plan agregado de aquí
+  // es independiente de qué rollos específicos se identifiquen en "Unidades
+  // específicas" (eso es solo trazabilidad de qué rollo se usó, no
+  // reemplaza este plan). registrarConsumoReal por el camino viejo lo sigue
+  // rechazando materiales.actions.ts, así que aquí solo se puede quitar la
+  // fila si ya no aplica.
   if (esHeredado) {
     return (
       <TableRow>
@@ -93,7 +93,7 @@ function FilaConsumo({
         <TableCell colSpan={2}>
           <div className="flex flex-wrap items-center justify-between gap-2">
             <p className="text-sm text-muted-foreground">
-              Este material ahora se controla por unidad — quítalo y regístralo desde &ldquo;Unidades
+              Este material también se identifica por rollo específico en &ldquo;Unidades
               específicas&rdquo;.
             </p>
             <Button variant="ghost" size="sm" disabled={pendiente || bloqueado} onClick={onQuitar}>
@@ -144,17 +144,10 @@ export function InsumosOrden({
   loteId,
   consumos,
   materiales,
-  materialesConUnidadAsignada,
 }: {
   loteId: string;
   consumos: Consumo[];
   materiales: Material[];
-  /** material_id de materiales por unidad que YA tienen al menos un rollo/
-   * bolsa asignado a esta orden (ver UnidadesOrden). En cuanto un material
-   * llega a esta lista, su fila aquí se oculta -- el trigger de la migración
-   * 0023 la mantiene sincronizada con las unidades reales, así que se maneja
-   * desde "Unidades específicas", no aquí. */
-  materialesConUnidadAsignada: string[];
 }) {
   const [materialId, setMaterialId] = useState("");
   const [cantidadEstimada, setCantidadEstimada] = useState("");
@@ -164,16 +157,12 @@ export function InsumosOrden({
   const nombreMaterial = (id: string) => materiales.find((m) => m.id === id)?.nombre ?? "—";
   const unidadMaterial = (id: string) => materiales.find((m) => m.id === id)?.unidad_medida ?? "";
   const esPorUnidad = (id: string) => materiales.find((m) => m.id === id)?.seguimiento_por_unidad ?? false;
-  const tieneUnidadAsignada = (id: string) => materialesConUnidadAsignada.includes(id);
   // Los materiales con seguimiento_por_unidad se asignan por rollo/bolsa
-  // específico (ver UnidadesOrden), no como cantidad agregada aquí. Un
-  // consumo agregado que ya existía para un material ANTES de cambiarlo a
-  // seguimiento por unidad ("heredado") se muestra aquí para poder quitarlo
-  // -- pero solo mientras nadie haya asignado todavía ninguna unidad a esta
-  // orden. En cuanto se asigna la primera, el trigger empieza a mantener este
-  // mismo renglón sincronizado con las unidades reales, y se oculta de aquí
-  // para no invitar a "quitarlo" (eso rompería la sincronización).
-  const consumosVisibles = consumos.filter((c) => !(esPorUnidad(c.material_id) && tieneUnidadAsignada(c.material_id)));
+  // específico en "Unidades específicas" -- pero eso es solo un identificador
+  // de qué rollo se ocupó, no reemplaza el estimado/plan que ya se llevaba
+  // aquí. Esta fila se sigue mostrando siempre, sin importar cuántas unidades
+  // se hayan asignado a la orden: son dos cosas independientes a propósito.
+  const consumosVisibles = consumos;
   const disponibles = materiales.filter(
     (m) => !m.seguimiento_por_unidad && !consumos.some((c) => c.material_id === m.id)
   );

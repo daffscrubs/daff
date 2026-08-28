@@ -60,11 +60,14 @@ function FilaUnidadConsumo({
 }) {
   const valorGuardado = String(consumo.cantidad_real ?? 0);
   const [real, setReal] = useState(valorGuardado);
+  const [mostrarSobrante, setMostrarSobrante] = useState(false);
+  const [sobrante, setSobrante] = useState("");
   const [pendiente, startTransition] = useTransition();
   const router = useRouter();
   const registrado = !!consumo.cantidad_real_registrada_en;
   const unidadMedida = consumo.unidades_material?.materiales?.unidad_medida ?? "";
   const mideCantidad = consumo.unidades_material?.materiales?.mide_cantidad_por_unidad ?? true;
+  const totalAsignado = consumo.cantidad_estimada ?? consumo.unidades_material?.cantidad_actual ?? 1;
 
   function guardar(cantidad: number) {
     startTransition(async () => {
@@ -79,6 +82,7 @@ function FilaUnidadConsumo({
   }
 
   if (registrado) {
+    const sobro = !mideCantidad ? Math.max(0, totalAsignado - (consumo.cantidad_real ?? 0)) : 0;
     return (
       <TableRow>
         <TableCell>{consumo.unidades_material?.materiales?.nombre ?? "—"}</TableCell>
@@ -97,29 +101,59 @@ function FilaUnidadConsumo({
             <TableCell colSpan={2} />
           ))}
         <TableCell className="text-right">
-          <Badge variant="secondary">{mideCantidad ? "Registrado" : "Usado"}</Badge>
+          <div className="flex flex-col items-end gap-0.5">
+            <Badge variant="secondary">{mideCantidad ? "Registrado" : "Usado"}</Badge>
+            {sobro > 0 && <span className="text-xs text-muted-foreground">Sobró {sobro}</span>}
+          </div>
         </TableCell>
       </TableRow>
     );
   }
 
-  // El material no mide cantidad dentro de cada unidad: no tiene caso pedir
-  // un número, la unidad completa se usa de un jalón — un solo botón que
-  // marca la unidad entera como consumida.
+  // El material no mide cantidad dentro de cada unidad: por default se
+  // asume que el rollo se usó completo (un solo clic), pero si sobró algo
+  // se puede registrar cuánto -- sigue siendo el mismo cantidad_real de
+  // siempre, solo que aquí se captura como "cuánto sobró" en vez de "cuánto
+  // se usó", que es como lo piensa quien corta la tela.
   if (!mideCantidad) {
     return (
       <TableRow>
         <TableCell>{consumo.unidades_material?.materiales?.nombre ?? "—"}</TableCell>
         <TableCell className="font-mono text-xs">{consumo.unidades_material?.codigo ?? "—"}</TableCell>
-        <TableCell className="text-right" colSpan={columnasCantidad ? 2 : 1}>
-          <Button
-            size="sm"
-            variant="outline"
-            disabled={pendiente || bloqueado}
-            onClick={() => guardar(consumo.cantidad_estimada ?? consumo.unidades_material?.cantidad_actual ?? 1)}
-          >
-            Marcar como usado
-          </Button>
+        <TableCell colSpan={columnasCantidad ? 2 : 1}>
+          {mostrarSobrante ? (
+            <div className="flex items-center gap-2">
+              <Input
+                type="number"
+                min={0}
+                step="0.01"
+                className="w-24"
+                placeholder="¿Cuánto sobró?"
+                value={sobrante}
+                onChange={(e) => setSobrante(e.target.value)}
+              />
+              <Button
+                size="sm"
+                variant="outline"
+                disabled={pendiente || bloqueado}
+                onClick={() => guardar(Math.max(0, totalAsignado - (Number(sobrante) || 0)))}
+              >
+                Guardar
+              </Button>
+              <Button size="sm" variant="ghost" disabled={pendiente || bloqueado} onClick={() => setMostrarSobrante(false)}>
+                Cancelar
+              </Button>
+            </div>
+          ) : (
+            <div className="flex items-center justify-end gap-2">
+              <Button size="sm" variant="outline" disabled={pendiente || bloqueado} onClick={() => guardar(totalAsignado)}>
+                Usar completo
+              </Button>
+              <Button size="sm" variant="ghost" disabled={pendiente || bloqueado} onClick={() => setMostrarSobrante(true)}>
+                ¿Quedó sobrante?
+              </Button>
+            </div>
+          )}
         </TableCell>
         <TableCell className="text-right">
           <Button variant="ghost" size="sm" disabled={pendiente || bloqueado} onClick={onQuitar}>

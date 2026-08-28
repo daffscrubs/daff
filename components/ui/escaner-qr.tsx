@@ -99,6 +99,13 @@ export function EscanerQRDialog({
             if (resultado) detectado(resultado.getText());
           });
           detenerRef.current = () => controles.stop();
+          // Safari (iPad/Mac) a veces deja el <video> "reproduciendo" según
+          // su propio estado interno pero sin pintar cuadro alguno (pantalla
+          // negra) si @zxing/browser adjuntó el stream antes de que el
+          // elemento estuviera listo. Un play() explícito de más no hace
+          // daño (si ya está reproduciendo, el navegador simplemente lo
+          // ignora) y en Safari suele destrabarlo.
+          videoRef.current?.play().catch(() => {});
         }
       } catch (err) {
         setError(
@@ -135,7 +142,19 @@ export function EscanerQRDialog({
         </DialogHeader>
         <div className="space-y-4">
           <div className="overflow-hidden rounded-lg bg-black">
-            <video ref={videoRef} className="aspect-square w-full object-cover" muted playsInline />
+            {/* El diálogo se centra con transform: translate(-50%,-50%) de forma
+                permanente (no solo durante la animación de apertura). Safari
+                tiene un bug conocido: un <video> dentro de un ancestro con
+                transform se puede quedar en negro aunque sí esté reproduciendo
+                -- translateZ(0) fuerza que el video tenga su propia capa de
+                composición y evita el problema. */}
+            <video
+              ref={videoRef}
+              className="aspect-square w-full object-cover"
+              style={{ transform: "translateZ(0)" }}
+              muted
+              playsInline
+            />
           </div>
           {error && <p className="text-sm text-destructive">{error}</p>}
           <form className="space-y-2" onSubmit={enviarManual}>
