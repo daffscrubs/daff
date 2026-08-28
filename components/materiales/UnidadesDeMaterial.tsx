@@ -46,22 +46,37 @@ const ESTATUS_VARIANTE: Record<EstatusUnidadMaterial, "default" | "secondary" | 
 // bodega sin una compra formal que los respalde en el sistema (compra_item_id
 // queda null). crearUnidadIndividual ya soportaba esto, solo faltaba el
 // diálogo que lo llamara.
-function AgregarUnidadExistenteDialog({ materialId }: { materialId: string }) {
+//
+// "Cantidad por unidad" vs "cuántas unidades": si Alejandro tiene 20 rollos
+// físicos de 25m cada uno, antes había que repetir el formulario 20 veces (y
+// si en vez de eso ponía "20" como cantidad, se creaba UN solo rollo de 20m
+// con un solo QR — justo la confusión que reportó). cantidadDeUnidades crea
+// N unidades idénticas de un jalón, cada una con su propio número y código.
+function AgregarUnidadExistenteDialog({
+  materialId,
+  costoUnitarioMaterial,
+}: {
+  materialId: string;
+  costoUnitarioMaterial: number | null;
+}) {
+  const costoPorDefecto = costoUnitarioMaterial != null ? String(costoUnitarioMaterial) : "";
   const [abierto, setAbierto] = useState(false);
   const [cantidadInicial, setCantidadInicial] = useState("");
-  const [costoUnitario, setCostoUnitario] = useState("");
+  const [cantidadDeUnidades, setCantidadDeUnidades] = useState("1");
+  const [costoUnitario, setCostoUnitario] = useState(costoPorDefecto);
   const [proveedor, setProveedor] = useState("");
   const [fechaRecepcion, setFechaRecepcion] = useState(() => fechaISOLocal(new Date()));
-  const [creada, setCreada] = useState<{ id: string; codigo: string } | null>(null);
+  const [creadas, setCreadas] = useState<string[] | null>(null);
   const [pendiente, startTransition] = useTransition();
   const router = useRouter();
 
   function reiniciar() {
     setCantidadInicial("");
-    setCostoUnitario("");
+    setCantidadDeUnidades("1");
+    setCostoUnitario(costoPorDefecto);
     setProveedor("");
     setFechaRecepcion(fechaISOLocal(new Date()));
-    setCreada(null);
+    setCreadas(null);
   }
 
   function crear(e: React.FormEvent) {
@@ -70,6 +85,7 @@ function AgregarUnidadExistenteDialog({ materialId }: { materialId: string }) {
       const res = await crearUnidadIndividual({
         materialId,
         cantidadInicial: Number(cantidadInicial),
+        cantidadDeUnidades: Number(cantidadDeUnidades) || 1,
         costoUnitario: costoUnitario ? Number(costoUnitario) : undefined,
         proveedor: proveedor || undefined,
         fechaRecepcion: fechaRecepcion || undefined,
@@ -78,8 +94,8 @@ function AgregarUnidadExistenteDialog({ materialId }: { materialId: string }) {
         toast.error(res.error);
         return;
       }
-      toast.success("Unidad creada");
-      setCreada(res.data);
+      toast.success(res.data.ids.length > 1 ? `${res.data.ids.length} unidades creadas` : "Unidad creada");
+      setCreadas(res.data.ids);
       router.refresh();
     });
   }
@@ -99,22 +115,29 @@ function AgregarUnidadExistenteDialog({ materialId }: { materialId: string }) {
         <DialogHeader>
           <DialogTitle>Agregar unidad existente</DialogTitle>
         </DialogHeader>
-        {creada ? (
+        {creadas ? (
           <div className="space-y-4">
             <p className="text-sm text-muted-foreground">
-              Unidad <span className="font-mono">{creada.codigo}</span> creada correctamente. Imprime su
-              etiqueta con QR para pegarla en el rollo/bolsa.
+              {creadas.length > 1
+                ? `${creadas.length} unidades creadas correctamente.`
+                : "Unidad creada correctamente."}{" "}
+              Imprime {creadas.length > 1 ? "sus etiquetas" : "su etiqueta"} con QR para pegar en cada
+              rollo/bolsa.
             </p>
             <div className="flex gap-2">
               <Button
                 className="flex-1"
                 render={
-                  <a href={`/api/pdf/unidades-material?ids=${creada.id}`} target="_blank" rel="noopener noreferrer" />
+                  <a
+                    href={`/api/pdf/unidades-material?ids=${creadas.join(",")}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                  />
                 }
                 nativeButton={false}
               >
                 <Download className="size-4" />
-                Descargar etiqueta
+                {creadas.length > 1 ? "Descargar etiquetas" : "Descargar etiqueta"}
               </Button>
               <Button variant="outline" onClick={() => alCambiarAbierto(false)}>
                 Listo
@@ -123,18 +146,37 @@ function AgregarUnidadExistenteDialog({ materialId }: { materialId: string }) {
           </div>
         ) : (
           <form className="space-y-4" onSubmit={crear}>
-            <div className="space-y-2">
-              <Label htmlFor="cantidadInicialUnidad">Cantidad inicial</Label>
-              <Input
-                id="cantidadInicialUnidad"
-                type="number"
-                min={0.01}
-                step="0.01"
-                value={cantidadInicial}
-                onChange={(e) => setCantidadInicial(e.target.value)}
-                required
-              />
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label htmlFor="cantidadInicialUnidad">Cantidad por unidad</Label>
+                <Input
+                  id="cantidadInicialUnidad"
+                  type="number"
+                  min={0.01}
+                  step="0.01"
+                  placeholder="Ej. 25 (lo que tiene CADA rollo)"
+                  value={cantidadInicial}
+                  onChange={(e) => setCantidadInicial(e.target.value)}
+                  required
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="cantidadDeUnidades">Cuántas unidades iguales</Label>
+                <Input
+                  id="cantidadDeUnidades"
+                  type="number"
+                  min={1}
+                  step="1"
+                  value={cantidadDeUnidades}
+                  onChange={(e) => setCantidadDeUnidades(e.target.value)}
+                  required
+                />
+              </div>
             </div>
+            <p className="text-xs text-muted-foreground">
+              Si tienes varios rollos/bolsas con exactamente la misma cantidad (ej. 20 rollos de 25m cada
+              uno), créalos todos aquí de una vez — cada uno sale con su propio código y QR.
+            </p>
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-2">
                 <Label htmlFor="costoUnitarioUnidad">Costo unitario (opcional)</Label>
@@ -162,7 +204,7 @@ function AgregarUnidadExistenteDialog({ materialId }: { materialId: string }) {
               <Input id="proveedorUnidad" value={proveedor} onChange={(e) => setProveedor(e.target.value)} />
             </div>
             <Button type="submit" className="w-full" disabled={pendiente}>
-              {pendiente ? "Guardando..." : "Crear unidad"}
+              {pendiente ? "Guardando..." : "Crear unidad(es)"}
             </Button>
           </form>
         )}
@@ -175,10 +217,12 @@ function AgregarUnidadExistenteDialog({ materialId }: { materialId: string }) {
 // (cada una con su propio código QR), con cuánto le queda y su estatus.
 export function UnidadesDeMaterial({
   materialId,
+  costoUnitarioMaterial,
   unidades,
   unidadMedida,
 }: {
   materialId: string;
+  costoUnitarioMaterial: number | null;
   unidades: UnidadMaterial[];
   unidadMedida: string;
 }) {
@@ -189,7 +233,7 @@ export function UnidadesDeMaterial({
       <div className="flex flex-wrap items-center justify-between gap-2">
         <h2 className="text-lg font-semibold">Unidades (rollos/bolsas)</h2>
         <div className="flex flex-wrap gap-2">
-          <AgregarUnidadExistenteDialog materialId={materialId} />
+          <AgregarUnidadExistenteDialog materialId={materialId} costoUnitarioMaterial={costoUnitarioMaterial} />
           {!!idsDisponibles.length && (
             <Button
               variant="outline"

@@ -10,9 +10,13 @@ export const crearUnidadesDesdeCompraSchema = z.object({
     .min(1, "Agrega al menos una cantidad"),
 });
 
+// cantidadDeUnidades permite dar de alta de un jalón varios rollos/bolsas
+// físicos que ya existen con exactamente la misma cantidad (ej. inventario
+// inicial: "20 rollos de 25m cada uno") sin repetir el formulario 20 veces.
 export const crearUnidadIndividualSchema = z.object({
   materialId: z.string().uuid(),
   cantidadInicial: z.coerce.number().positive("Debe ser mayor a 0"),
+  cantidadDeUnidades: z.coerce.number().int().positive("Debe ser al menos 1").default(1),
   costoUnitario: z.coerce.number().min(0).optional(),
   proveedor: z.string().optional(),
   fechaRecepcion: z.string().optional(),

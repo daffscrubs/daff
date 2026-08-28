@@ -111,7 +111,7 @@ export async function crearUnidadesDesdeCompra(
 
 export async function crearUnidadIndividual(
   input: CrearUnidadIndividualInput
-): Promise<AccionResultado<{ id: string; codigo: string }>> {
+): Promise<AccionResultado<{ ids: string[] }>> {
   const perfil = await requerirPerfil(["admin", "supervisor"]);
   const datos = crearUnidadIndividualSchema.parse(input);
   const supabase = await createClient();
@@ -126,34 +126,33 @@ export async function crearUnidadIndividual(
     return accionError("Este material no está configurado para seguimiento por unidad.");
   }
 
-  const numeroUnidad = await siguienteNumeroUnidad(supabase, datos.materialId);
-  const codigo = generarCodigoUnidad(datos.materialId, material.nombre, numeroUnidad);
-
-  const { data, error } = await supabase
-    .from("unidades_material")
-    .insert({
+  let siguiente = await siguienteNumeroUnidad(supabase, datos.materialId);
+  const filas = Array.from({ length: datos.cantidadDeUnidades }, () => {
+    const numeroUnidad = siguiente++;
+    return {
       material_id: datos.materialId,
       numero_unidad: numeroUnidad,
-      codigo,
+      codigo: generarCodigoUnidad(datos.materialId, material.nombre, numeroUnidad),
       cantidad_inicial: datos.cantidadInicial,
       cantidad_actual: datos.cantidadInicial,
       costo_unitario: datos.costoUnitario ?? null,
       proveedor: datos.proveedor || null,
       fecha_recepcion: datos.fechaRecepcion || undefined,
       registrado_por: perfil.id,
-    })
-    .select("id, codigo")
-    .single();
+    };
+  });
+
+  const { data, error } = await supabase.from("unidades_material").insert(filas).select("id");
   if (error) {
     if (esViolacionCodigoUnico(error.message)) {
-      return accionError("No se pudo generar un código único para esta unidad. Intenta de nuevo.");
+      return accionError("No se pudo generar un código único para estas unidades. Intenta de nuevo.");
     }
     return accionError(error.message);
   }
 
   revalidatePath("/materiales");
   revalidatePath(`/materiales/${datos.materialId}`);
-  return accionOk({ id: data.id as string, codigo: data.codigo as string });
+  return accionOk({ ids: (data ?? []).map((f) => f.id as string) });
 }
 
 export async function buscarUnidadPorCodigo(codigo: string): Promise<AccionResultado<UnidadConMaterial>> {
