@@ -39,15 +39,14 @@ export function EscanerQRDialog({
   onDetectado: (codigo: string) => void;
   titulo?: string;
 }) {
-  // El <video> real nunca se muestra: en Safari (iPad/Mac, confirmado por un
-  // usuario) se queda en negro en pantalla aunque sí esté decodificando
-  // cuadros (bug conocido de WebKit al componer <video> dentro de un
-  // ancestro con transform — el diálogo se centra con translate(-50%,-50%)
-  // de forma permanente). En vez de pelear con eso, el video queda oculto
-  // (visualmente, sin display:none para que Safari no lo pausee) y cada
-  // cuadro se copia a un <canvas> visible, que sí compone bien en cualquier
-  // navegador. La detección de QR sigue leyendo del <video> directamente
-  // (eso nunca falló, solo el pintado en pantalla).
+  // El <video> se mantiene con tamaño real en el layout (no lo escondemos a
+  // 1x1px): iOS parece suspender la decodificación de cuadros de un <video>
+  // que considera "no visible de verdad" -- el intento anterior de ocultarlo
+  // con sr-only (clip a 1x1px) puede haber disparado justo eso, dejando al
+  // <video> sin cuadros que copiar al canvas. En su lugar, el <canvas> se
+  // dibuja ENCIMA del video (mismo tamaño, position absolute) y es lo único
+  // que el usuario ve. La detección de QR sigue leyendo del <video>
+  // directamente.
   const videoRef = useRef<HTMLVideoElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const detenerRef = useRef<(() => void) | null>(null);
@@ -56,6 +55,7 @@ export function EscanerQRDialog({
   // vuelve a renderizar mientras el diálogo sigue abierto.
   const onDetectadoRef = useRef(onDetectado);
   const [error, setError] = useState<string | null>(null);
+  const [diagnostico, setDiagnostico] = useState<string | null>(null);
   const [codigoManual, setCodigoManual] = useState("");
 
   useEffect(() => {
@@ -68,6 +68,31 @@ export function EscanerQRDialog({
     let rafId: number | null = null;
     let espejoRafId: number | null = null;
     let stream: MediaStream | null = null;
+    let watchdogId: ReturnType<typeof setTimeout> | null = null;
+
+    // Si a los 2.5s el video sigue sin dimensiones o el track no está "live",
+    // algo se detuvo en silencio (sin lanzar una excepción que el catch de
+    // abajo pudiera atrapar) -- se muestra el estado real en pantalla para
+    // no seguir adivinando a ciegas.
+    function armarDiagnostico() {
+      watchdogId = setTimeout(() => {
+        if (cancelado) return;
+        const video = videoRef.current;
+        // En la rama de @zxing/browser no tenemos referencia directa al
+        // stream (la maneja la librería internamente) -- pero sí queda en
+        // srcObject del propio <video>, así que se lee de ahí para que el
+        // diagnóstico sirva en ambas ramas.
+        const streamActual = video?.srcObject instanceof MediaStream ? video.srcObject : stream;
+        const track = streamActual?.getVideoTracks()[0];
+        if (video && (!video.videoWidth || video.readyState < video.HAVE_CURRENT_DATA)) {
+          setDiagnostico(
+            `video: ${video.videoWidth}x${video.videoHeight}, readyState=${video.readyState}, paused=${video.paused}` +
+              (track ? ` · track: readyState=${track.readyState}, muted=${track.muted}, enabled=${track.enabled}` : " · sin track de video") +
+              ` · UA=${navigator.userAgent}`
+          );
+        }
+      }, 2500);
+    }
 
     function iniciarEspejo() {
       const video = videoRef.current;
@@ -91,6 +116,7 @@ export function EscanerQRDialog({
     function detenerTodo() {
       if (rafId != null) cancelAnimationFrame(rafId);
       if (espejoRafId != null) cancelAnimationFrame(espejoRafId);
+      if (watchdogId != null) clearTimeout(watchdogId);
       stream?.getTracks().forEach((t) => t.stop());
     }
 
@@ -101,6 +127,7 @@ export function EscanerQRDialog({
 
     async function iniciar() {
       setError(null);
+      setDiagnostico(null);
       try {
         if (typeof window !== "undefined" && window.BarcodeDetector) {
           stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: "environment" } });
@@ -108,6 +135,7 @@ export function EscanerQRDialog({
           videoRef.current.srcObject = stream;
           await videoRef.current.play();
           iniciarEspejo();
+          armarDiagnostico();
           const detector = new window.BarcodeDetector({ formats: ["qr_code"] });
 
           const detectarFrame = async () => {
@@ -137,6 +165,7 @@ export function EscanerQRDialog({
           // @zxing/browser ya deja el video reproduciendo; solo falta
           // empezar a copiar sus cuadros al canvas visible.
           iniciarEspejo();
+          armarDiagnostico();
         }
       } catch (err) {
         setError(
@@ -172,15 +201,16 @@ export function EscanerQRDialog({
           <DialogDescription>Apunta la cámara al código QR de la etiqueta.</DialogDescription>
         </DialogHeader>
         <div className="space-y-4">
-          <div className="overflow-hidden rounded-lg bg-black">
-            <canvas ref={canvasRef} className="aspect-square w-full object-cover" />
-            {/* sr-only en vez de display:none: un <video> completamente
-                oculto puede dejar de decodificar cuadros en algunos
-                navegadores. Nunca se muestra, solo alimenta el canvas y la
-                detección de QR. */}
-            <video ref={videoRef} className="sr-only" muted playsInline />
+          <div className="relative aspect-square w-full overflow-hidden rounded-lg bg-black">
+            <video ref={videoRef} className="absolute inset-0 h-full w-full object-cover" muted playsInline />
+            <canvas ref={canvasRef} className="absolute inset-0 h-full w-full object-cover" />
           </div>
           {error && <p className="text-sm text-destructive">{error}</p>}
+          {diagnostico && (
+            <p className="rounded-md bg-muted p-2 font-mono text-xs break-all text-muted-foreground">
+              {diagnostico}
+            </p>
+          )}
           <form className="space-y-2" onSubmit={enviarManual}>
             <Label htmlFor="codigoManual">¿No escanea? Escribe el código a mano</Label>
             <div className="flex gap-2">
