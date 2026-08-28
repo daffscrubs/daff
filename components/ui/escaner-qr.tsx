@@ -15,9 +15,7 @@ import {
 
 // Detector nativo del navegador cuando está disponible (Chrome/Edge en
 // Android, sobre todo) — más rápido y sin cargar el decodificador por
-// software. Safari/iOS y navegadores viejos no lo tienen, por eso el
-// fallback a @zxing/browser abajo, que decodifica cuadro por cuadro con
-// getUserMedia y funciona en cualquier navegador.
+// software. Safari no lo tiene, por eso el fallback a @zxing/browser abajo.
 interface DetectorNativo {
   detect: (fuente: CanvasImageSource) => Promise<{ rawValue: string }[]>;
 }
@@ -39,14 +37,12 @@ export function EscanerQRDialog({
   onDetectado: (codigo: string) => void;
   titulo?: string;
 }) {
-  // El <video> se mantiene con tamaño real en el layout (no lo escondemos a
-  // 1x1px): iOS parece suspender la decodificación de cuadros de un <video>
-  // que considera "no visible de verdad" -- el intento anterior de ocultarlo
-  // con sr-only (clip a 1x1px) puede haber disparado justo eso, dejando al
-  // <video> sin cuadros que copiar al canvas. En su lugar, el <canvas> se
-  // dibuja ENCIMA del video (mismo tamaño, position absolute) y es lo único
-  // que el usuario ve. La detección de QR sigue leyendo del <video>
-  // directamente.
+  // El <video> se mantiene con tamaño real en el layout (no se oculta a
+  // 1x1px) y el <canvas> se dibuja encima -- Safari tiene un historial de
+  // dejar el <video> en pantalla en negro por distintas razones (bug de
+  // composición con ancestros con transform, decodificación suspendida en
+  // elementos que considera "no visibles"), así que lo que el usuario ve
+  // siempre es el canvas, nunca el video directamente.
   const videoRef = useRef<HTMLVideoElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const detenerRef = useRef<(() => void) | null>(null);
@@ -70,20 +66,15 @@ export function EscanerQRDialog({
     let stream: MediaStream | null = null;
     let watchdogId: ReturnType<typeof setTimeout> | null = null;
 
-    // Si a los 2.5s el video sigue sin dimensiones o el track no está "live",
-    // algo se detuvo en silencio (sin lanzar una excepción que el catch de
-    // abajo pudiera atrapar) -- se muestra el estado real en pantalla para
-    // no seguir adivinando a ciegas.
+    // Si a los 2.5s el video sigue sin dimensiones, algo se detuvo en
+    // silencio (sin lanzar una excepción que el catch de abajo pudiera
+    // atrapar) -- se muestra el estado real en pantalla para no seguir
+    // adivinando a ciegas.
     function armarDiagnostico() {
       watchdogId = setTimeout(() => {
         if (cancelado) return;
         const video = videoRef.current;
-        // En la rama de @zxing/browser no tenemos referencia directa al
-        // stream (la maneja la librería internamente) -- pero sí queda en
-        // srcObject del propio <video>, así que se lee de ahí para que el
-        // diagnóstico sirva en ambas ramas.
-        const streamActual = video?.srcObject instanceof MediaStream ? video.srcObject : stream;
-        const track = streamActual?.getVideoTracks()[0];
+        const track = stream?.getVideoTracks()[0];
         if (video && (!video.videoWidth || video.readyState < video.HAVE_CURRENT_DATA)) {
           setDiagnostico(
             `video: ${video.videoWidth}x${video.videoHeight}, readyState=${video.readyState}, paused=${video.paused}` +
@@ -129,15 +120,22 @@ export function EscanerQRDialog({
       setError(null);
       setDiagnostico(null);
       try {
-        if (typeof window !== "undefined" && window.BarcodeDetector) {
-          stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: "environment" } });
-          if (cancelado || !videoRef.current) return;
-          videoRef.current.srcObject = stream;
-          await videoRef.current.play();
-          iniciarEspejo();
-          armarDiagnostico();
-          const detector = new window.BarcodeDetector({ formats: ["qr_code"] });
+        // getUserMedia + <video> lo maneja siempre este componente, nunca la
+        // librería de decodificación -- @zxing/browser's decodeFromVideoDevice
+        // (que hacía esto internamente) se confirmó fallando en silencio en
+        // Safari/iPadOS: la cámara nunca llegaba a adjuntarse al video (0x0,
+        // sin track), sin lanzar ningún error atrapable. Manejarlo aquí da
+        // control total y el mismo camino para todos los navegadores.
+        stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: "environment" } });
+        if (cancelado || !videoRef.current) return;
+        videoRef.current.srcObject = stream;
+        await videoRef.current.play();
+        iniciarEspejo();
+        armarDiagnostico();
+        detenerRef.current = detenerTodo;
 
+        if (typeof window !== "undefined" && window.BarcodeDetector) {
+          const detector = new window.BarcodeDetector({ formats: ["qr_code"] });
           const detectarFrame = async () => {
             if (cancelado || !videoRef.current) return;
             try {
@@ -152,20 +150,26 @@ export function EscanerQRDialog({
             rafId = requestAnimationFrame(detectarFrame);
           };
           rafId = requestAnimationFrame(detectarFrame);
-          detenerRef.current = detenerTodo;
         } else {
           const lector = new BrowserQRCodeReader();
-          const controles = await lector.decodeFromVideoDevice(undefined, videoRef.current ?? undefined, (resultado) => {
-            if (resultado) detectado(resultado.getText());
-          });
-          detenerRef.current = () => {
-            controles.stop();
-            detenerTodo();
+          const detectarFrame = () => {
+            if (cancelado || !videoRef.current) return;
+            try {
+              const resultado = lector.decode(videoRef.current);
+              if (resultado) {
+                detectado(resultado.getText());
+                return;
+              }
+            } catch {
+              // NotFoundException: no había ningún QR en este cuadro, es lo
+              // normal en la gran mayoría de los cuadros -- sigue
+              // intentando. Cualquier otro error también se ignora por
+              // cuadro (una falla puntual de decodificación no debe tumbar
+              // todo el escaneo).
+            }
+            rafId = requestAnimationFrame(detectarFrame);
           };
-          // @zxing/browser ya deja el video reproduciendo; solo falta
-          // empezar a copiar sus cuadros al canvas visible.
-          iniciarEspejo();
-          armarDiagnostico();
+          rafId = requestAnimationFrame(detectarFrame);
         }
       } catch (err) {
         setError(
