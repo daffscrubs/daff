@@ -1,4 +1,4 @@
-import type { EstatusEntrega, EstatusOrden, EstatusPedido } from "@/types/database.types";
+import type { EstatusEntrega, EstatusOrden, EstatusPedido, EstatusPrendaBordado } from "@/types/database.types";
 
 export const ESTATUS_PEDIDO_LABEL: Record<EstatusPedido, string> = {
   cotizacion: "Cotización",
@@ -21,4 +21,17 @@ export const ESTATUS_ENTREGA_LABEL: Record<EstatusEntrega, string> = {
   en_ruta: "En ruta",
   entregada: "Entregada",
   cancelada: "Cancelada",
+};
+
+export const ESTATUS_PRENDA_BORDADO_LABEL: Record<EstatusPrendaBordado, string> = {
+  recibida_en_tienda: "Recibida en tienda",
+  recogida_para_bordar: "Recogida para bordar",
+  bordada: "Bordada",
+  regresada_a_tienda: "Regresada a tienda",
+};
+
+export const TIPO_BORDADO_LABEL: Record<string, string> = {
+  logo: "Logo",
+  nombre: "Nombre",
+  texto_libre: "Texto libre",
 };
