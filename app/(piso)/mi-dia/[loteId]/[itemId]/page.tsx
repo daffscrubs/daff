@@ -8,24 +8,28 @@ import { visualEtapa } from "@/lib/produccion/etapa-visual";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 
-// Paso 2 de 2: los procesos/sub-procesos disponibles, pero acotados a UN
-// solo producto (el que se eligió en /mi-dia) en vez de la lista completa
-// de todas las órdenes mezcladas.
+// Paso 3 de 3: los procesos/sub-procesos disponibles de ESTE producto de
+// ESTA orden.
 export default async function MiDiaProcesosPage({
   params,
 }: {
-  params: Promise<{ itemId: string }>;
+  params: Promise<{ loteId: string; itemId: string }>;
 }) {
-  const { itemId } = await params;
+  const { loteId, itemId } = await params;
   const perfil = await requerirPerfil();
   const supabase = await createClient();
 
-  const { data: item } = await supabase.from("items_orden_produccion").select("*").eq("id", itemId).single();
+  const { data: item } = await supabase
+    .from("items_orden_produccion")
+    .select("*")
+    .eq("id", itemId)
+    .eq("lote_id", loteId)
+    .single();
   if (!item) notFound();
 
   const [{ data: lote }, { data: loteEtapas }, { data: etapasCatalogo }, { data: modelo }, { data: talla }, { data: funciones }] =
     await Promise.all([
-      supabase.from("lotes_produccion").select("folio").eq("id", item.lote_id).single(),
+      supabase.from("lotes_produccion").select("folio").eq("id", loteId).single(),
       supabase.from("lote_etapas").select("*").eq("item_orden_id", itemId),
       supabase.from("etapas_proceso").select("*"),
       supabase.from("modelos").select("nombre").eq("id", item.modelo_id).single(),
@@ -42,18 +46,16 @@ export default async function MiDiaProcesosPage({
 
   return (
     <div className="space-y-4">
-      <Link href="/mi-dia" className="inline-flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground">
+      <Link href={`/mi-dia/${loteId}`} className="inline-flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground">
         <ChevronLeft className="size-4" />
-        Mi día
+        {lote?.folio ?? "Volver"}
       </Link>
 
       <div>
         <h1 className="text-lg font-semibold">
           {modelo?.nombre} · Talla {talla?.codigo}
         </h1>
-        <p className="text-sm text-muted-foreground">
-          {lote?.folio} · Elige el proceso en el que vas a trabajar.
-        </p>
+        <p className="text-sm text-muted-foreground">Elige el proceso en el que vas a trabajar.</p>
       </div>
 
       <div className="space-y-3">

@@ -73,10 +73,10 @@ export function FormAvanceColaborador({
         return;
       }
       toast.success("Avance registrado");
-      // Regresa a los procesos de este mismo producto (no hasta el inicio de
-      // Mi día) -- es común capturar varios sub-procesos seguidos del mismo
-      // producto.
-      router.push(`/mi-dia/${itemOrdenId}`);
+      // Regresa a los procesos de este mismo producto/orden (no hasta el
+      // inicio de Mi día) -- es común capturar varios sub-procesos seguidos
+      // del mismo producto.
+      router.push(`/mi-dia/${loteId}/${itemOrdenId}`);
       router.refresh();
     });
   }
