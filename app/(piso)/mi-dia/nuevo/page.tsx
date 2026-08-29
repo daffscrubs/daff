@@ -50,6 +50,7 @@ export default async function NuevoAvancePage({
     <FormAvanceColaborador
       loteId={loteEtapa.lote_id}
       loteEtapaId={loteEtapaId}
+      itemOrdenId={loteEtapa.item_orden_id}
       nombreEtapa={nombreEtapa}
       folioLote={`${lote.folio} · ${item.modelos?.nombre ?? ""} · Talla ${item.tallas?.codigo ?? ""}`}
       disponible={actual.disponible}

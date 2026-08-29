@@ -15,12 +15,14 @@ import { Card, CardContent, CardHeader } from "@/components/ui/card";
 export function FormAvanceColaborador({
   loteId,
   loteEtapaId,
+  itemOrdenId,
   nombreEtapa,
   folioLote,
   disponible,
 }: {
   loteId: string;
   loteEtapaId: string;
+  itemOrdenId: string;
   nombreEtapa: string;
   folioLote: string;
   disponible: number;
@@ -71,7 +73,10 @@ export function FormAvanceColaborador({
         return;
       }
       toast.success("Avance registrado");
-      router.push("/mi-dia");
+      // Regresa a los procesos de este mismo producto (no hasta el inicio de
+      // Mi día) -- es común capturar varios sub-procesos seguidos del mismo
+      // producto.
+      router.push(`/mi-dia/${itemOrdenId}`);
       router.refresh();
     });
   }
