@@ -1,4 +1,4 @@
-import type { EstatusEntrega, EstatusOrden, EstatusPedido } from "@/types/database.types";
+import type { EstatusEntrega, EstatusOrden, EstatusPedido, EstatusPrendaBordado } from "@/types/database.types";
 
 const COLOR_CLASES = {
   gris: "bg-muted text-muted-foreground border-transparent",
@@ -30,4 +30,11 @@ export const CLASE_ESTATUS_ENTREGA: Record<EstatusEntrega, string> = {
   en_ruta: COLOR_CLASES.ambar,
   entregada: COLOR_CLASES.verde,
   cancelada: COLOR_CLASES.rojo,
+};
+
+export const CLASE_ESTATUS_PRENDA_BORDADO: Record<EstatusPrendaBordado, string> = {
+  recibida_en_tienda: COLOR_CLASES.gris,
+  recogida_para_bordar: COLOR_CLASES.azul,
+  bordada: COLOR_CLASES.ambar,
+  regresada_a_tienda: COLOR_CLASES.verde,
 };

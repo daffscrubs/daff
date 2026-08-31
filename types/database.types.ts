@@ -10,7 +10,7 @@ export type Database = {
   // Allows to automatically instantiate createClient with right options
   // instead of createClient<Database, { PostgrestVersion: 'XX' }>(URL, KEY)
   __InternalSupabase: {
-    PostgrestVersion: "14.17"
+    PostgrestVersion: "14.5"
   }
   graphql_public: {
     Tables: {
@@ -280,6 +280,41 @@ export type Database = {
             columns: ["unidad_id"]
             isOneToOne: false
             referencedRelation: "unidades_material"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      detalles_bordado: {
+        Row: {
+          created_at: string
+          descripcion: string
+          id: string
+          prenda_id: string
+          tipo: string
+          ubicacion: string
+        }
+        Insert: {
+          created_at?: string
+          descripcion: string
+          id?: string
+          prenda_id: string
+          tipo: string
+          ubicacion: string
+        }
+        Update: {
+          created_at?: string
+          descripcion?: string
+          id?: string
+          prenda_id?: string
+          tipo?: string
+          ubicacion?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "detalles_bordado_prenda_id_fkey"
+            columns: ["prenda_id"]
+            isOneToOne: false
+            referencedRelation: "prendas_bordado"
             referencedColumns: ["id"]
           },
         ]
@@ -1141,6 +1176,95 @@ export type Database = {
           },
         ]
       }
+      prendas_bordado: {
+        Row: {
+          bordada_por: string | null
+          cliente_nombre: string
+          cliente_telefono: string | null
+          created_at: string
+          descripcion: string
+          estatus: Database["public"]["Enums"]["estatus_prenda_bordado"]
+          fecha_bordada: string | null
+          fecha_entrega_compromiso: string
+          fecha_recibida: string
+          fecha_recogida: string | null
+          fecha_regresada: string | null
+          folio: string
+          id: string
+          recibida_por: string
+          recogida_por: string | null
+          regresada_por: string | null
+          updated_at: string
+        }
+        Insert: {
+          bordada_por?: string | null
+          cliente_nombre: string
+          cliente_telefono?: string | null
+          created_at?: string
+          descripcion: string
+          estatus?: Database["public"]["Enums"]["estatus_prenda_bordado"]
+          fecha_bordada?: string | null
+          fecha_entrega_compromiso: string
+          fecha_recibida?: string
+          fecha_recogida?: string | null
+          fecha_regresada?: string | null
+          folio: string
+          id?: string
+          recibida_por: string
+          recogida_por?: string | null
+          regresada_por?: string | null
+          updated_at?: string
+        }
+        Update: {
+          bordada_por?: string | null
+          cliente_nombre?: string
+          cliente_telefono?: string | null
+          created_at?: string
+          descripcion?: string
+          estatus?: Database["public"]["Enums"]["estatus_prenda_bordado"]
+          fecha_bordada?: string | null
+          fecha_entrega_compromiso?: string
+          fecha_recibida?: string
+          fecha_recogida?: string | null
+          fecha_regresada?: string | null
+          folio?: string
+          id?: string
+          recibida_por?: string
+          recogida_por?: string | null
+          regresada_por?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "prendas_bordado_bordada_por_fkey"
+            columns: ["bordada_por"]
+            isOneToOne: false
+            referencedRelation: "perfiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "prendas_bordado_recibida_por_fkey"
+            columns: ["recibida_por"]
+            isOneToOne: false
+            referencedRelation: "perfiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "prendas_bordado_recogida_por_fkey"
+            columns: ["recogida_por"]
+            isOneToOne: false
+            referencedRelation: "perfiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "prendas_bordado_regresada_por_fkey"
+            columns: ["regresada_por"]
+            isOneToOne: false
+            referencedRelation: "perfiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       registros_avance_colaborador: {
         Row: {
           cantidad: number
@@ -1356,6 +1480,11 @@ export type Database = {
         | "listo"
         | "entregado"
         | "cancelado"
+      estatus_prenda_bordado:
+        | "recibida_en_tienda"
+        | "recogida_para_bordar"
+        | "bordada"
+        | "regresada_a_tienda"
       estatus_unidad_material: "disponible" | "agotado" | "de_baja"
       origen_avance: "colaborador" | "ajuste_supervisor"
       rol_usuario: "admin" | "ventas" | "supervisor" | "colaborador"
@@ -1500,6 +1629,12 @@ export const Constants = {
         "entregado",
         "cancelado",
       ],
+      estatus_prenda_bordado: [
+        "recibida_en_tienda",
+        "recogida_para_bordar",
+        "bordada",
+        "regresada_a_tienda",
+      ],
       estatus_unidad_material: ["disponible", "agotado", "de_baja"],
       origen_avance: ["colaborador", "ajuste_supervisor"],
       rol_usuario: ["admin", "ventas", "supervisor", "colaborador"],
@@ -1516,3 +1651,4 @@ export type OrigenAvance = Database["public"]["Enums"]["origen_avance"]
 export type TipoMovimiento = Database["public"]["Enums"]["tipo_movimiento"]
 export type EstatusEntrega = Database["public"]["Enums"]["estatus_entrega"]
 export type EstatusUnidadMaterial = Database["public"]["Enums"]["estatus_unidad_material"]
+export type EstatusPrendaBordado = Database["public"]["Enums"]["estatus_prenda_bordado"]
