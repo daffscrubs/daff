@@ -4,7 +4,6 @@ import { useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import { Shirt } from "lucide-react";
-import { marcarRecogida, marcarBordada, marcarRegresada } from "@/actions/prendasBordado.actions";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
@@ -19,25 +18,15 @@ import { EstadoVacio } from "@/components/ui/estado-vacio";
 import { ESTATUS_PRENDA_BORDADO_LABEL } from "@/lib/labels";
 import { CLASE_ESTATUS_PRENDA_BORDADO } from "@/lib/estatus-colores";
 import { formatearFechaSolo } from "@/lib/fechas";
-import type { AccionResultado } from "@/lib/tipos/accion";
-import type { Database, EstatusPrendaBordado } from "@/types/database.types";
+import { SIGUIENTE_ACCION_PRENDA } from "@/lib/bordados/siguiente-accion";
+import type { Database } from "@/types/database.types";
 
 type PrendaBordado = Database["public"]["Tables"]["prendas_bordado"]["Row"];
-
-// La acción disponible por fila depende solo del estatus actual -- mismo
-// mapeo que ya usa EscanearPrendaDialog para no duplicar la regla en dos
-// sitios con criterios distintos.
-const SIGUIENTE_ACCION: Record<EstatusPrendaBordado, { etiqueta: string; accion: (id: string) => Promise<AccionResultado> } | null> = {
-  recibida_en_tienda: { etiqueta: "Marcar recogida", accion: marcarRecogida },
-  recogida_para_bordar: { etiqueta: "Marcar bordada", accion: marcarBordada },
-  bordada: { etiqueta: "Marcar regresada", accion: marcarRegresada },
-  regresada_a_tienda: null,
-};
 
 function FilaPrenda({ prenda }: { prenda: PrendaBordado }) {
   const [pendiente, startTransition] = useTransition();
   const router = useRouter();
-  const siguiente = SIGUIENTE_ACCION[prenda.estatus];
+  const siguiente = SIGUIENTE_ACCION_PRENDA[prenda.estatus];
 
   function ejecutar() {
     if (!siguiente) return;

@@ -6,9 +6,6 @@ import { toast } from "sonner";
 import { QrCode } from "lucide-react";
 import {
   obtenerPrendaPorFolio,
-  marcarRecogida,
-  marcarBordada,
-  marcarRegresada,
   type PrendaBordadoConDetalles,
 } from "@/actions/prendasBordado.actions";
 import { EscanerQRDialog } from "@/components/ui/escaner-qr";
@@ -17,20 +14,9 @@ import { Badge } from "@/components/ui/badge";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { ESTATUS_PRENDA_BORDADO_LABEL } from "@/lib/labels";
 import { CLASE_ESTATUS_PRENDA_BORDADO } from "@/lib/estatus-colores";
-import type { AccionResultado } from "@/lib/tipos/accion";
-import type { EstatusPrendaBordado } from "@/types/database.types";
+import { SIGUIENTE_ACCION_PRENDA } from "@/lib/bordados/siguiente-accion";
 
-// La siguiente acción disponible depende solo del estatus actual -- mismo
-// orden que valida transicionarEstatusPrenda en el servidor. null significa
-// "estatus final, no hay nada más que marcar".
-const SIGUIENTE_ACCION: Record<EstatusPrendaBordado, { etiqueta: string; accion: (id: string) => Promise<AccionResultado> } | null> = {
-  recibida_en_tienda: { etiqueta: "Marcar recogida para bordar", accion: marcarRecogida },
-  recogida_para_bordar: { etiqueta: "Marcar bordada", accion: marcarBordada },
-  bordada: { etiqueta: "Marcar regresada a tienda", accion: marcarRegresada },
-  regresada_a_tienda: null,
-};
-
-export function EscanearPrendaDialog() {
+export function EscanearPrendaDialog({ className }: { className?: string } = {}) {
   const [escanerAbierto, setEscanerAbierto] = useState(false);
   const [resultado, setResultado] = useState<PrendaBordadoConDetalles | null>(null);
   const [pendiente, startTransition] = useTransition();
@@ -50,7 +36,7 @@ export function EscanearPrendaDialog() {
 
   function ejecutarSiguienteAccion() {
     if (!resultado) return;
-    const siguiente = SIGUIENTE_ACCION[resultado.prenda.estatus];
+    const siguiente = SIGUIENTE_ACCION_PRENDA[resultado.prenda.estatus];
     if (!siguiente) return;
     startTransition(async () => {
       const res = await siguiente.accion(resultado.prenda.id);
@@ -64,11 +50,11 @@ export function EscanearPrendaDialog() {
     });
   }
 
-  const siguiente = resultado ? SIGUIENTE_ACCION[resultado.prenda.estatus] : null;
+  const siguiente = resultado ? SIGUIENTE_ACCION_PRENDA[resultado.prenda.estatus] : null;
 
   return (
     <>
-      <Button variant="outline" onClick={() => setEscanerAbierto(true)}>
+      <Button variant="outline" className={className} onClick={() => setEscanerAbierto(true)}>
         <QrCode className="size-4" />
         Escanear ticket
       </Button>

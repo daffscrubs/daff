@@ -30,7 +30,7 @@ create table prendas_bordado (
 );
 
 create index idx_prendas_bordado_estatus on prendas_bordado(estatus);
-create index idx_prendas_bordado_folio on prendas_bordado(folio);
+-- folio ya tiene su propio índice por la restricción unique; no se crea uno aparte.
 
 -- Uno o más bordados por prenda (ej. logo en el pecho + nombre en la manga).
 create table detalles_bordado (
@@ -46,10 +46,14 @@ create index idx_detalles_bordado_prenda on detalles_bordado(prenda_id);
 
 -- Primer uso de updated_at en el esquema (ninguna otra tabla lo tenía) --
 -- función genérica y reutilizable para futuras tablas que también lo
--- necesiten, no algo hecho a la medida solo de prendas_bordado.
+-- necesiten, no algo hecho a la medida solo de prendas_bordado. security
+-- definer + search_path fijo, igual que las demás funciones de trigger del
+-- esquema (fn_validar_y_acumular_avance, fn_descontar_unidad_material, etc.).
 create or replace function fn_actualizar_updated_at()
 returns trigger
 language plpgsql
+security definer
+set search_path = public
 as $$
 begin
   new.updated_at = now();
@@ -61,16 +65,41 @@ create trigger trg_actualizar_updated_at_prendas_bordado
   before update on prendas_bordado
   for each row execute function fn_actualizar_updated_at();
 
--- RLS: a diferencia del resto de tablas operativas (donde solo admin/
--- supervisor escriben), aquí cualquier autenticado con perfil lee y
--- escribe -- lo pidió así explícitamente quien encargó esta tabla, sin
--- distinción de rol.
+-- RLS: a diferencia de las tablas de producción/ventas (donde solo roles de
+-- gestión escriben), aquí los 4 roles -- incluido colaborador -- pueden leer
+-- y capturar, porque quien recoge/borda/regresa la prenda suele tener rol
+-- colaborador y necesita marcarlo desde /bordado en (piso). Se sigue el
+-- mismo patrón fn_rol_actual() del resto del esquema en vez de
+-- auth.role() = 'authenticated' (que daría acceso a cualquier sesión válida,
+-- tenga o no un perfil real). select/insert/update quedan abiertos a los 4
+-- roles; delete se separa y se restringe a admin/supervisor para que nadie
+-- pueda borrar el historial de una prenda por accidente.
 alter table prendas_bordado enable row level security;
-create policy "autenticados_gestionan_prendas_bordado" on prendas_bordado for all
-  using (auth.role() = 'authenticated')
-  with check (auth.role() = 'authenticated');
+
+create policy "colaboradores_leen_prendas_bordado" on prendas_bordado for select
+  using (fn_rol_actual() in ('admin','ventas','supervisor','colaborador'));
+
+create policy "colaboradores_insertan_prendas_bordado" on prendas_bordado for insert
+  with check (fn_rol_actual() in ('admin','ventas','supervisor','colaborador'));
+
+create policy "colaboradores_actualizan_prendas_bordado" on prendas_bordado for update
+  using (fn_rol_actual() in ('admin','ventas','supervisor','colaborador'))
+  with check (fn_rol_actual() in ('admin','ventas','supervisor','colaborador'));
+
+create policy "admin_supervisor_borran_prendas_bordado" on prendas_bordado for delete
+  using (fn_rol_actual() in ('admin','supervisor'));
 
 alter table detalles_bordado enable row level security;
-create policy "autenticados_gestionan_detalles_bordado" on detalles_bordado for all
-  using (auth.role() = 'authenticated')
-  with check (auth.role() = 'authenticated');
+
+create policy "colaboradores_leen_detalles_bordado" on detalles_bordado for select
+  using (fn_rol_actual() in ('admin','ventas','supervisor','colaborador'));
+
+create policy "colaboradores_insertan_detalles_bordado" on detalles_bordado for insert
+  with check (fn_rol_actual() in ('admin','ventas','supervisor','colaborador'));
+
+create policy "colaboradores_actualizan_detalles_bordado" on detalles_bordado for update
+  using (fn_rol_actual() in ('admin','ventas','supervisor','colaborador'))
+  with check (fn_rol_actual() in ('admin','ventas','supervisor','colaborador'));
+
+create policy "admin_supervisor_borran_detalles_bordado" on detalles_bordado for delete
+  using (fn_rol_actual() in ('admin','supervisor'));

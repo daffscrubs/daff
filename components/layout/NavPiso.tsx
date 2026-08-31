@@ -2,11 +2,12 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { ListChecks, History } from "lucide-react";
+import { ListChecks, History, Shirt } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 const ITEMS = [
   { href: "/mi-dia", label: "Mi día", icon: ListChecks },
+  { href: "/bordado", label: "Bordado", icon: Shirt },
   { href: "/mi-historial", label: "Mi historial", icon: History },
 ];
 
