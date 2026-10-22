@@ -4,7 +4,7 @@ import { useMemo, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { Search, Boxes, Shirt } from "lucide-react";
 import { toast } from "sonner";
-import { eliminarModelo, crearModelo } from "@/actions/catalogos.actions";
+import { crearModelo } from "@/actions/catalogos.actions";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -32,7 +32,6 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { BotonEliminarConfirmacion } from "@/components/forms/BotonEliminarConfirmacion";
 import { ImportarProductosDialog } from "@/components/inventario/ImportarProductosDialog";
 import { EstadoVacio } from "@/components/ui/estado-vacio";
 import { formatearMoneda } from "@/lib/dinero";
@@ -280,7 +279,6 @@ export function InventarioManager({
               <TableHead>Categoría</TableHead>
               <TableHead>Costo</TableHead>
               <TableHead>Precio de venta</TableHead>
-              <TableHead />
             </TableRow>
           </TableHeader>
           <TableBody>
@@ -326,19 +324,13 @@ export function InventarioManager({
                   <TableCell className="text-muted-foreground">
                     {modelo.costo_unitario != null ? formatearMoneda(modelo.costo_unitario) : "—"}
                   </TableCell>
-                  <TableCell className="text-muted-foreground">{precioVentaDe(modelo)}</TableCell>
-                  <TableCell className="pr-4 text-right" onClick={(e) => e.stopPropagation()}>
-                    <BotonEliminarConfirmacion
-                      entidad="producto"
-                      onEliminar={() => eliminarModelo(modelo.id)}
-                    />
-                  </TableCell>
+                  <TableCell className="pr-4 text-muted-foreground">{precioVentaDe(modelo)}</TableCell>
                 </TableRow>
               );
             })}
             {!filtrados.length && (
               <TableRow>
-                <TableCell colSpan={6}>
+                <TableCell colSpan={5}>
                   <EstadoVacio
                     icon={Boxes}
                     titulo={modelos.length ? "Sin resultados" : "Sin productos todavía"}
