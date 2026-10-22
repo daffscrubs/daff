@@ -10,7 +10,7 @@ export default async function EditarOrdenPage({
   const { loteId } = await params;
   const supabase = await createClient();
 
-  const [{ data: lote }, { data: items }, { data: loteEtapas }, { data: modelos }, { data: tallas }, { data: modeloTallas }, { data: stockProductos }] =
+  const [{ data: lote }, { data: items }, { data: loteEtapas }, { data: modelos }, { data: tallas }, { data: modeloTallas }, { data: stockProductos }, { data: ubicaciones }] =
     await Promise.all([
       supabase.from("lotes_produccion").select("*").eq("id", loteId).single(),
       supabase.from("items_orden_produccion").select("*").eq("lote_id", loteId),
@@ -19,6 +19,7 @@ export default async function EditarOrdenPage({
       supabase.from("tallas").select("*").order("orden"),
       supabase.from("modelo_tallas").select("*"),
       supabase.from("stock_productos").select("modelo_id, cantidad_actual"),
+      supabase.from("ubicaciones").select("*").eq("activa", true).order("orden").order("nombre"),
     ]);
 
   if (!lote) notFound();
@@ -41,6 +42,7 @@ export default async function EditarOrdenPage({
         loteId={loteId}
         folio={lote.folio}
         fechaFinEstimadaInicial={lote.fecha_fin_estimada ?? ""}
+        ubicacionDestinoInicial={lote.ubicacion_destino_id ?? ""}
         itemsIniciales={(items ?? []).map((item) => ({
           modeloId: item.modelo_id,
           tallaId: item.talla_id,
@@ -51,6 +53,7 @@ export default async function EditarOrdenPage({
         tallas={tallas ?? []}
         modeloTallas={modeloTallas ?? []}
         existencias={existencias}
+        ubicaciones={ubicaciones ?? []}
       />
     </div>
   );

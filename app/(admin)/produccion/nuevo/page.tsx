@@ -14,6 +14,7 @@ export default async function NuevoLotePage() {
     { data: modeloTallas },
     { data: materiales },
     { data: stockProductos },
+    { data: ubicaciones },
   ] = await Promise.all([
     sugerirFolioOrdenAction(),
     supabase.from("pedidos").select("*").order("created_at", { ascending: false }),
@@ -23,6 +24,7 @@ export default async function NuevoLotePage() {
     supabase.from("modelo_tallas").select("*"),
     supabase.from("materiales").select("*").order("nombre"),
     supabase.from("stock_productos").select("modelo_id, cantidad_actual"),
+    supabase.from("ubicaciones").select("*").eq("activa", true).order("orden").order("nombre"),
   ]);
 
   const folioSugerido = resultadoFolio.ok ? resultadoFolio.data : "";
@@ -51,6 +53,7 @@ export default async function NuevoLotePage() {
         modeloTallas={modeloTallas ?? []}
         materiales={materiales ?? []}
         existencias={existencias}
+        ubicaciones={ubicaciones ?? []}
       />
     </div>
   );

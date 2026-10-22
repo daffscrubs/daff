@@ -50,6 +50,7 @@ export async function crearOrdenProduccion(input: OrdenProduccionInput): Promise
       pedido_id: datos.pedidoId || null,
       fecha_inicio: fechaISOLocal(new Date()),
       fecha_fin_estimada: datos.fechaFinEstimada || null,
+      ubicacion_destino_id: datos.ubicacionDestinoId,
       creado_por: perfil.id,
     })
     .select("id")
@@ -108,7 +109,10 @@ export async function actualizarOrdenProduccion(loteId: string, input: EditarOrd
 
   const { error: errorFecha } = await supabase
     .from("lotes_produccion")
-    .update({ fecha_fin_estimada: datos.fechaFinEstimada || null })
+    .update({
+      fecha_fin_estimada: datos.fechaFinEstimada || null,
+      ubicacion_destino_id: datos.ubicacionDestinoId || null,
+    })
     .eq("id", loteId);
   if (errorFecha) return accionError(errorFecha.message);
 

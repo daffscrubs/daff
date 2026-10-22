@@ -5,11 +5,12 @@ import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import { obtenerDetalleModelo } from "@/actions/detalle.actions";
 import { actualizarCostoModelo, eliminarModelo, guardarTallasModelo } from "@/actions/catalogos.actions";
-import { crearMovimientoStockProducto } from "@/actions/stockProductos.actions";
+import { crearMovimientoStockProducto, traspasarStockProducto } from "@/actions/stockProductos.actions";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { ArrowRightLeft } from "lucide-react";
 import { formatearMoneda } from "@/lib/dinero";
 import {
   AlertDialog,
@@ -67,10 +68,28 @@ export function DetalleProducto({ detalle }: { detalle: DetalleModelo }) {
   const [tipoAjuste, setTipoAjuste] = useState<TipoMovimiento>("entrada");
   const [cantidadAjuste, setCantidadAjuste] = useState("");
   const [motivoAjuste, setMotivoAjuste] = useState("");
+  const [ubicacionAjusteId, setUbicacionAjusteId] = useState("");
   const [ajustando, startTransitionAjuste] = useTransition();
+
+  const [tallaTraspaso, setTallaTraspaso] = useState<{ id: string; codigo: string } | null>(null);
+  const [origenTraspasoId, setOrigenTraspasoId] = useState("");
+  const [destinoTraspasoId, setDestinoTraspasoId] = useState("");
+  const [cantidadTraspaso, setCantidadTraspaso] = useState("");
+  const [motivoTraspaso, setMotivoTraspaso] = useState("");
+  const [traspasando, startTransitionTraspaso] = useTransition();
 
   const modelo = detalle.modelo;
   if (!modelo) return null;
+
+  const ubicacionesActivas = detalle.ubicaciones.filter((u) => u.activa);
+  const nombreUbicacion = (id: string) => detalle.ubicaciones.find((u) => u.id === id)?.nombre ?? "—";
+  const stockDe = (tallaId: string, ubicacionId: string) =>
+    detalle.existencias.find((e) => e.talla_id === tallaId && e.ubicacion_id === ubicacionId)?.cantidad_actual ?? 0;
+  const totalUbicacion = (ubicacionId: string) =>
+    detalle.existencias.filter((e) => e.ubicacion_id === ubicacionId).reduce((acc, e) => acc + e.cantidad_actual, 0);
+  // Tallas que ya tienen algún registro de existencias (en cualquier ubicación),
+  // en el orden del catálogo de tallas.
+  const tallasConStock = detalle.tallas.filter((t) => detalle.existencias.some((e) => e.talla_id === t.id));
 
   function guardarCosto() {
     startTransition(async () => {
@@ -156,6 +175,7 @@ export function DetalleProducto({ detalle }: { detalle: DetalleModelo }) {
 
   function abrirAjuste(tallaId: string, codigo: string) {
     setTallaAjuste({ id: tallaId, codigo });
+    setUbicacionAjusteId(ubicacionesActivas[0]?.id ?? "");
     setTipoAjuste("entrada");
     setCantidadAjuste("");
     setMotivoAjuste("");
@@ -164,10 +184,15 @@ export function DetalleProducto({ detalle }: { detalle: DetalleModelo }) {
   function registrarAjuste(e: React.FormEvent) {
     e.preventDefault();
     if (!tallaAjuste) return;
+    if (!ubicacionAjusteId) {
+      toast.error("Selecciona una ubicación");
+      return;
+    }
     startTransitionAjuste(async () => {
       const res = await crearMovimientoStockProducto({
         modeloId: modelo!.id,
         tallaId: tallaAjuste.id,
+        ubicacionId: ubicacionAjusteId,
         tipo: tipoAjuste,
         cantidad: Number(cantidadAjuste),
         motivo: motivoAjuste,
@@ -178,6 +203,43 @@ export function DetalleProducto({ detalle }: { detalle: DetalleModelo }) {
       }
       toast.success("Movimiento registrado");
       setTallaAjuste(null);
+      router.refresh();
+    });
+  }
+
+  function abrirTraspaso(tallaId: string, codigo: string) {
+    // Origen sugerido: la ubicación con más piezas de esa talla; destino: otra.
+    const conMasStock = [...ubicacionesActivas].sort((a, b) => stockDe(tallaId, b.id) - stockDe(tallaId, a.id))[0];
+    const otra = ubicacionesActivas.find((u) => u.id !== conMasStock?.id);
+    setTallaTraspaso({ id: tallaId, codigo });
+    setOrigenTraspasoId(conMasStock?.id ?? "");
+    setDestinoTraspasoId(otra?.id ?? "");
+    setCantidadTraspaso("");
+    setMotivoTraspaso("");
+  }
+
+  function registrarTraspaso(e: React.FormEvent) {
+    e.preventDefault();
+    if (!tallaTraspaso) return;
+    if (!origenTraspasoId || !destinoTraspasoId) {
+      toast.error("Selecciona el origen y el destino");
+      return;
+    }
+    startTransitionTraspaso(async () => {
+      const res = await traspasarStockProducto({
+        modeloId: modelo!.id,
+        tallaId: tallaTraspaso.id,
+        origenId: origenTraspasoId,
+        destinoId: destinoTraspasoId,
+        cantidad: Number(cantidadTraspaso),
+        motivo: motivoTraspaso,
+      });
+      if (!res.ok) {
+        toast.error(res.error);
+        return;
+      }
+      toast.success("Traspaso registrado");
+      setTallaTraspaso(null);
       router.refresh();
     });
   }
@@ -231,6 +293,17 @@ export function DetalleProducto({ detalle }: { detalle: DetalleModelo }) {
           <p className="text-2xl font-semibold">{precioVentaMostrar()}</p>
         </div>
       </div>
+
+      {ubicacionesActivas.length > 1 && (
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+          {ubicacionesActivas.map((u) => (
+            <div key={u.id} className="rounded-lg border p-4">
+              <p className="text-xs text-muted-foreground">Existencias en {u.nombre}</p>
+              <p className="text-2xl font-semibold">{totalUbicacion(u.id)}</p>
+            </div>
+          ))}
+        </div>
+      )}
 
       <div className="space-y-4 rounded-lg border p-4">
         <h2 className="text-lg font-semibold">Costo, precio y categoría</h2>
@@ -369,25 +442,39 @@ export function DetalleProducto({ detalle }: { detalle: DetalleModelo }) {
           <TableHeader>
             <TableRow>
               <TableHead>Talla</TableHead>
-              <TableHead>Cantidad</TableHead>
+              {ubicacionesActivas.map((u) => (
+                <TableHead key={u.id}>{u.nombre}</TableHead>
+              ))}
+              <TableHead>Total</TableHead>
               <TableHead />
             </TableRow>
           </TableHeader>
           <TableBody>
-            {detalle.existencias.map((e) => (
-              <TableRow key={e.id}>
-                <TableCell>{nombreTalla(e.talla_id)}</TableCell>
-                <TableCell>{e.cantidad_actual}</TableCell>
-                <TableCell className="text-right">
-                  <Button variant="outline" size="sm" onClick={() => abrirAjuste(e.talla_id, nombreTalla(e.talla_id))}>
+            {tallasConStock.map((t) => (
+              <TableRow key={t.id}>
+                <TableCell className="font-medium">{t.codigo}</TableCell>
+                {ubicacionesActivas.map((u) => (
+                  <TableCell key={u.id}>{stockDe(t.id, u.id)}</TableCell>
+                ))}
+                <TableCell className="font-medium">
+                  {detalle.existencias.filter((e) => e.talla_id === t.id).reduce((acc, e) => acc + e.cantidad_actual, 0)}
+                </TableCell>
+                <TableCell className="space-x-2 text-right">
+                  {ubicacionesActivas.length > 1 && (
+                    <Button variant="outline" size="sm" onClick={() => abrirTraspaso(t.id, t.codigo)}>
+                      <ArrowRightLeft className="size-3.5" />
+                      Traspasar
+                    </Button>
+                  )}
+                  <Button variant="outline" size="sm" onClick={() => abrirAjuste(t.id, t.codigo)}>
                     Ajustar stock
                   </Button>
                 </TableCell>
               </TableRow>
             ))}
-            {!detalle.existencias.length && (
+            {!tallasConStock.length && (
               <TableRow>
-                <TableCell colSpan={3} className="text-center text-muted-foreground">
+                <TableCell colSpan={ubicacionesActivas.length + 3} className="text-center text-muted-foreground">
                   Sin existencias todavía.
                 </TableCell>
               </TableRow>
@@ -417,6 +504,23 @@ export function DetalleProducto({ detalle }: { detalle: DetalleModelo }) {
             <DialogTitle>Ajustar stock · Talla {tallaAjuste?.codigo}</DialogTitle>
           </DialogHeader>
           <form className="space-y-4" onSubmit={registrarAjuste}>
+            <div className="space-y-2">
+              <Label>Ubicación</Label>
+              <Select
+                items={ubicacionesActivas.map((u) => ({ value: u.id, label: u.nombre }))}
+                value={ubicacionAjusteId}
+                onValueChange={(v) => setUbicacionAjusteId(v ?? "")}
+              >
+                <SelectTrigger className="w-full">
+                  <SelectValue placeholder="Selecciona una ubicación" />
+                </SelectTrigger>
+                <SelectContent>
+                  {ubicacionesActivas.map((u) => (
+                    <SelectItem key={u.id} value={u.id}>{u.nombre}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
             <div className="space-y-2">
               <Label>Tipo</Label>
               <Select
@@ -461,6 +565,77 @@ export function DetalleProducto({ detalle }: { detalle: DetalleModelo }) {
         </DialogContent>
       </Dialog>
 
+      <Dialog open={!!tallaTraspaso} onOpenChange={(v) => !v && setTallaTraspaso(null)}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Traspasar existencias · Talla {tallaTraspaso?.codigo}</DialogTitle>
+          </DialogHeader>
+          <form className="space-y-4" onSubmit={registrarTraspaso}>
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-2">
+                <Label>Desde</Label>
+                <Select
+                  items={ubicacionesActivas.map((u) => ({ value: u.id, label: u.nombre }))}
+                  value={origenTraspasoId}
+                  onValueChange={(v) => setOrigenTraspasoId(v ?? "")}
+                >
+                  <SelectTrigger className="w-full">
+                    <SelectValue placeholder="Origen" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {ubicacionesActivas.map((u) => (
+                      <SelectItem key={u.id} value={u.id}>{u.nombre}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-2">
+                <Label>Hacia</Label>
+                <Select
+                  items={ubicacionesActivas.map((u) => ({ value: u.id, label: u.nombre }))}
+                  value={destinoTraspasoId}
+                  onValueChange={(v) => setDestinoTraspasoId(v ?? "")}
+                >
+                  <SelectTrigger className="w-full">
+                    <SelectValue placeholder="Destino" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {ubicacionesActivas.map((u) => (
+                      <SelectItem key={u.id} value={u.id}>{u.nombre}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="cantidadTraspaso">
+                Cantidad
+                {tallaTraspaso && origenTraspasoId && (
+                  <span className="font-normal text-muted-foreground">
+                    {" "}(disponibles en {nombreUbicacion(origenTraspasoId)}: {stockDe(tallaTraspaso.id, origenTraspasoId)})
+                  </span>
+                )}
+              </Label>
+              <Input
+                id="cantidadTraspaso"
+                type="number"
+                min={1}
+                value={cantidadTraspaso}
+                onChange={(e) => setCantidadTraspaso(e.target.value)}
+                required
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="motivoTraspaso">Motivo (opcional)</Label>
+              <Input id="motivoTraspaso" value={motivoTraspaso} onChange={(e) => setMotivoTraspaso(e.target.value)} />
+            </div>
+            <Button type="submit" className="w-full" disabled={traspasando}>
+              {traspasando ? "Traspasando..." : "Registrar traspaso"}
+            </Button>
+          </form>
+        </DialogContent>
+      </Dialog>
+
       <div>
         <h2 className="mb-3 text-lg font-semibold">Historial</h2>
         <ul className="space-y-2">
@@ -475,6 +650,7 @@ export function DetalleProducto({ detalle }: { detalle: DetalleModelo }) {
               </div>
               <p className="mt-1 text-xs text-muted-foreground">
                 {new Date(m.created_at).toLocaleString("es-MX")}
+                {` · ${nombreUbicacion(m.ubicacion_id)}`}
                 {m.lotes_produccion?.folio && ` · Orden ${m.lotes_produccion.folio}`}
                 {m.motivo && ` · ${m.motivo}`}
               </p>

@@ -43,7 +43,8 @@ import type { Database } from "@/types/database.types";
 type Modelo = Database["public"]["Tables"]["modelos"]["Row"];
 type Talla = Database["public"]["Tables"]["tallas"]["Row"];
 type ModeloTalla = Pick<Database["public"]["Tables"]["modelo_tallas"]["Row"], "modelo_id" | "precio_venta">;
-type StockProducto = Pick<Database["public"]["Tables"]["stock_productos"]["Row"], "modelo_id" | "cantidad_actual">;
+type StockProducto = Pick<Database["public"]["Tables"]["stock_productos"]["Row"], "modelo_id" | "ubicacion_id" | "cantidad_actual">;
+type Ubicacion = Database["public"]["Tables"]["ubicaciones"]["Row"];
 
 const OPCIONES_ORDEN = [
   { value: "nombre", label: "Nombre (A-Z)" },
@@ -56,11 +57,13 @@ export function InventarioManager({
   tallas,
   modeloTallas,
   stock,
+  ubicaciones,
 }: {
   modelos: Modelo[];
   tallas: Talla[];
   modeloTallas: ModeloTalla[];
   stock: StockProducto[];
+  ubicaciones: Ubicacion[];
 }) {
   function precioVentaDe(modelo: Modelo): string {
     const precios = modeloTallas
@@ -72,8 +75,12 @@ export function InventarioManager({
     const max = Math.max(...precios);
     return min === max ? formatearMoneda(min) : `${formatearMoneda(min)} - ${formatearMoneda(max)}`;
   }
-  function existenciasDe(modelo: Modelo): number {
-    return stock.filter((s) => s.modelo_id === modelo.id).reduce((acc, s) => acc + s.cantidad_actual, 0);
+  // Con una ubicación elegida en el filtro, solo cuenta lo que hay ahí; con
+  // "Todas", la suma de todas las ubicaciones.
+  function existenciasDe(modelo: Modelo, ubicacionId = ubicacionFiltro): number {
+    return stock
+      .filter((s) => s.modelo_id === modelo.id && (ubicacionId === "todas" || s.ubicacion_id === ubicacionId))
+      .reduce((acc, s) => acc + s.cantidad_actual, 0);
   }
   // Tallas del producto: las asignadas en el catálogo o, si no tiene, las que
   // ya tienen un registro de existencias.
@@ -91,6 +98,7 @@ export function InventarioManager({
   const [busqueda, setBusqueda] = useState("");
   const [categoriaFiltro, setCategoriaFiltro] = useState("todas");
   const [orden, setOrden] = useState("nombre");
+  const [ubicacionFiltro, setUbicacionFiltro] = useState("todas");
   const [pendiente, startTransition] = useTransition();
   const router = useRouter();
 
@@ -103,10 +111,18 @@ export function InventarioManager({
     [categorias]
   );
 
+  const opcionesUbicacion = useMemo(
+    () => [{ value: "todas", label: "Todas las ubicaciones" }, ...ubicaciones.map((u) => ({ value: u.id, label: u.nombre }))],
+    [ubicaciones]
+  );
+
   const filtrados = useMemo(() => {
     const q = normalizarTexto(busqueda.trim());
     const existencias = new Map<string, number>();
-    for (const s of stock) existencias.set(s.modelo_id, (existencias.get(s.modelo_id) ?? 0) + s.cantidad_actual);
+    for (const s of stock) {
+      if (ubicacionFiltro !== "todas" && s.ubicacion_id !== ubicacionFiltro) continue;
+      existencias.set(s.modelo_id, (existencias.get(s.modelo_id) ?? 0) + s.cantidad_actual);
+    }
 
     const lista = modelos.filter((m) => {
       if (categoriaFiltro !== "todas" && m.categoria !== categoriaFiltro) return false;
@@ -116,7 +132,7 @@ export function InventarioManager({
     if (orden === "stock_desc") lista.sort((a, b) => (existencias.get(b.id) ?? 0) - (existencias.get(a.id) ?? 0));
     if (orden === "stock_asc") lista.sort((a, b) => (existencias.get(a.id) ?? 0) - (existencias.get(b.id) ?? 0));
     return lista;
-  }, [modelos, stock, busqueda, categoriaFiltro, orden]);
+  }, [modelos, stock, busqueda, categoriaFiltro, orden, ubicacionFiltro]);
 
   function alternarTalla(id: string) {
     setTallaIds((prev) => (prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]));
@@ -261,6 +277,22 @@ export function InventarioManager({
               ))}
             </SelectContent>
           </Select>
+          {ubicaciones.length > 1 && (
+            <Select
+              items={opcionesUbicacion}
+              value={ubicacionFiltro}
+              onValueChange={(v) => setUbicacionFiltro((v as string) ?? "todas")}
+            >
+              <SelectTrigger className="h-10 w-52">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {opcionesUbicacion.map((o) => (
+                  <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          )}
           <Select items={OPCIONES_ORDEN} value={orden} onValueChange={(v) => setOrden((v as string) ?? "nombre")}>
             <SelectTrigger className="h-10 w-48">
               <SelectValue />
@@ -321,6 +353,11 @@ export function InventarioManager({
                             tallas ? ` en ${tallas} ${tallas === 1 ? "talla" : "tallas"}` : ""
                           }`}
                     </Badge>
+                    {ubicacionFiltro === "todas" && ubicaciones.length > 1 && existencias !== 0 && (
+                      <p className="mt-1 text-xs text-muted-foreground">
+                        {ubicaciones.map((u) => `${u.nombre} ${existenciasDe(modelo, u.id)}`).join(" · ")}
+                      </p>
+                    )}
                   </TableCell>
                   <TableCell className="text-muted-foreground">{modelo.categoria ?? "—"}</TableCell>
                   <TableCell className="text-muted-foreground">

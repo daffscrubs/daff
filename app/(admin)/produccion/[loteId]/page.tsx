@@ -50,7 +50,7 @@ export default async function LoteDetallePage({
     { data: materiales },
     { data: consumosUnidad },
   ] = await Promise.all([
-    supabase.from("lotes_produccion").select("*").eq("id", loteId).single(),
+    supabase.from("lotes_produccion").select("*, ubicaciones(nombre)").eq("id", loteId).single(),
     supabase.from("items_orden_produccion").select("*").eq("lote_id", loteId),
     supabase.from("lote_etapas").select("*").eq("lote_id", loteId),
     supabase.from("etapas_proceso").select("*"),
@@ -116,6 +116,7 @@ export default async function LoteDetallePage({
           <p className="text-muted-foreground">
             {itemsOrden.length} producto(s) ·{" "}
             {itemsOrden.reduce((acc, i) => acc + i.cantidad_planeada, 0)} piezas en total
+            {lote.ubicaciones?.nombre && ` · Entran a ${lote.ubicaciones.nombre}`}
           </p>
         </div>
         <div className="flex items-center gap-2">
