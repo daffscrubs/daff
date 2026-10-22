@@ -1,4 +1,5 @@
 import { createClient } from "@/lib/supabase/server";
+import { leerTodo } from "@/lib/supabase/leer-todo";
 import { sugerirFolioOrdenAction } from "@/actions/produccion.actions";
 import { FormLote } from "@/components/produccion/FormLote";
 
@@ -21,9 +22,9 @@ export default async function NuevoLotePage() {
     supabase.from("items_pedido").select("*"),
     supabase.from("modelos").select("*").eq("activo", true).order("nombre"),
     supabase.from("tallas").select("*").order("orden"),
-    supabase.from("modelo_tallas").select("*"),
+    leerTodo((d, h) => supabase.from("modelo_tallas").select("*").order("id").range(d, h)),
     supabase.from("materiales").select("*").order("nombre"),
-    supabase.from("stock_productos").select("modelo_id, cantidad_actual"),
+    leerTodo((d, h) => supabase.from("stock_productos").select("modelo_id, cantidad_actual").order("id").range(d, h)),
     supabase.from("ubicaciones").select("*").eq("activa", true).order("orden").order("nombre"),
   ]);
 

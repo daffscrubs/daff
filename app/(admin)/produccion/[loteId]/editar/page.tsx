@@ -1,5 +1,6 @@
 import { notFound } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
+import { leerTodo } from "@/lib/supabase/leer-todo";
 import { EditarOrdenForm } from "@/components/produccion/EditarOrdenForm";
 
 export default async function EditarOrdenPage({
@@ -17,8 +18,8 @@ export default async function EditarOrdenPage({
       supabase.from("lote_etapas").select("id").eq("lote_id", loteId),
       supabase.from("modelos").select("*").order("nombre"),
       supabase.from("tallas").select("*").order("orden"),
-      supabase.from("modelo_tallas").select("*"),
-      supabase.from("stock_productos").select("modelo_id, cantidad_actual"),
+      leerTodo((d, h) => supabase.from("modelo_tallas").select("*").order("id").range(d, h)),
+      leerTodo((d, h) => supabase.from("stock_productos").select("modelo_id, cantidad_actual").order("id").range(d, h)),
       supabase.from("ubicaciones").select("*").eq("activa", true).order("orden").order("nombre"),
     ]);
 
