@@ -5,6 +5,7 @@ import { Search, Shirt } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { formatearMoneda } from "@/lib/dinero";
+import { normalizarTexto } from "@/lib/texto";
 import { cn } from "@/lib/utils";
 
 export interface ProductoBuscable {
@@ -16,9 +17,6 @@ export interface ProductoBuscable {
   existencias: number;
 }
 
-// Sin acentos y en minúsculas, para que "filipina" encuentre "Filipína".
-const normalizar = (texto: string) =>
-  texto.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
 
 export function BuscadorProductos({
   productos,
@@ -41,9 +39,9 @@ export function BuscadorProductos({
   }, []);
 
   const resultados = useMemo(() => {
-    const q = normalizar(texto.trim());
+    const q = normalizarTexto(texto.trim());
     if (!q) return productos;
-    return productos.filter((p) => normalizar(`${p.nombre} ${p.categoria ?? ""}`).includes(q));
+    return productos.filter((p) => normalizarTexto(`${p.nombre} ${p.categoria ?? ""}`).includes(q));
   }, [productos, texto]);
 
   function elegir(productoId: string) {
