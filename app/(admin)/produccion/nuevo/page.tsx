@@ -13,6 +13,7 @@ export default async function NuevoLotePage() {
     { data: tallas },
     { data: modeloTallas },
     { data: materiales },
+    { data: stockProductos },
   ] = await Promise.all([
     sugerirFolioOrdenAction(),
     supabase.from("pedidos").select("*").order("created_at", { ascending: false }),
@@ -21,9 +22,17 @@ export default async function NuevoLotePage() {
     supabase.from("tallas").select("*").order("orden"),
     supabase.from("modelo_tallas").select("*"),
     supabase.from("materiales").select("*").order("nombre"),
+    supabase.from("stock_productos").select("modelo_id, cantidad_actual"),
   ]);
 
   const folioSugerido = resultadoFolio.ok ? resultadoFolio.data : "";
+
+  // Piezas en inventario por modelo (todas sus tallas juntas), para mostrarlas
+  // junto a cada producto en el buscador.
+  const existencias: Record<string, number> = {};
+  for (const s of stockProductos ?? []) {
+    existencias[s.modelo_id] = (existencias[s.modelo_id] ?? 0) + s.cantidad_actual;
+  }
 
   return (
     <div className="space-y-6">
@@ -41,6 +50,7 @@ export default async function NuevoLotePage() {
         tallas={tallas ?? []}
         modeloTallas={modeloTallas ?? []}
         materiales={materiales ?? []}
+        existencias={existencias}
       />
     </div>
   );

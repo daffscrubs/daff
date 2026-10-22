@@ -15,6 +15,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { ComboboxField } from "@/components/ui/combobox-field";
+import { BuscadorProductos } from "@/components/produccion/BuscadorProductos";
 import {
   Table,
   TableBody,
@@ -41,6 +42,7 @@ export function FormLote({
   tallas,
   modeloTallas,
   materiales,
+  existencias,
 }: {
   folioSugerido: string;
   pedidos: Pedido[];
@@ -49,6 +51,8 @@ export function FormLote({
   tallas: Talla[];
   modeloTallas: ModeloTalla[];
   materiales: Material[];
+  /** Piezas en inventario por modelo (suma de todas sus tallas). */
+  existencias: Record<string, number>;
 }) {
   const [folio, setFolio] = useState(folioSugerido);
   const [pedidoId, setPedidoId] = useState("");
@@ -60,14 +64,27 @@ export function FormLote({
 
   const itemsDelPedido = itemsPedido.filter((i) => i.pedido_id === pedidoId);
 
+  const productosBuscables = modelos.map((m) => ({
+    id: m.id,
+    nombre: m.nombre,
+    categoria: m.categoria,
+    precioVenta: m.precio_venta,
+    imagenUrl: m.imagen_url,
+    existencias: existencias[m.id] ?? 0,
+  }));
+  const nombreModelo = (id: string) => modelos.find((m) => m.id === id)?.nombre ?? "—";
+
   function tallasDeModelo(modeloId: string) {
     const asignadas = modeloTallas.filter((mt) => mt.modelo_id === modeloId).map((mt) => mt.talla_id);
     if (!asignadas.length) return tallas;
     return tallas.filter((t) => asignadas.includes(t.id));
   }
 
-  function agregarItem() {
-    setItems((prev) => [...prev, { modeloId: "", tallaId: "", cantidadPlaneada: 1 }]);
+  // Elegir un producto en el buscador agrega una línea con ese modelo ya
+  // puesto; solo falta la talla y la cantidad. Se puede elegir el mismo
+  // modelo varias veces para pedir varias tallas.
+  function agregarProducto(modeloId: string) {
+    setItems((prev) => [...prev, { modeloId, tallaId: "", cantidadPlaneada: 1 }]);
   }
 
   function actualizarItem(index: number, cambios: Partial<ItemOrdenInput>) {
@@ -172,11 +189,10 @@ export function FormLote({
                 Cargar productos del pedido
               </Button>
             )}
-            <Button type="button" variant="outline" size="sm" onClick={agregarItem}>
-              Agregar producto
-            </Button>
           </div>
         </div>
+
+        <BuscadorProductos productos={productosBuscables} onSeleccionar={agregarProducto} />
 
         <Table>
           <TableHeader>
@@ -190,15 +206,7 @@ export function FormLote({
           <TableBody>
             {items.map((item, index) => (
               <TableRow key={index}>
-                <TableCell>
-                  <ComboboxField
-                    className="w-40"
-                    items={modelos.map((m) => ({ value: m.id, label: m.nombre }))}
-                    value={item.modeloId}
-                    onValueChange={(v) => actualizarItem(index, { modeloId: v, tallaId: "" })}
-                    placeholder="Buscar modelo..."
-                  />
-                </TableCell>
+                <TableCell className="font-medium">{nombreModelo(item.modeloId)}</TableCell>
                 <TableCell>
                   <Select
                     items={tallasDeModelo(item.modeloId).map((t) => ({ value: t.id, label: t.codigo }))}
@@ -235,7 +243,7 @@ export function FormLote({
             {!items.length && (
               <TableRow>
                 <TableCell colSpan={4} className="text-center text-muted-foreground">
-                  Agrega al menos un producto (ej. 10 filipinas chicas y 10 medianas).
+                  Busca arriba un producto y haz clic para agregarlo (ej. 10 filipinas chicas y 10 medianas).
                 </TableCell>
               </TableRow>
             )}
