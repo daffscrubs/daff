@@ -109,7 +109,9 @@ export function ProduccionTable({
                     {lote.folio}
                   </Link>
                 </TableCell>
-                <TableCell className="text-muted-foreground">{descripcionProductos(lote.id) || "—"}</TableCell>
+                <TableCell className="min-w-64 whitespace-normal text-muted-foreground">
+                  {descripcionProductos(lote.id) || "—"}
+                </TableCell>
                 <TableCell>{itemsLote.reduce((acc, i) => acc + i.cantidad_planeada, 0)}</TableCell>
                 <TableCell>
                   <Badge className={CLASE_ESTATUS_ORDEN[lote.estatus]}>{ESTATUS_ORDEN_LABEL[lote.estatus]}</Badge>

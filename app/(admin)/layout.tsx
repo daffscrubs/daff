@@ -31,7 +31,7 @@ export default async function AdminLayout({ children }: { children: React.ReactN
         </div>
         <SidebarAdmin rol={perfil.rol} />
       </aside>
-      <div className="flex flex-1 flex-col">
+      <div className="flex min-w-0 flex-1 flex-col">
         <header className="flex items-center justify-between border-b bg-background px-6 py-3 shadow-sm">
           <div />
           <div className="flex items-center gap-3">
