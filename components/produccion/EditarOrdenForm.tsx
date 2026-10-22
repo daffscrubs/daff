@@ -29,21 +29,25 @@ import type { ItemOrdenInput } from "@/lib/validaciones/produccion.schema";
 type Modelo = Database["public"]["Tables"]["modelos"]["Row"];
 type Talla = Database["public"]["Tables"]["tallas"]["Row"];
 type ModeloTalla = Database["public"]["Tables"]["modelo_tallas"]["Row"];
+type Ubicacion = Database["public"]["Tables"]["ubicaciones"]["Row"];
 
 export function EditarOrdenForm({
   loteId,
   folio,
   fechaFinEstimadaInicial,
+  ubicacionDestinoInicial,
   itemsIniciales,
   bloqueado,
   modelos,
   tallas,
   modeloTallas,
   existencias,
+  ubicaciones,
 }: {
   loteId: string;
   folio: string;
   fechaFinEstimadaInicial: string;
+  ubicacionDestinoInicial: string;
   itemsIniciales: ItemOrdenInput[];
   bloqueado: boolean;
   modelos: Modelo[];
@@ -51,8 +55,10 @@ export function EditarOrdenForm({
   modeloTallas: ModeloTalla[];
   /** Piezas en inventario por modelo (suma de todas sus tallas). */
   existencias: Record<string, number>;
+  ubicaciones: Ubicacion[];
 }) {
   const [fechaFinEstimada, setFechaFinEstimada] = useState(fechaFinEstimadaInicial);
+  const [ubicacionDestinoId, setUbicacionDestinoId] = useState(ubicacionDestinoInicial);
   const [items, setItems] = useState<ItemOrdenInput[]>(itemsIniciales);
   const [pendiente, startTransition] = useTransition();
   const router = useRouter();
@@ -105,7 +111,11 @@ export function EditarOrdenForm({
       return;
     }
     startTransition(async () => {
-      const res = await actualizarOrdenProduccion(loteId, { fechaFinEstimada, items });
+      const res = await actualizarOrdenProduccion(loteId, {
+        fechaFinEstimada,
+        ubicacionDestinoId: ubicacionDestinoId || null,
+        items,
+      });
       if (!res.ok) {
         toast.error(res.error);
         return;
@@ -131,6 +141,28 @@ export function EditarOrdenForm({
             onChange={(e) => setFechaFinEstimada(e.target.value)}
           />
         </div>
+      </div>
+
+      <div className="max-w-sm space-y-2">
+        <Label>Ubicación destino de las piezas terminadas</Label>
+        <Select
+          items={ubicaciones.map((u) => ({ value: u.id, label: u.nombre }))}
+          value={ubicacionDestinoId}
+          onValueChange={(v) => setUbicacionDestinoId(v ?? "")}
+        >
+          <SelectTrigger className="w-full">
+            <SelectValue placeholder={`Sin elegir (se usa ${ubicaciones[0]?.nombre ?? "la predeterminada"})`} />
+          </SelectTrigger>
+          <SelectContent>
+            {ubicaciones.map((u) => (
+              <SelectItem key={u.id} value={u.id}>{u.nombre}</SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+        <p className="text-xs text-muted-foreground">
+          Las piezas que ya entraron al inventario conservan la ubicación donde entraron; el cambio aplica a las que
+          se terminen de ahora en adelante.
+        </p>
       </div>
 
       <div className="space-y-3">

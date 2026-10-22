@@ -41,7 +41,7 @@ export function ImportarProductosDialog() {
       if (res.data.creados) {
         toast.success(`${res.data.creados} producto${res.data.creados === 1 ? "" : "s"} creado${res.data.creados === 1 ? "" : "s"}`);
         router.refresh();
-      } else if (!res.data.errores.length) {
+      } else if (!res.data.errores.length && !res.data.omitidos) {
         toast.error("No se encontraron filas para importar");
       }
     });
@@ -69,7 +69,8 @@ export function ImportarProductosDialog() {
         <div className="space-y-4">
           <div className="space-y-2 rounded-lg border p-3">
             <p className="text-sm text-muted-foreground">
-              Descarga la plantilla, llena una fila por producto y vuelve a subirla aquí.
+              Descarga la plantilla (mismo formato que la exportación de Pulpos), llena una fila por producto y talla
+              y vuelve a subirla aquí. También puedes subir directamente el archivo exportado de Pulpos.
             </p>
             <Button
               variant="outline"
@@ -99,6 +100,21 @@ export function ImportarProductosDialog() {
               <p className="font-medium">
                 {resultado.creados} producto{resultado.creados === 1 ? "" : "s"} creado{resultado.creados === 1 ? "" : "s"}
               </p>
+              {resultado.piezasPorUbicacion.some((u) => u.piezas > 0) && (
+                <p className="text-muted-foreground">
+                  Existencias cargadas:{" "}
+                  {resultado.piezasPorUbicacion
+                    .filter((u) => u.piezas > 0)
+                    .map((u) => `${u.ubicacion} ${u.piezas.toLocaleString("es-MX")}`)
+                    .join(" · ")}
+                </p>
+              )}
+              {!!resultado.omitidos && (
+                <p className="text-muted-foreground">
+                  {resultado.omitidos} producto{resultado.omitidos === 1 ? "" : "s"} omitido{resultado.omitidos === 1 ? "" : "s"}{" "}
+                  porque ya exist{resultado.omitidos === 1 ? "e" : "en"} en el sistema.
+                </p>
+              )}
               {!!resultado.errores.length && (
                 <div className="rounded-lg border border-destructive/30 bg-destructive/5 p-2">
                   <p className="mb-1 font-medium text-destructive">

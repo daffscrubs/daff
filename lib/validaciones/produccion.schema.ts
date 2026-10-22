@@ -15,12 +15,14 @@ export const ordenProduccionSchema = z.object({
   folio: z.string().min(1, "Requerido"),
   pedidoId: z.string().uuid().optional().nullable(),
   fechaFinEstimada: z.string().optional(),
+  ubicacionDestinoId: z.string().uuid("Elige dónde entrarán las piezas terminadas"),
   items: z.array(itemOrdenSchema).min(1, "Agrega al menos un producto"),
   insumos: z.array(insumoOrdenSchema).optional().default([]),
 });
 
 export const editarOrdenProduccionSchema = z.object({
   fechaFinEstimada: z.string().optional(),
+  ubicacionDestinoId: z.string().uuid().optional().nullable(),
   items: z.array(itemOrdenSchema).min(1, "Agrega al menos un producto"),
 });
 

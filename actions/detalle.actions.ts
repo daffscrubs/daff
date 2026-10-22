@@ -23,7 +23,14 @@ export async function obtenerDetalleModelo(id: string) {
   await requerirPerfil(["admin", "ventas", "supervisor"]);
   const supabase = await createClient();
 
-  const [{ data: modelo }, { data: existencias }, { data: movimientos }, { data: tallas }, { data: tallasAsignadas }] =
+  const [
+    { data: modelo },
+    { data: existencias },
+    { data: movimientos },
+    { data: tallas },
+    { data: tallasAsignadas },
+    { data: ubicaciones },
+  ] =
     await Promise.all([
       supabase.from("modelos").select("*").eq("id", id).single(),
       supabase.from("stock_productos").select("*").eq("modelo_id", id),
@@ -33,8 +40,9 @@ export async function obtenerDetalleModelo(id: string) {
         .eq("modelo_id", id)
         .order("created_at", { ascending: false })
         .limit(20),
-      supabase.from("tallas").select("id, codigo"),
+      supabase.from("tallas").select("id, codigo").order("orden"),
       supabase.from("modelo_tallas").select("talla_id, precio_venta").eq("modelo_id", id),
+      supabase.from("ubicaciones").select("*").order("orden").order("nombre"),
     ]);
 
   const existenciasTotal = (existencias ?? []).reduce((acc, e) => acc + e.cantidad_actual, 0);
@@ -42,6 +50,7 @@ export async function obtenerDetalleModelo(id: string) {
   return {
     modelo,
     existencias: existencias ?? [],
+    ubicaciones: ubicaciones ?? [],
     existenciasTotal,
     movimientos: movimientos ?? [],
     tallas: tallas ?? [],

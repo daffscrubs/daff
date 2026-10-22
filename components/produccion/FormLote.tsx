@@ -33,6 +33,7 @@ type Modelo = Database["public"]["Tables"]["modelos"]["Row"];
 type Talla = Database["public"]["Tables"]["tallas"]["Row"];
 type ModeloTalla = Database["public"]["Tables"]["modelo_tallas"]["Row"];
 type Material = Database["public"]["Tables"]["materiales"]["Row"];
+type Ubicacion = Database["public"]["Tables"]["ubicaciones"]["Row"];
 
 export function FormLote({
   folioSugerido,
@@ -43,6 +44,7 @@ export function FormLote({
   modeloTallas,
   materiales,
   existencias,
+  ubicaciones,
 }: {
   folioSugerido: string;
   pedidos: Pedido[];
@@ -53,10 +55,12 @@ export function FormLote({
   materiales: Material[];
   /** Piezas en inventario por modelo (suma de todas sus tallas). */
   existencias: Record<string, number>;
+  ubicaciones: Ubicacion[];
 }) {
   const [folio, setFolio] = useState(folioSugerido);
   const [pedidoId, setPedidoId] = useState("");
   const [fechaFinEstimada, setFechaFinEstimada] = useState("");
+  const [ubicacionDestinoId, setUbicacionDestinoId] = useState("");
   const [items, setItems] = useState<ItemOrdenInput[]>([]);
   const [insumos, setInsumos] = useState<InsumoOrdenInput[]>([]);
   const [pendiente, startTransition] = useTransition();
@@ -127,12 +131,17 @@ export function FormLote({
       toast.error("Agrega al menos un producto");
       return;
     }
+    if (!ubicacionDestinoId) {
+      toast.error("Elige dónde entrarán las piezas terminadas");
+      return;
+    }
     const insumosValidos = insumos.filter((i) => i.materialId);
     startTransition(async () => {
       const res = await crearOrdenProduccion({
         folio,
         pedidoId: pedidoId || null,
         fechaFinEstimada: fechaFinEstimada || undefined,
+        ubicacionDestinoId,
         items,
         insumos: insumosValidos,
       });
@@ -178,6 +187,27 @@ export function FormLote({
             onChange={(e) => setFechaFinEstimada(e.target.value)}
           />
         </div>
+      </div>
+
+      <div className="max-w-sm space-y-2">
+        <Label>Ubicación destino de las piezas terminadas</Label>
+        <Select
+          items={ubicaciones.map((u) => ({ value: u.id, label: u.nombre }))}
+          value={ubicacionDestinoId}
+          onValueChange={(v) => setUbicacionDestinoId(v ?? "")}
+        >
+          <SelectTrigger className="w-full">
+            <SelectValue placeholder="Elige dónde entrarán al inventario" />
+          </SelectTrigger>
+          <SelectContent>
+            {ubicaciones.map((u) => (
+              <SelectItem key={u.id} value={u.id}>{u.nombre}</SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+        <p className="text-xs text-muted-foreground">
+          Cuando se complete el último proceso de cada producto, sus piezas entran al inventario de esta ubicación.
+        </p>
       </div>
 
       <div className="space-y-3">

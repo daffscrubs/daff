@@ -689,6 +689,7 @@ export type Database = {
           id: string
           notas: string | null
           pedido_id: string | null
+          ubicacion_destino_id: string | null
         }
         Insert: {
           creado_por?: string | null
@@ -701,6 +702,7 @@ export type Database = {
           id?: string
           notas?: string | null
           pedido_id?: string | null
+          ubicacion_destino_id?: string | null
         }
         Update: {
           creado_por?: string | null
@@ -713,6 +715,7 @@ export type Database = {
           id?: string
           notas?: string | null
           pedido_id?: string | null
+          ubicacion_destino_id?: string | null
         }
         Relationships: [
           {
@@ -727,6 +730,13 @@ export type Database = {
             columns: ["pedido_id"]
             isOneToOne: false
             referencedRelation: "pedidos"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "lotes_produccion_ubicacion_destino_id_fkey"
+            columns: ["ubicacion_destino_id"]
+            isOneToOne: false
+            referencedRelation: "ubicaciones"
             referencedColumns: ["id"]
           },
         ]
@@ -918,6 +928,8 @@ export type Database = {
           registrado_por: string | null
           talla_id: string
           tipo: Database["public"]["Enums"]["tipo_movimiento"]
+          traspaso_id: string | null
+          ubicacion_id: string
         }
         Insert: {
           cantidad: number
@@ -929,6 +941,8 @@ export type Database = {
           registrado_por?: string | null
           talla_id: string
           tipo: Database["public"]["Enums"]["tipo_movimiento"]
+          traspaso_id?: string | null
+          ubicacion_id?: string
         }
         Update: {
           cantidad?: number
@@ -940,6 +954,8 @@ export type Database = {
           registrado_por?: string | null
           talla_id?: string
           tipo?: Database["public"]["Enums"]["tipo_movimiento"]
+          traspaso_id?: string | null
+          ubicacion_id?: string
         }
         Relationships: [
           {
@@ -968,6 +984,13 @@ export type Database = {
             columns: ["talla_id"]
             isOneToOne: false
             referencedRelation: "tallas"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "movimientos_stock_producto_ubicacion_id_fkey"
+            columns: ["ubicacion_id"]
+            isOneToOne: false
+            referencedRelation: "ubicaciones"
             referencedColumns: ["id"]
           },
         ]
@@ -1342,18 +1365,21 @@ export type Database = {
           id: string
           modelo_id: string
           talla_id: string
+          ubicacion_id: string
         }
         Insert: {
           cantidad_actual?: number
           id?: string
           modelo_id: string
           talla_id: string
+          ubicacion_id: string
         }
         Update: {
           cantidad_actual?: number
           id?: string
           modelo_id?: string
           talla_id?: string
+          ubicacion_id?: string
         }
         Relationships: [
           {
@@ -1368,6 +1394,13 @@ export type Database = {
             columns: ["talla_id"]
             isOneToOne: false
             referencedRelation: "tallas"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "stock_productos_ubicacion_id_fkey"
+            columns: ["ubicacion_id"]
+            isOneToOne: false
+            referencedRelation: "ubicaciones"
             referencedColumns: ["id"]
           },
         ]
@@ -1386,6 +1419,30 @@ export type Database = {
         Update: {
           codigo?: string
           id?: string
+          orden?: number
+        }
+        Relationships: []
+      }
+      ubicaciones: {
+        Row: {
+          activa: boolean
+          created_at: string
+          id: string
+          nombre: string
+          orden: number
+        }
+        Insert: {
+          activa?: boolean
+          created_at?: string
+          id?: string
+          nombre: string
+          orden?: number
+        }
+        Update: {
+          activa?: boolean
+          created_at?: string
+          id?: string
+          nombre?: string
           orden?: number
         }
         Relationships: []
@@ -1468,6 +1525,21 @@ export type Database = {
       fn_rol_actual: {
         Args: never
         Returns: Database["public"]["Enums"]["rol_usuario"]
+      }
+      fn_traspasar_stock_producto: {
+        Args: {
+          p_cantidad: number
+          p_destino_id: string
+          p_modelo_id: string
+          p_motivo?: string
+          p_origen_id: string
+          p_talla_id: string
+        }
+        Returns: string
+      }
+      fn_ubicacion_predeterminada: {
+        Args: never
+        Returns: string
       }
     }
     Enums: {
@@ -1652,3 +1724,4 @@ export type TipoMovimiento = Database["public"]["Enums"]["tipo_movimiento"]
 export type EstatusEntrega = Database["public"]["Enums"]["estatus_entrega"]
 export type EstatusUnidadMaterial = Database["public"]["Enums"]["estatus_unidad_material"]
 export type EstatusPrendaBordado = Database["public"]["Enums"]["estatus_prenda_bordado"]
+export type Ubicacion = Database["public"]["Tables"]["ubicaciones"]["Row"]
