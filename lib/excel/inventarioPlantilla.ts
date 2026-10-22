@@ -57,6 +57,8 @@ const COLUMNAS_USADAS = [
   "Nombre del Producto",
   "Categoría",
   "Variantes de Tamaño (talla)",
+  "Código de Barras",
+  "SKU",
   "Stock Total Acapol",
   "Stock Zona Industrial",
   "Costo",
@@ -113,9 +115,11 @@ export async function generarPlantillaInventario(tallas: { codigo: string }[]): 
     '6. Las existencias se cargan POR UBICACIÓN: "Stock Total Acapol" entra al inventario de Acapol y',
     '   "Stock Zona Industrial" al de Zona Industrial (no se suman). "Stock Tizapa" no se carga.',
     "   Un stock en cero o negativo no genera existencias.",
-    '7. "Precio Público" es el precio de esa talla; "Costo" es el costo del producto. Solo números, sin signo de $.',
-    "8. Si un producto con el mismo nombre ya existe en el sistema, se omite (no se duplica ni se le suman existencias).",
-    "9. No cambies los nombres de las columnas.",
+    '7. "Código de Barras" y "SKU" son de cada talla (cada talla de un producto lleva el suyo) y no se pueden repetir',
+    "   entre productos: si uno ya está en uso, esa talla se carga sin él y se avisa.",
+    '8. "Precio Público" es el precio de esa talla; "Costo" es el costo del producto. Solo números, sin signo de $.',
+    "9. Si un producto con el mismo nombre ya existe en el sistema, se omite (no se duplica ni se le suman existencias).",
+    "10. No cambies los nombres de las columnas.",
   ];
   lineas.forEach((linea) => instrucciones.addRow([linea]));
   instrucciones.getRow(1).font = { bold: true, size: 13 };

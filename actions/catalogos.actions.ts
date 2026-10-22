@@ -66,7 +66,7 @@ export async function actualizarCostoModelo(
 
 export async function guardarTallasModelo(
   modeloId: string,
-  tallas: { tallaId: string; precioVenta?: number }[]
+  tallas: { tallaId: string; precioVenta?: number; codigoBarras?: string; sku?: string }[]
 ): Promise<AccionResultado> {
   await requerirPerfil(["admin", "supervisor"]);
   const supabase = await createClient();
@@ -80,9 +80,20 @@ export async function guardarTallasModelo(
         modelo_id: modeloId,
         talla_id: t.tallaId,
         precio_venta: t.precioVenta ?? null,
+        // Un texto vacío cuenta como "sin código".
+        codigo_barras: t.codigoBarras?.trim() || null,
+        sku: t.sku?.trim() || null,
       }))
     );
-    if (errorInsertar) return accionError(errorInsertar.message);
+    if (errorInsertar) {
+      if (errorInsertar.message.includes("modelo_tallas_codigo_barras_key")) {
+        return accionError("Ese código de barras ya está en otra talla o producto.");
+      }
+      if (errorInsertar.message.includes("modelo_tallas_sku_key")) {
+        return accionError("Ese SKU ya está en otra talla o producto.");
+      }
+      return accionError(errorInsertar.message);
+    }
   }
 
   revalidatePath("/inventario");
