@@ -1,5 +1,6 @@
 import { notFound } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
+import { leerTodo } from "@/lib/supabase/leer-todo";
 import { FormPedido } from "@/components/pedidos/FormPedido";
 
 export default async function EditarPedidoPage({
@@ -23,7 +24,7 @@ export default async function EditarPedidoPage({
     supabase.from("clientes").select("*").order("nombre_comercial"),
     supabase.from("modelos").select("*").eq("activo", true).order("nombre"),
     supabase.from("tallas").select("*").order("orden"),
-    supabase.from("modelo_tallas").select("*"),
+    leerTodo((d, h) => supabase.from("modelo_tallas").select("*").order("id").range(d, h)),
   ]);
 
   if (!pedido) notFound();

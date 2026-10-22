@@ -1,4 +1,5 @@
 import { createClient } from "@/lib/supabase/server";
+import { leerTodo } from "@/lib/supabase/leer-todo";
 import { FormPedido } from "@/components/pedidos/FormPedido";
 
 export default async function NuevoPedidoPage() {
@@ -15,7 +16,7 @@ export default async function NuevoPedidoPage() {
     supabase.from("clientes").select("*").order("nombre_comercial"),
     supabase.from("modelos").select("*").eq("activo", true).order("nombre"),
     supabase.from("tallas").select("*").order("orden"),
-    supabase.from("modelo_tallas").select("*"),
+    leerTodo((d, h) => supabase.from("modelo_tallas").select("*").order("id").range(d, h)),
     supabase.from("plantillas_pedido").select("*").order("nombre"),
     supabase.from("plantilla_items").select("*"),
   ]);

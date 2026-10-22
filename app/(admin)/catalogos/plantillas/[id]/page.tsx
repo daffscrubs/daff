@@ -1,5 +1,6 @@
 import { notFound } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
+import { leerTodo } from "@/lib/supabase/leer-todo";
 import { PlantillaItemsManager } from "@/components/catalogos/PlantillaItemsManager";
 
 export default async function PlantillaDetallePage({
@@ -16,7 +17,7 @@ export default async function PlantillaDetallePage({
       supabase.from("plantilla_items").select("*").eq("plantilla_id", id),
       supabase.from("modelos").select("*").order("nombre"),
       supabase.from("tallas").select("*").order("orden"),
-      supabase.from("modelo_tallas").select("*"),
+      leerTodo((d, h) => supabase.from("modelo_tallas").select("*").order("id").range(d, h)),
     ]);
 
   if (!plantilla) notFound();
