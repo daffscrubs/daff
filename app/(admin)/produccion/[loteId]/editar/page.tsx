@@ -10,7 +10,7 @@ export default async function EditarOrdenPage({
   const { loteId } = await params;
   const supabase = await createClient();
 
-  const [{ data: lote }, { data: items }, { data: loteEtapas }, { data: modelos }, { data: tallas }, { data: modeloTallas }] =
+  const [{ data: lote }, { data: items }, { data: loteEtapas }, { data: modelos }, { data: tallas }, { data: modeloTallas }, { data: stockProductos }] =
     await Promise.all([
       supabase.from("lotes_produccion").select("*").eq("id", loteId).single(),
       supabase.from("items_orden_produccion").select("*").eq("lote_id", loteId),
@@ -18,10 +18,18 @@ export default async function EditarOrdenPage({
       supabase.from("modelos").select("*").order("nombre"),
       supabase.from("tallas").select("*").order("orden"),
       supabase.from("modelo_tallas").select("*"),
+      supabase.from("stock_productos").select("modelo_id, cantidad_actual"),
     ]);
 
   if (!lote) notFound();
   if (lote.estatus === "cancelada") notFound();
+
+  // Piezas en inventario por modelo (todas sus tallas juntas), para mostrarlas
+  // junto a cada producto en el buscador.
+  const existencias: Record<string, number> = {};
+  for (const s of stockProductos ?? []) {
+    existencias[s.modelo_id] = (existencias[s.modelo_id] ?? 0) + s.cantidad_actual;
+  }
 
   return (
     <div className="space-y-6">
@@ -42,6 +50,7 @@ export default async function EditarOrdenPage({
         modelos={modelos ?? []}
         tallas={tallas ?? []}
         modeloTallas={modeloTallas ?? []}
+        existencias={existencias}
       />
     </div>
   );

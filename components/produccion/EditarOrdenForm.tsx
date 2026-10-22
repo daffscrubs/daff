@@ -14,7 +14,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { ComboboxField } from "@/components/ui/combobox-field";
+import { BuscadorProductos } from "@/components/produccion/BuscadorProductos";
 import {
   Table,
   TableBody,
@@ -39,6 +39,7 @@ export function EditarOrdenForm({
   modelos,
   tallas,
   modeloTallas,
+  existencias,
 }: {
   loteId: string;
   folio: string;
@@ -48,6 +49,8 @@ export function EditarOrdenForm({
   modelos: Modelo[];
   tallas: Talla[];
   modeloTallas: ModeloTalla[];
+  /** Piezas en inventario por modelo (suma de todas sus tallas). */
+  existencias: Record<string, number>;
 }) {
   const [fechaFinEstimada, setFechaFinEstimada] = useState(fechaFinEstimadaInicial);
   const [items, setItems] = useState<ItemOrdenInput[]>(itemsIniciales);
@@ -60,8 +63,10 @@ export function EditarOrdenForm({
     return tallas.filter((t) => asignadas.includes(t.id));
   }
 
-  function agregarItem() {
-    setItems((prev) => [...prev, { modeloId: "", tallaId: "", cantidadPlaneada: 1 }]);
+  // Elegir un producto en el buscador agrega una línea con ese modelo ya
+  // puesto; solo falta la talla y la cantidad.
+  function agregarProducto(modeloId: string) {
+    setItems((prev) => [...prev, { modeloId, tallaId: "", cantidadPlaneada: 1 }]);
   }
 
   function actualizarItem(index: number, cambios: Partial<ItemOrdenInput>) {
@@ -71,6 +76,19 @@ export function EditarOrdenForm({
   function quitarItem(index: number) {
     setItems((prev) => prev.filter((_, i) => i !== index));
   }
+
+  // Solo modelos activos se ofrecen para agregar; los ya agregados a la
+  // orden siguen mostrando su nombre aunque se hayan desactivado después.
+  const productosBuscables = modelos
+    .filter((m) => m.activo)
+    .map((m) => ({
+      id: m.id,
+      nombre: m.nombre,
+      categoria: m.categoria,
+      precioVenta: m.precio_venta,
+      imagenUrl: m.imagen_url,
+      existencias: existencias[m.id] ?? 0,
+    }));
 
   function nombreModelo(id: string) {
     return modelos.find((m) => m.id === id)?.nombre ?? "—";
@@ -118,12 +136,8 @@ export function EditarOrdenForm({
       <div className="space-y-3">
         <div className="flex items-center justify-between">
           <Label>Productos</Label>
-          {!bloqueado && (
-            <Button type="button" variant="outline" size="sm" onClick={agregarItem}>
-              Agregar producto
-            </Button>
-          )}
         </div>
+        {!bloqueado && <BuscadorProductos productos={productosBuscables} onSeleccionar={agregarProducto} />}
         {bloqueado && (
           <p className="text-xs text-muted-foreground">
             Esta orden ya tiene procesos configurados, así que los productos no se pueden modificar. Si necesitas
@@ -151,15 +165,7 @@ export function EditarOrdenForm({
                 ))
               : items.map((item, index) => (
                   <TableRow key={index}>
-                    <TableCell>
-                      <ComboboxField
-                        className="w-40"
-                        items={modelos.map((m) => ({ value: m.id, label: m.nombre }))}
-                        value={item.modeloId}
-                        onValueChange={(v) => actualizarItem(index, { modeloId: v, tallaId: "" })}
-                        placeholder="Buscar modelo..."
-                      />
-                    </TableCell>
+                    <TableCell className="font-medium">{nombreModelo(item.modeloId)}</TableCell>
                     <TableCell>
                       <Select
                         items={tallasDeModelo(item.modeloId).map((t) => ({ value: t.id, label: t.codigo }))}
