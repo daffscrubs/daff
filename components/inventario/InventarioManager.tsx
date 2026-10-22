@@ -2,9 +2,10 @@
 
 import { useMemo, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { Search, Boxes } from "lucide-react";
+import { Search, Boxes, Shirt } from "lucide-react";
 import { toast } from "sonner";
 import { eliminarModelo, crearModelo } from "@/actions/catalogos.actions";
+import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -35,12 +36,20 @@ import { BotonEliminarConfirmacion } from "@/components/forms/BotonEliminarConfi
 import { ImportarProductosDialog } from "@/components/inventario/ImportarProductosDialog";
 import { EstadoVacio } from "@/components/ui/estado-vacio";
 import { formatearMoneda } from "@/lib/dinero";
+import { normalizarTexto } from "@/lib/texto";
+import { cn } from "@/lib/utils";
 import type { Database } from "@/types/database.types";
 
 type Modelo = Database["public"]["Tables"]["modelos"]["Row"];
 type Talla = Database["public"]["Tables"]["tallas"]["Row"];
 type ModeloTalla = Pick<Database["public"]["Tables"]["modelo_tallas"]["Row"], "modelo_id" | "precio_venta">;
 type StockProducto = Pick<Database["public"]["Tables"]["stock_productos"]["Row"], "modelo_id" | "cantidad_actual">;
+
+const OPCIONES_ORDEN = [
+  { value: "nombre", label: "Nombre (A-Z)" },
+  { value: "stock_desc", label: "Más existencias" },
+  { value: "stock_asc", label: "Menos existencias" },
+];
 
 export function InventarioManager({
   modelos,
@@ -66,6 +75,12 @@ export function InventarioManager({
   function existenciasDe(modelo: Modelo): number {
     return stock.filter((s) => s.modelo_id === modelo.id).reduce((acc, s) => acc + s.cantidad_actual, 0);
   }
+  // Tallas del producto: las asignadas en el catálogo o, si no tiene, las que
+  // ya tienen un registro de existencias.
+  function tallasDe(modelo: Modelo): number {
+    const asignadas = modeloTallas.filter((mt) => mt.modelo_id === modelo.id).length;
+    return asignadas || stock.filter((s) => s.modelo_id === modelo.id).length;
+  }
   const [abierto, setAbierto] = useState(false);
   const [nombre, setNombre] = useState("");
   const [descripcion, setDescripcion] = useState("");
@@ -75,6 +90,7 @@ export function InventarioManager({
   const [tallaIds, setTallaIds] = useState<string[]>([]);
   const [busqueda, setBusqueda] = useState("");
   const [categoriaFiltro, setCategoriaFiltro] = useState("todas");
+  const [orden, setOrden] = useState("nombre");
   const [pendiente, startTransition] = useTransition();
   const router = useRouter();
 
@@ -88,13 +104,19 @@ export function InventarioManager({
   );
 
   const filtrados = useMemo(() => {
-    const q = busqueda.trim().toLowerCase();
-    return modelos.filter((m) => {
+    const q = normalizarTexto(busqueda.trim());
+    const existencias = new Map<string, number>();
+    for (const s of stock) existencias.set(s.modelo_id, (existencias.get(s.modelo_id) ?? 0) + s.cantidad_actual);
+
+    const lista = modelos.filter((m) => {
       if (categoriaFiltro !== "todas" && m.categoria !== categoriaFiltro) return false;
       if (!q) return true;
-      return m.nombre.toLowerCase().includes(q);
+      return normalizarTexto(`${m.nombre} ${m.categoria ?? ""}`).includes(q);
     });
-  }, [modelos, busqueda, categoriaFiltro]);
+    if (orden === "stock_desc") lista.sort((a, b) => (existencias.get(b.id) ?? 0) - (existencias.get(a.id) ?? 0));
+    if (orden === "stock_asc") lista.sort((a, b) => (existencias.get(a.id) ?? 0) - (existencias.get(b.id) ?? 0));
+    return lista;
+  }, [modelos, stock, busqueda, categoriaFiltro, orden]);
 
   function alternarTalla(id: string) {
     setTallaIds((prev) => (prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]));
@@ -129,32 +151,7 @@ export function InventarioManager({
 
   return (
     <div className="space-y-4">
-      <div className="flex flex-wrap items-center justify-between gap-4">
-        <div className="flex flex-wrap items-center gap-3">
-          <div className="relative max-w-sm flex-1">
-            <Search className="pointer-events-none absolute left-2.5 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
-            <Input
-              placeholder="Buscar producto..."
-              value={busqueda}
-              onChange={(e) => setBusqueda(e.target.value)}
-              className="pl-8"
-            />
-          </div>
-          <Select
-            items={opcionesCategoria}
-            value={categoriaFiltro}
-            onValueChange={(v) => setCategoriaFiltro((v as string) ?? "todas")}
-          >
-            <SelectTrigger className="w-52">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              {opcionesCategoria.map((o) => (
-                <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        </div>
+      <div className="flex flex-wrap items-center justify-end gap-4">
         <div className="flex items-center gap-2">
           <ImportarProductosDialog />
           <Dialog open={abierto} onOpenChange={setAbierto}>
@@ -239,52 +236,120 @@ export function InventarioManager({
         </div>
       </div>
 
-      <Table>
-        <TableHeader>
-          <TableRow>
-            <TableHead>Nombre</TableHead>
-            <TableHead>Categoría</TableHead>
-            <TableHead>Existencias</TableHead>
-            <TableHead>Costo</TableHead>
-            <TableHead>Precio de venta</TableHead>
-            <TableHead />
-          </TableRow>
-        </TableHeader>
-        <TableBody>
-          {filtrados.map((modelo) => (
-            <TableRow
-              key={modelo.id}
-              className="cursor-pointer"
-              onClick={() => router.push(`/inventario/${modelo.id}`)}
-            >
-              <TableCell className="font-medium">{modelo.nombre}</TableCell>
-              <TableCell className="text-muted-foreground">{modelo.categoria ?? "—"}</TableCell>
-              <TableCell>{existenciasDe(modelo)}</TableCell>
-              <TableCell className="text-muted-foreground">
-                {modelo.costo_unitario != null ? formatearMoneda(modelo.costo_unitario) : "—"}
-              </TableCell>
-              <TableCell className="text-muted-foreground">{precioVentaDe(modelo)}</TableCell>
-              <TableCell className="text-right" onClick={(e) => e.stopPropagation()}>
-                <BotonEliminarConfirmacion
-                  entidad="producto"
-                  onEliminar={() => eliminarModelo(modelo.id)}
-                />
-              </TableCell>
-            </TableRow>
-          ))}
-          {!filtrados.length && (
+      <div className="overflow-hidden rounded-xl bg-card shadow-sm ring-1 ring-foreground/10">
+        <div className="flex flex-wrap items-center gap-3 p-3">
+          <div className="relative min-w-64 flex-1">
+            <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
+            <Input
+              placeholder="Buscar por nombre o categoría"
+              value={busqueda}
+              onChange={(e) => setBusqueda(e.target.value)}
+              className="h-10 pl-9 text-sm"
+            />
+          </div>
+          <Select
+            items={opcionesCategoria}
+            value={categoriaFiltro}
+            onValueChange={(v) => setCategoriaFiltro((v as string) ?? "todas")}
+          >
+            <SelectTrigger className="h-10 w-52">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              {opcionesCategoria.map((o) => (
+                <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          <Select items={OPCIONES_ORDEN} value={orden} onValueChange={(v) => setOrden((v as string) ?? "nombre")}>
+            <SelectTrigger className="h-10 w-48">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              {OPCIONES_ORDEN.map((o) => (
+                <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+        <Table>
+          <TableHeader>
             <TableRow>
-              <TableCell colSpan={6}>
-                <EstadoVacio
-                  icon={Boxes}
-                  titulo={modelos.length ? "Sin resultados" : "Sin productos todavía"}
-                  descripcion={modelos.length ? "Prueba con otra búsqueda o filtro." : "Los productos que agregues van a aparecer aquí."}
-                />
-              </TableCell>
+              <TableHead className="pl-4">Producto</TableHead>
+              <TableHead>Existencias</TableHead>
+              <TableHead>Categoría</TableHead>
+              <TableHead>Costo</TableHead>
+              <TableHead>Precio de venta</TableHead>
+              <TableHead />
             </TableRow>
-          )}
-        </TableBody>
-      </Table>
+          </TableHeader>
+          <TableBody>
+            {filtrados.map((modelo) => {
+              const existencias = existenciasDe(modelo);
+              const tallas = tallasDe(modelo);
+              return (
+                <TableRow
+                  key={modelo.id}
+                  className="cursor-pointer"
+                  onClick={() => router.push(`/inventario/${modelo.id}`)}
+                >
+                  <TableCell className="py-3 pl-4">
+                    <div className="flex items-center gap-3">
+                      <div className="flex size-10 shrink-0 items-center justify-center overflow-hidden rounded-lg border bg-muted">
+                        {modelo.imagen_url?.startsWith("http") ? (
+                          // eslint-disable-next-line @next/next/no-img-element
+                          <img src={modelo.imagen_url} alt="" className="size-full object-cover" />
+                        ) : (
+                          <Shirt className="size-5 text-muted-foreground" />
+                        )}
+                      </div>
+                      <span className="font-medium">{modelo.nombre}</span>
+                    </div>
+                  </TableCell>
+                  <TableCell>
+                    <Badge
+                      className={cn(
+                        "border-transparent",
+                        existencias > 0
+                          ? "bg-emerald-100 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300"
+                          : "bg-red-100 text-red-700 dark:bg-red-950 dark:text-red-300"
+                      )}
+                    >
+                      {existencias === 0
+                        ? "Sin existencias"
+                        : `${existencias} ${Math.abs(existencias) === 1 ? "unidad" : "unidades"}${
+                            tallas ? ` en ${tallas} ${tallas === 1 ? "talla" : "tallas"}` : ""
+                          }`}
+                    </Badge>
+                  </TableCell>
+                  <TableCell className="text-muted-foreground">{modelo.categoria ?? "—"}</TableCell>
+                  <TableCell className="text-muted-foreground">
+                    {modelo.costo_unitario != null ? formatearMoneda(modelo.costo_unitario) : "—"}
+                  </TableCell>
+                  <TableCell className="text-muted-foreground">{precioVentaDe(modelo)}</TableCell>
+                  <TableCell className="pr-4 text-right" onClick={(e) => e.stopPropagation()}>
+                    <BotonEliminarConfirmacion
+                      entidad="producto"
+                      onEliminar={() => eliminarModelo(modelo.id)}
+                    />
+                  </TableCell>
+                </TableRow>
+              );
+            })}
+            {!filtrados.length && (
+              <TableRow>
+                <TableCell colSpan={6}>
+                  <EstadoVacio
+                    icon={Boxes}
+                    titulo={modelos.length ? "Sin resultados" : "Sin productos todavía"}
+                    descripcion={modelos.length ? "Prueba con otra búsqueda o filtro." : "Los productos que agregues van a aparecer aquí."}
+                  />
+                </TableCell>
+              </TableRow>
+            )}
+          </TableBody>
+        </Table>
+      </div>
     </div>
   );
 }
