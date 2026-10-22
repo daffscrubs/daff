@@ -23,12 +23,27 @@ export interface ResultadoImportacion {
 const COL_NOMBRE = ["nombre del producto"];
 const COL_CATEGORIA = ["categoria"];
 const COL_TALLA = ["variantes de tamano", "variante de tamano (talla)"];
+const COL_COLOR = ["variantes de color"];
 const COL_STOCK_SIMPLE = ["stock"];
 const COL_COSTO = ["costo"];
 const COL_PRECIO = ["precio publico", "precio de venta"];
 
+// Talla a la que van las existencias de un producto que en el Excel no trae talla
+// (en Pulpos suele variar solo por color). Las existencias del sistema son por
+// talla, así que sin ella esas piezas se perderían.
+const TALLA_SIN_TALLA = "UNITALLA";
+
 const MAX_FILAS_ENCABEZADO = 10;
 const TAMANO_LOTE = 500;
+
+/** "VERDE OLIVO" / "verde olivo" -> "Verde Olivo", para que el mismo color escrito distinto dé el mismo producto. */
+function aTitulo(texto: string): string {
+  return texto
+    .toLowerCase()
+    .split(/\s+/)
+    .map((p) => p.charAt(0).toUpperCase() + p.slice(1))
+    .join(" ");
+}
 
 /** Texto visible de una celda: Pulpos guarda los textos con formato (richText), que String() convertiría en "[object Object]". */
 function valorCelda(celda: ExcelJS.Cell): unknown {
@@ -119,6 +134,7 @@ export async function importarProductosExcel(formData: FormData): Promise<Accion
   const colNombre = buscarColumna(COL_NOMBRE);
   const colCategoria = buscarColumna(COL_CATEGORIA);
   const colTalla = buscarColumna(COL_TALLA);
+  const colColor = buscarColumna(COL_COLOR);
   const colCosto = buscarColumna(COL_COSTO);
   const colPrecio = buscarColumna(COL_PRECIO);
 
@@ -143,12 +159,18 @@ export async function importarProductosExcel(formData: FormData): Promise<Accion
   hoja.eachRow((fila, numeroFila) => {
     if (numeroFila <= filaEncabezados) return;
 
-    const nombre = leerTexto(fila, colNombre);
+    const nombreBase = leerTexto(fila, colNombre);
     const hayContenido = (fila.values as unknown[] | undefined)?.some((v) => v != null && v !== "");
-    if (!nombre) {
+    if (!nombreBase) {
       if (hayContenido) errores.push({ fila: numeroFila, mensaje: "Falta el nombre del producto" });
       return;
     }
+    // En el sistema cada color es su propio producto ("Qx. Michelle Negro",
+    // "Qx. Michelle Marino"...), así que la variante de color de Pulpos se agrega al
+    // nombre, salvo que el nombre ya la incluya.
+    const color = leerTexto(fila, colColor);
+    const nombre =
+      color && !normalizarTexto(nombreBase).includes(normalizarTexto(color)) ? `${nombreBase} ${aTitulo(color)}` : nombreBase;
 
     const tallaTexto = leerTexto(fila, colTalla);
     const tallaId = tallaTexto ? tallaIdPorCodigo.get(tallaTexto.toUpperCase()) : undefined;
@@ -170,6 +192,19 @@ export async function importarProductosExcel(formData: FormData): Promise<Accion
       if (cantidad !== undefined) stock.set(ubicacionId, cantidad);
     }
 
+    // Fila sin talla pero con existencias: van a la talla UNITALLA en vez de perderse.
+    let tallaIdFinal = tallaId;
+    if (!tallaTexto && [...stock.values()].some((c) => c > 0)) {
+      tallaIdFinal = tallaIdPorCodigo.get(TALLA_SIN_TALLA);
+      if (!tallaIdFinal) {
+        errores.push({
+          fila: numeroFila,
+          mensaje: `Tiene existencias pero no talla. Crea la talla "${TALLA_SIN_TALLA}" en el catálogo para productos sin talla.`,
+        });
+        return;
+      }
+    }
+
     const costoUnitario = leerNumero(fila, colCosto);
     const precioVenta = leerNumero(fila, colPrecio);
     if (Number.isNaN(costoUnitario)) {
@@ -184,7 +219,7 @@ export async function importarProductosExcel(formData: FormData): Promise<Accion
     const parseo = filaVarianteImportadaSchema.safeParse({
       nombre,
       categoria: leerTexto(fila, colCategoria),
-      tallaId,
+      tallaId: tallaIdFinal,
       costoUnitario,
       precioVenta,
     });
