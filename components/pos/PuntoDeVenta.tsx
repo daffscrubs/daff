@@ -7,7 +7,6 @@ import { toast } from "sonner";
 import { ArrowDown, ArrowUp, Calculator, Check, CornerDownLeft, Landmark, Minus, Percent, Plus, Printer, ScanBarcode, Search, ShoppingBag, Trash2, User, UserPlus, Users, X, type LucideIcon } from "lucide-react";
 import { crearCliente } from "@/actions/clientes.actions";
 import { registrarVenta } from "@/actions/ventas.actions";
-import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
