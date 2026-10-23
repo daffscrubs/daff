@@ -1,4 +1,5 @@
 import { createClient } from "@/lib/supabase/server";
+import { NavReportes } from "@/components/reportes/NavReportes";
 import { ReporteProductividadTable } from "@/components/produccion/ReporteProductividadTable";
 import { construirRegistrosReporte } from "@/lib/produccion/registro-reporte";
 
@@ -39,7 +40,13 @@ export default async function ReporteProductividadPage() {
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-2xl font-semibold">Productividad por colaborador</h1>
+        <h1 className="text-2xl font-semibold">Reportes</h1>
+        <p className="text-muted-foreground">Ventas y productividad de tu operación.</p>
+      </div>
+      <NavReportes />
+
+      <div>
+        <h2 className="text-lg font-semibold">Productividad por colaborador</h2>
         <p className="text-muted-foreground">Piezas netas registradas por colaborador y etapa (incluye ajustes). Filtra por fecha.</p>
       </div>
 

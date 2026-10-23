@@ -23,7 +23,7 @@ import { cn } from "@/lib/utils";
 import { tienePermiso, type PerfilConPermisos } from "@/lib/permisos";
 
 // "permiso": el que debe tener el usuario para ver la opción ("admin" = solo el administrador).
-const ITEMS: { href: string; label: string; icon: LucideIcon; permiso: string }[] = [
+const ITEMS: { href: string; base?: string; label: string; icon: LucideIcon; permiso: string }[] = [
   { href: "/pos", label: "Punto de venta", icon: Store, permiso: "modulo.pos" },
   { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard, permiso: "modulo.dashboard" },
   { href: "/caja", label: "Caja", icon: Landmark, permiso: "modulo.caja" },
@@ -31,11 +31,11 @@ const ITEMS: { href: string; label: string; icon: LucideIcon; permiso: string }[
   { href: "/pedidos", label: "Pedidos", icon: ClipboardList, permiso: "modulo.pedidos" },
   { href: "/produccion", label: "Producción", icon: Factory, permiso: "modulo.produccion" },
   { href: "/inventario", label: "Inventario", icon: Package, permiso: "modulo.inventario" },
-  { href: "/catalogos/tallas", label: "Catálogos", icon: BookOpen, permiso: "modulo.catalogos" },
+  { href: "/catalogos/tallas", base: "/catalogos", label: "Catálogos", icon: BookOpen, permiso: "modulo.catalogos" },
   { href: "/materiales", label: "Materiales", icon: Boxes, permiso: "modulo.materiales" },
   { href: "/compras", label: "Compras", icon: ShoppingCart, permiso: "modulo.compras" },
   { href: "/bordados", label: "Bordados", icon: Shirt, permiso: "modulo.bordados" },
-  { href: "/reportes/productividad", label: "Reportes", icon: BarChart3, permiso: "modulo.reportes" },
+  { href: "/reportes/ventas", base: "/reportes", label: "Reportes", icon: BarChart3, permiso: "modulo.reportes" },
   { href: "/usuarios", label: "Usuarios", icon: UserCog, permiso: "admin" },
   { href: "/ajustes", label: "Ajustes", icon: Settings, permiso: "admin" },
 ];
@@ -46,7 +46,7 @@ export function SidebarAdmin({ perfil }: { perfil: PerfilConPermisos }) {
   return (
     <nav className="flex flex-col gap-0.5 p-3">
       {ITEMS.filter((item) => (item.permiso === "admin" ? perfil.rol === "admin" : tienePermiso(perfil, item.permiso))).map((item) => {
-        const activo = pathname.startsWith(item.href);
+        const activo = pathname.startsWith(item.base ?? item.href);
         const Icon = item.icon;
         return (
           <Link

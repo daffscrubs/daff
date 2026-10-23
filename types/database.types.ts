@@ -1824,6 +1824,96 @@ export type Database = {
           },
         ]
       }
+      ventas_historicas: {
+        Row: {
+          caja: string | null
+          cajero: string | null
+          cliente_id: string | null
+          cliente_nombre: string | null
+          created_at: string
+          deuda_actual: number
+          deuda_inicial: number
+          descuento: number
+          entrega: string | null
+          estatus: Database["public"]["Enums"]["estatus_venta_historica"]
+          facturada: boolean
+          fecha: string
+          id: string
+          nota: string | null
+          numero: number
+          pago_efectivo: number
+          pago_tarjeta: number
+          pago_transferencia: number
+          reembolsos: number
+          saldo_pendiente: number
+          subtotal: number
+          total: number
+          total_actualizado: number
+          vencimiento_deuda: string | null
+          vendedor: string | null
+        }
+        Insert: {
+          caja?: string | null
+          cajero?: string | null
+          cliente_id?: string | null
+          cliente_nombre?: string | null
+          created_at?: string
+          deuda_actual?: number
+          deuda_inicial?: number
+          descuento?: number
+          entrega?: string | null
+          estatus: Database["public"]["Enums"]["estatus_venta_historica"]
+          facturada?: boolean
+          fecha: string
+          id?: string
+          nota?: string | null
+          numero: number
+          pago_efectivo?: number
+          pago_tarjeta?: number
+          pago_transferencia?: number
+          reembolsos?: number
+          subtotal: number
+          total: number
+          total_actualizado: number
+          vencimiento_deuda?: string | null
+          vendedor?: string | null
+        }
+        Update: {
+          caja?: string | null
+          cajero?: string | null
+          cliente_id?: string | null
+          cliente_nombre?: string | null
+          created_at?: string
+          deuda_actual?: number
+          deuda_inicial?: number
+          descuento?: number
+          entrega?: string | null
+          estatus?: Database["public"]["Enums"]["estatus_venta_historica"]
+          facturada?: boolean
+          fecha?: string
+          id?: string
+          nota?: string | null
+          numero?: number
+          pago_efectivo?: number
+          pago_tarjeta?: number
+          pago_transferencia?: number
+          reembolsos?: number
+          subtotal?: number
+          total?: number
+          total_actualizado?: number
+          vencimiento_deuda?: string | null
+          vendedor?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "ventas_historicas_cliente_id_fkey"
+            columns: ["cliente_id"]
+            isOneToOne: false
+            referencedRelation: "clientes"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
     }
     Views: {
       [_ in never]: never
@@ -1848,6 +1938,47 @@ export type Database = {
       fn_permisos_por_rol: {
         Args: { p_rol: Database["public"]["Enums"]["rol_usuario"] }
         Returns: string[]
+      }
+      fn_rango_ventas: {
+        Args: never
+        Returns: { primera: string; ultima: string }[]
+      }
+      fn_reporte_ventas: {
+        Args: { p_agrupar?: string; p_desde: string; p_hasta: string }
+        Returns: {
+          bruto: number
+          descuentos: number
+          efectivo: number
+          neto: number
+          periodo: string
+          por_cobrar: number
+          reembolsos: number
+          tarjeta: number
+          transferencia: number
+          ventas: number
+        }[]
+      }
+      fn_reporte_ventas_por: {
+        Args: { p_desde: string; p_dimension: string; p_hasta: string; p_limite?: number }
+        Returns: { clave: string; neto: number; ventas: number }[]
+      }
+      fn_resumen_clientes: {
+        Args: never
+        Returns: { cliente_id: string; saldo: number; total: number; ultima_compra: string; ventas: number }[]
+      }
+      fn_ventas_cliente: {
+        Args: { p_cliente_id: string }
+        Returns: {
+          estatus: string
+          fecha: string
+          nota: string
+          origen: string
+          pagado: number
+          referencia: string
+          saldo: number
+          total: number
+          venta_id: string
+        }[]
       }
       fn_registrar_movimiento_caja: {
         Args: {
@@ -1910,6 +2041,7 @@ export type Database = {
         | "regresada_a_tienda"
       estatus_unidad_material: "disponible" | "agotado" | "de_baja"
       estatus_venta: "completada" | "cancelada"
+      estatus_venta_historica: "pagada" | "deuda_pendiente" | "impaga" | "reembolsada" | "cancelada"
       metodo_pago: "efectivo" | "transferencia" | "tarjeta"
       origen_avance: "colaborador" | "ajuste_supervisor"
       rol_usuario: "admin" | "ventas" | "supervisor" | "colaborador"
@@ -2063,6 +2195,7 @@ export const Constants = {
       ],
       estatus_unidad_material: ["disponible", "agotado", "de_baja"],
       estatus_venta: ["completada", "cancelada"],
+      estatus_venta_historica: ["pagada", "deuda_pendiente", "impaga", "reembolsada", "cancelada"],
       metodo_pago: ["efectivo", "transferencia", "tarjeta"],
       origen_avance: ["colaborador", "ajuste_supervisor"],
       rol_usuario: ["admin", "ventas", "supervisor", "colaborador"],
@@ -2084,4 +2217,5 @@ export type EstatusPrendaBordado = Database["public"]["Enums"]["estatus_prenda_b
 export type Ubicacion = Database["public"]["Tables"]["ubicaciones"]["Row"]
 export type MetodoPago = Database["public"]["Enums"]["metodo_pago"]
 export type EstatusVenta = Database["public"]["Enums"]["estatus_venta"]
+export type EstatusVentaHistorica = Database["public"]["Enums"]["estatus_venta_historica"]
 export type TipoMovimientoCaja = Database["public"]["Enums"]["tipo_movimiento_caja"]
