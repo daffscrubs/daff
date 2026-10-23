@@ -1,13 +1,18 @@
-import { Document, Page, View, Text, Svg, Rect, StyleSheet } from "@react-pdf/renderer";
+import path from "node:path";
+import { Document, Page, View, Text, Image, Svg, Rect, StyleSheet } from "@react-pdf/renderer";
 import { barrasCode128, modulosCode128 } from "@/lib/barcode/code128";
 
 // Etiqueta física de producto: 62 x 25mm, una por página, para imprimir muchas de
-// corrido en la impresora de etiquetas. Lleva el nombre y la talla arriba, el código de
-// barras (Code 128) al centro y el código en texto con el precio abajo. El código va
-// también en texto por si hay que teclearlo cuando el lector no lo alcanza a leer.
+// corrido en la impresora de etiquetas. Arriba a la izquierda va el nombre con la
+// categoría y la talla, arriba a la derecha el logo; en medio el código de barras
+// (Code 128) y abajo el código en texto, por si hay que teclearlo cuando el lector
+// no lo alcanza a leer.
+const RUTA_LOGO = path.join(process.cwd(), "public/brand/logo-full-trimmed.png");
+const PROPORCION_LOGO = 762 / 1034; // ancho / alto del archivo
+const ALTO_LOGO = 22;
 const ANCHO_PT = 175.75; // 62mm
 const MARGEN_X = 5;
-const ALTO_CODIGO = 34;
+const ALTO_CODIGO = 28;
 const ZONA_SILENCIO = 10; // módulos en blanco a cada lado: sin ellos el lector no ubica el inicio
 const MODULO_MAXIMO = 1.3; // pt; por encima de esto el código se ve desproporcionado
 const ANCHO_UTIL = ANCHO_PT - MARGEN_X * 2;
@@ -22,48 +27,50 @@ const estilos = StyleSheet.create({
   },
   encabezado: {
     flexDirection: "row",
-    alignItems: "center",
+    alignItems: "flex-start",
     justifyContent: "space-between",
-    height: 11,
+    height: ALTO_LOGO,
+  },
+  textos: {
+    flex: 1,
+    paddingTop: 2,
+    paddingRight: 6,
   },
   nombre: {
-    fontSize: 7.5,
+    fontSize: 8,
     fontWeight: 700,
-    flex: 1,
   },
-  talla: {
-    fontSize: 9,
-    fontWeight: 700,
-    marginLeft: 4,
+  detalle: {
+    fontSize: 6.5,
+    color: "#444444",
+    marginTop: 1.5,
+  },
+  logo: {
+    height: ALTO_LOGO,
+    width: ALTO_LOGO * PROPORCION_LOGO,
   },
   zonaCodigo: {
     alignItems: "center",
     marginTop: 2,
   },
   pie: {
-    flexDirection: "row",
     alignItems: "center",
     marginTop: 1.5,
     height: 8,
   },
-  relleno: { flex: 1 },
   textoCodigo: {
     fontSize: 7,
     letterSpacing: 1,
-  },
-  precio: {
-    flex: 1,
-    fontSize: 7,
-    fontWeight: 700,
-    textAlign: "right",
   },
 });
 
 export interface EtiquetaProductoPDF {
   nombre: string;
-  talla: string;
+  /** Categoría del producto, si tiene. */
+  categoria: string | null;
+  /** Talla; null cuando el producto no maneja tallas (no se imprime nada en su lugar). */
+  talla: string | null;
   codigo: string;
-  precio: string | null;
 }
 
 function CodigoDeBarras({ codigo }: { codigo: string }) {
@@ -82,22 +89,26 @@ function CodigoDeBarras({ codigo }: { codigo: string }) {
 export function EtiquetaProducto({ etiquetas }: { etiquetas: EtiquetaProductoPDF[] }) {
   return (
     <Document>
-      {etiquetas.map((etiqueta, i) => (
-        <Page key={i} size={{ width: "62mm", height: "25mm" }} style={estilos.pagina}>
-          <View style={estilos.encabezado}>
-            <Text style={estilos.nombre}>{etiqueta.nombre}</Text>
-            <Text style={estilos.talla}>{etiqueta.talla}</Text>
-          </View>
-          <View style={estilos.zonaCodigo}>
-            <CodigoDeBarras codigo={etiqueta.codigo} />
-          </View>
-          <View style={estilos.pie}>
-            <View style={estilos.relleno} />
-            <Text style={estilos.textoCodigo}>{etiqueta.codigo}</Text>
-            <Text style={estilos.precio}>{etiqueta.precio ?? ""}</Text>
-          </View>
-        </Page>
-      ))}
+      {etiquetas.map((etiqueta, i) => {
+        const detalle = [etiqueta.categoria, etiqueta.talla].filter(Boolean).join(" / ");
+        return (
+          <Page key={i} size={{ width: "62mm", height: "25mm" }} style={estilos.pagina}>
+            <View style={estilos.encabezado}>
+              <View style={estilos.textos}>
+                <Text style={estilos.nombre}>{etiqueta.nombre}</Text>
+                {!!detalle && <Text style={estilos.detalle}>{detalle}</Text>}
+              </View>
+              <Image src={RUTA_LOGO} style={estilos.logo} />
+            </View>
+            <View style={estilos.zonaCodigo}>
+              <CodigoDeBarras codigo={etiqueta.codigo} />
+            </View>
+            <View style={estilos.pie}>
+              <Text style={estilos.textoCodigo}>{etiqueta.codigo}</Text>
+            </View>
+          </Page>
+        );
+      })}
     </Document>
   );
 }
