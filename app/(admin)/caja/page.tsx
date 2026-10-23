@@ -28,7 +28,7 @@ export default async function CajaPage({ searchParams }: { searchParams: Promise
     // Turnos abiertos ese día, y el que siga abierto aunque se haya abierto otro día.
     supabase
       .from("cajas_sesiones")
-      .select("id, fecha_apertura, fecha_cierre, fondo_inicial, efectivo_esperado, efectivo_contado, notas_cierre, abierta:perfiles!cajas_sesiones_abierta_por_fkey(nombre_completo), cerro:perfiles!cajas_sesiones_cerrada_por_fkey(nombre_completo)")
+      .select("id, fecha_apertura, fecha_cierre, fondo_inicial, efectivo_esperado, efectivo_contado, tarjeta_esperado, tarjeta_contado, transferencia_esperado, transferencia_contado, notas_cierre, abierta:perfiles!cajas_sesiones_abierta_por_fkey(nombre_completo), cerro:perfiles!cajas_sesiones_cerrada_por_fkey(nombre_completo)")
       .eq("ubicacion_id", ubicacionId)
       .or(`and(fecha_apertura.gte.${desde},fecha_apertura.lt.${hasta}),fecha_cierre.is.null`)
       .order("fecha_apertura", { ascending: false }),
@@ -48,8 +48,8 @@ export default async function CajaPage({ searchParams }: { searchParams: Promise
       .order("created_at", { ascending: false }),
   ]);
 
-  // Efectivo que debe haber en el cajón ahora (lo calcula la base de datos: es la misma cuenta del cierre).
-  const efectivoEsperado = sesionAbierta ? Number((await supabase.rpc("fn_efectivo_esperado", { p_sesion_id: sesionAbierta.id })).data ?? 0) : null;
+  // Lo que debe haber ahora por método (lo calcula la base de datos: es la misma cuenta del cierre).
+  const esperados = sesionAbierta ? ((await supabase.rpc("fn_totales_esperados", { p_sesion_id: sesionAbierta.id })).data ?? [])[0] : undefined;
 
   return (
     <CajaPanel
@@ -64,7 +64,9 @@ export default async function CajaPage({ searchParams }: { searchParams: Promise
               desde: sesionAbierta.fecha_apertura,
               fondo: Number(sesionAbierta.fondo_inicial),
               abiertaPor: sesionAbierta.perfiles?.nombre_completo ?? "",
-              efectivoEsperado: efectivoEsperado ?? 0,
+              efectivoEsperado: Number(esperados?.efectivo ?? 0),
+              tarjetaEsperado: Number(esperados?.tarjeta ?? 0),
+              transferenciaEsperado: Number(esperados?.transferencia ?? 0),
             }
           : null
       }
@@ -75,6 +77,8 @@ export default async function CajaPage({ searchParams }: { searchParams: Promise
         fondo: Number(s.fondo_inicial),
         esperado: s.efectivo_esperado === null ? null : Number(s.efectivo_esperado),
         contado: s.efectivo_contado === null ? null : Number(s.efectivo_contado),
+        tarjeta: s.tarjeta_contado === null ? null : { esperado: Number(s.tarjeta_esperado ?? 0), contado: Number(s.tarjeta_contado) },
+        transferencia: s.transferencia_contado === null ? null : { esperado: Number(s.transferencia_esperado ?? 0), contado: Number(s.transferencia_contado) },
         notas: s.notas_cierre,
         abiertaPor: s.abierta?.nombre_completo ?? "",
         cerradaPor: s.cerro?.nombre_completo ?? "",

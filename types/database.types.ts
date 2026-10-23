@@ -95,6 +95,10 @@ export type Database = {
           fondo_inicial: number
           id: string
           notas_cierre: string | null
+          tarjeta_contado: number | null
+          tarjeta_esperado: number | null
+          transferencia_contado: number | null
+          transferencia_esperado: number | null
           ubicacion_id: string
         }
         Insert: {
@@ -107,6 +111,10 @@ export type Database = {
           fondo_inicial?: number
           id?: string
           notas_cierre?: string | null
+          tarjeta_contado?: number | null
+          tarjeta_esperado?: number | null
+          transferencia_contado?: number | null
+          transferencia_esperado?: number | null
           ubicacion_id: string
         }
         Update: {
@@ -119,6 +127,10 @@ export type Database = {
           fondo_inicial?: number
           id?: string
           notas_cierre?: string | null
+          tarjeta_contado?: number | null
+          tarjeta_esperado?: number | null
+          transferencia_contado?: number | null
+          transferencia_esperado?: number | null
           ubicacion_id?: string
         }
         Relationships: [
@@ -1838,12 +1850,22 @@ export type Database = {
         Returns: undefined
       }
       fn_cerrar_caja: {
-        Args: { p_efectivo_contado: number; p_notas?: string; p_sesion_id: string }
+        Args: {
+          p_efectivo_contado: number
+          p_notas?: string
+          p_sesion_id: string
+          p_tarjeta_contado?: number
+          p_transferencia_contado?: number
+        }
         Returns: number
       }
       fn_efectivo_esperado: {
         Args: { p_sesion_id: string }
         Returns: number
+      }
+      fn_totales_esperados: {
+        Args: { p_sesion_id: string }
+        Returns: { efectivo: number; tarjeta: number; transferencia: number }[]
       }
       fn_permisos_por_rol: {
         Args: { p_rol: Database["public"]["Enums"]["rol_usuario"] }

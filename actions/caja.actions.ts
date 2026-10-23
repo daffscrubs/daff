@@ -45,21 +45,58 @@ export async function registrarMovimientoCaja(
   return accionOk(undefined);
 }
 
-/** Cierra el turno; regresa la diferencia (contado - esperado): negativa = faltante, positiva = sobrante. */
-export async function cerrarCaja(sesionId: string, efectivoContado: number, notas?: string): Promise<AccionResultado<{ diferencia: number }>> {
+export interface ResultadoCorte {
+  efectivo: { esperado: number; contado: number; diferencia: number };
+  tarjeta: { esperado: number; contado: number | null; diferencia: number | null };
+  transferencia: { esperado: number; contado: number | null; diferencia: number | null };
+}
+
+/** Cierra el turno y regresa, por método de pago, lo esperado, lo contado y la diferencia (contado - esperado: negativa = faltante). */
+export async function cerrarCaja(
+  sesionId: string,
+  conteo: { efectivo: number; tarjeta?: number | null; transferencia?: number | null },
+  notas?: string
+): Promise<AccionResultado<ResultadoCorte>> {
   await requerirPerfil();
-  const datos = cerrarCajaSchema.safeParse({ sesionId, efectivoContado, notas });
+  const datos = cerrarCajaSchema.safeParse({
+    sesionId,
+    efectivoContado: conteo.efectivo,
+    tarjetaContado: conteo.tarjeta ?? null,
+    transferenciaContado: conteo.transferencia ?? null,
+    notas,
+  });
   if (!datos.success) return accionError(datos.error.issues[0]?.message ?? "Datos inválidos");
 
   const supabase = await createClient();
-  const { data, error } = await supabase.rpc("fn_cerrar_caja", {
+  const { error } = await supabase.rpc("fn_cerrar_caja", {
     p_sesion_id: datos.data.sesionId,
     p_efectivo_contado: datos.data.efectivoContado,
     p_notas: datos.data.notas,
+    p_tarjeta_contado: datos.data.tarjetaContado ?? undefined,
+    p_transferencia_contado: datos.data.transferenciaContado ?? undefined,
   });
-  if (error || data === null) return accionError(error?.message ?? "No se pudo cerrar la caja");
+  if (error) return accionError(error.message);
 
+  // Lo esperado lo calcula la base al cerrar (no el navegador): se lee tal como quedó guardado en el corte.
+  const { data: corte } = await supabase
+    .from("cajas_sesiones")
+    .select("efectivo_esperado, efectivo_contado, tarjeta_esperado, tarjeta_contado, transferencia_esperado, transferencia_contado")
+    .eq("id", datos.data.sesionId)
+    .single();
   revalidatePath("/caja");
   revalidatePath("/pos");
-  return accionOk({ diferencia: Number(data) });
+  if (!corte) return accionError("La caja se cerró, pero no se pudo leer el resultado del corte. Revisa Turnos de caja.");
+
+  const num = (v: number | null) => (v === null ? null : Number(v));
+  const metodo = (esperado: number | null, contado: number | null) => ({
+    esperado: Number(esperado ?? 0),
+    contado: num(contado),
+    diferencia: contado === null ? null : Math.round((Number(contado) - Number(esperado ?? 0)) * 100) / 100,
+  });
+  const ef = metodo(corte.efectivo_esperado, corte.efectivo_contado);
+  return accionOk({
+    efectivo: { esperado: ef.esperado, contado: ef.contado ?? 0, diferencia: ef.diferencia ?? 0 },
+    tarjeta: metodo(corte.tarjeta_esperado, corte.tarjeta_contado),
+    transferencia: metodo(corte.transferencia_esperado, corte.transferencia_contado),
+  });
 }
