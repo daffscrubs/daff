@@ -5,61 +5,55 @@ import {
   OrdenProduccionDocumento,
   type ItemOrdenPDF,
   type InsumoOrdenPDF,
-  type RegistroAvancePDF,
+  type EntregaPDF,
 } from "@/lib/pdf/OrdenProduccionDocumento";
 import { ESTATUS_ORDEN_LABEL } from "@/lib/labels";
 import { construirHistorialOrden } from "@/lib/produccion/historial";
-import { construirRegistrosReporte } from "@/lib/produccion/registro-reporte";
+import { entregadoPorItem, type EntregaConItems } from "@/lib/produccion/entregas";
 
 export async function GET(_req: Request, { params }: { params: Promise<{ id: string }> }) {
   await requerirPerfil(["admin", "supervisor", "ventas"]);
   const { id } = await params;
   const supabase = await createClient();
 
-  const { data: lote } = await supabase.from("lotes_produccion").select("*, pedidos(clientes(nombre_comercial))").eq("id", id).single();
+  const { data: lote } = await supabase
+    .from("lotes_produccion")
+    .select("*, pedidos(clientes(nombre_comercial)), maquileros(nombre)")
+    .eq("id", id)
+    .single();
   if (!lote) return new Response("No encontrado", { status: 404 });
 
-  const [
-    { data: items },
-    { data: loteEtapas },
-    { data: etapasCatalogo },
-    { data: modelos },
-    { data: tallas },
-    { data: consumos },
-    { data: materiales },
-    { data: registros },
-  ] = await Promise.all([
+  const [{ data: items }, { data: modelos }, { data: tallas }, { data: consumos }, { data: materiales }, { data: entregasProd }, { data: perfiles }] = await Promise.all([
     supabase.from("items_orden_produccion").select("*").eq("lote_id", id),
-    supabase.from("lote_etapas").select("*").eq("lote_id", id),
-    supabase.from("etapas_proceso").select("*"),
     supabase.from("modelos").select("id, nombre"),
     supabase.from("tallas").select("id, codigo"),
     supabase.from("consumo_material_orden").select("*").eq("lote_id", id),
     supabase.from("materiales").select("id, nombre, unidad_medida"),
-    supabase
-      .from("registros_avance_colaborador")
-      .select("*, perfiles!registros_avance_colaborador_colaborador_id_fkey(nombre_completo)")
-      .eq("lote_id", id)
-      .order("created_at", { ascending: true }),
+    supabase.from("entregas_produccion").select("*, entrega_produccion_items(item_orden_id, cantidad)").eq("lote_id", id).order("fecha", { ascending: true }).order("created_at", { ascending: true }),
+    supabase.from("perfiles").select("id, nombre_completo"),
   ]);
 
-  const entregas = lote.pedido_id
+  const entregas = (entregasProd ?? []) as EntregaConItems[];
+  const entregadoPorRenglon = entregadoPorItem(entregas);
+  const pedidoAlCliente = lote.pedido_id
     ? (await supabase.from("entregas").select("*").eq("pedido_id", lote.pedido_id)).data ?? []
     : [];
+
+  const nombreItem = (itemId: string) => {
+    const item = items?.find((i) => i.id === itemId);
+    if (!item) return "";
+    return `${modelos?.find((m) => m.id === item.modelo_id)?.nombre ?? "—"} ${tallas?.find((t) => t.id === item.talla_id)?.codigo ?? ""}`.trim();
+  };
+  const nombrePerfil = (perfilId: string | null) => perfiles?.find((p) => p.id === perfilId)?.nombre_completo ?? "—";
+  const quienEntrego = (e: EntregaConItems) => (e.maquilero_id ? lote.maquileros?.nombre ?? "Maquilero" : nombrePerfil(e.entregado_por));
+  const piezas = (e: EntregaConItems) => e.entrega_produccion_items.map((i) => `${i.cantidad} ${nombreItem(i.item_orden_id)}`.trim()).join(", ");
 
   const itemsPDF: ItemOrdenPDF[] = (items ?? []).map((item) => ({
     producto: modelos?.find((m) => m.id === item.modelo_id)?.nombre ?? "—",
     talla: tallas?.find((t) => t.id === item.talla_id)?.codigo ?? "—",
-    cantidad: item.cantidad_planeada,
+    pedido: item.cantidad_planeada,
+    entregado: entregadoPorRenglon.get(item.id) ?? 0,
   }));
-
-  const procesos = [
-    ...new Map(
-      (loteEtapas ?? []).filter((le) => !le.parent_lote_etapa_id).map((le) => [le.orden_secuencia!, le.etapa_id!])
-    ).entries(),
-  ]
-    .sort(([a], [b]) => a - b)
-    .map(([, etapaId]) => etapasCatalogo?.find((e) => e.id === etapaId)?.nombre ?? "—");
 
   const insumosPDF: InsumoOrdenPDF[] = (consumos ?? []).map((c) => {
     const material = materiales?.find((m) => m.id === c.material_id);
@@ -71,45 +65,36 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
     };
   });
 
-  const registrosReporte = construirRegistrosReporte({
-    registros: registros ?? [],
-    etapasCatalogo: etapasCatalogo ?? [],
-    loteEtapas: loteEtapas ?? [],
-    items: items ?? [],
-    lotes: [{ id: lote.id, folio: lote.folio }],
-    modelos: modelos ?? [],
-    tallas: tallas ?? [],
-  });
-
   const cronologia = construirHistorialOrden({
     lote,
-    registrosReporte,
+    entregasProduccion: entregas,
+    descripcionEntrega: (e) => ({ piezas: piezas(e), quien: `Entregó ${quienEntrego(e)} · recibió ${nombrePerfil(e.recibido_por)}` }),
     consumos: consumos ?? [],
     materiales: materiales ?? [],
-    entregas,
+    entregas: pedidoAlCliente,
   });
 
-  const registrosAvance: RegistroAvancePDF[] = registrosReporte.map((r) => ({
-    fecha: r.created_at,
-    colaborador: r.colaborador,
-    proceso: r.etapa,
-    producto: r.producto,
-    cantidad: r.cantidad,
+  const entregasPDF: EntregaPDF[] = entregas.map((e) => ({
+    fecha: e.fecha,
+    entrego: quienEntrego(e),
+    recibio: nombrePerfil(e.recibido_por),
+    piezas: piezas(e),
+    cancelada: e.estatus === "cancelada",
   }));
 
   const buffer = await renderToBuffer(
     OrdenProduccionDocumento({
       folio: lote.folio,
       cliente: lote.pedidos?.clientes?.nombre_comercial ?? null,
-      estatus: ESTATUS_ORDEN_LABEL[lote.estatus],
+      estatus: `${ESTATUS_ORDEN_LABEL[lote.estatus]}${lote.cerrada_con_faltantes ? " (con faltantes)" : ""}`,
       fechaInicio: lote.fecha_inicio,
       fechaFinEstimada: lote.fecha_fin_estimada,
       notas: lote.notas,
       items: itemsPDF,
-      procesos,
+      quienLaHace: lote.tipo_produccion === "maquila" ? `Maquila · ${lote.maquileros?.nombre ?? "—"}` : "Interna",
       insumos: insumosPDF,
       cronologia,
-      registrosAvance,
+      entregas: entregasPDF,
     })
   );
 

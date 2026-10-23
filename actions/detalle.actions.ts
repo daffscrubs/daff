@@ -3,22 +3,6 @@
 import { createClient } from "@/lib/supabase/server";
 import { requerirPerfil } from "@/lib/supabase/auth-helpers";
 
-export async function obtenerDetalleCliente(id: string) {
-  await requerirPerfil(["admin", "ventas", "supervisor"]);
-  const supabase = await createClient();
-
-  const [{ data: cliente }, { data: pedidos }] = await Promise.all([
-    supabase.from("clientes").select("*").eq("id", id).single(),
-    supabase
-      .from("pedidos")
-      .select("*")
-      .eq("cliente_id", id)
-      .order("created_at", { ascending: false }),
-  ]);
-
-  return { cliente, pedidos: pedidos ?? [] };
-}
-
 export async function obtenerDetalleModelo(id: string) {
   await requerirPerfil(["admin", "ventas", "supervisor"]);
   const supabase = await createClient();

@@ -4,11 +4,7 @@ import { UsuariosTable } from "@/components/usuarios/UsuariosTable";
 
 export default async function UsuariosPage() {
   const supabase = await createClient();
-  const [{ data: perfiles }, { data: etapasCatalogo }, { data: asignaciones }] = await Promise.all([
-    supabase.from("perfiles").select("*").order("nombre_completo"),
-    supabase.from("etapas_proceso").select("*").eq("activo", true).order("nombre"),
-    supabase.from("colaborador_etapas").select("*"),
-  ]);
+  const { data: perfiles } = await supabase.from("perfiles").select("*").order("nombre_completo");
 
   return (
     <div className="space-y-6">
@@ -20,11 +16,7 @@ export default async function UsuariosPage() {
         <NuevoUsuarioDialog />
       </div>
 
-      <UsuariosTable
-        perfiles={perfiles ?? []}
-        etapasCatalogo={etapasCatalogo ?? []}
-        asignaciones={asignaciones ?? []}
-      />
+      <UsuariosTable perfiles={perfiles ?? []} />
     </div>
   );
 }

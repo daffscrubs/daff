@@ -25,7 +25,7 @@ export default async function ReporteVentasPage({ searchParams }: { searchParams
     <div className="space-y-6">
       <div>
         <h1 className="text-2xl font-semibold">Reportes</h1>
-        <p className="text-muted-foreground">Ventas y productividad de tu operación.</p>
+        <p className="text-muted-foreground">Ventas y piezas entregadas por tu taller y tus maquileros.</p>
       </div>
       <NavReportes />
       <ReporteVentas

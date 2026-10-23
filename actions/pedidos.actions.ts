@@ -129,7 +129,7 @@ export async function cancelarPedido(id: string): Promise<AccionResultado> {
   if (!editable.ok) return editable;
 
   // Cancelar el pedido debe cancelar también su producción activa: de lo
-  // contrario un colaborador podría seguir registrando avance (y
+  // contrario se podrían seguir registrando entregas (y
   // consumiendo materiales) sobre un pedido que el cliente ya no quiere.
   const { data: lotes, error: errorLotes } = await supabase
     .from("lotes_produccion")

@@ -6,7 +6,7 @@ import { cn } from "@/lib/utils";
 
 const SECCIONES = [
   { href: "/reportes/ventas", etiqueta: "Ventas" },
-  { href: "/reportes/productividad", etiqueta: "Productividad" },
+  { href: "/reportes/entregas", etiqueta: "Piezas entregadas" },
 ];
 
 export function NavReportes() {

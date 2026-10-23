@@ -35,12 +35,13 @@ export function MetricasFinancieras({
   pedidos,
   compras,
   gastos,
-  avances,
+  entregas,
 }: {
   pedidos: PedidoResumenFinanciero[];
   compras: MovimientoFinanciero[];
   gastos: MovimientoFinanciero[];
-  avances: MovimientoFinanciero[];
+  /** Piezas entregadas por día (entregas de producción vigentes). */
+  entregas: MovimientoFinanciero[];
 }) {
   const [periodo, setPeriodo] = useState<TipoPeriodo>("mes");
   const hoy = fechaISOLocal(new Date());
@@ -57,12 +58,12 @@ export function MetricasFinancieras({
   const ingresos = pedidos.filter((p) => enRango(p.fecha)).reduce((acc, p) => acc + p.total, 0);
   const totalCompras = compras.filter((c) => enRango(c.fecha)).reduce((acc, c) => acc + c.monto, 0);
   const totalGastos = gastos.filter((g) => enRango(g.fecha)).reduce((acc, g) => acc + g.monto, 0);
-  const totalPiezas = avances.filter((a) => enRango(a.fecha)).reduce((acc, a) => acc + a.monto, 0);
+  const totalPiezas = entregas.filter((a) => enRango(a.fecha)).reduce((acc, a) => acc + a.monto, 0);
 
   const serieIngresos = serieDiaria(pedidos.map((p) => ({ fecha: p.fecha, monto: p.total })));
   const serieCompras = serieDiaria(compras);
   const serieGastos = serieDiaria(gastos);
-  const seriePiezas = serieDiaria(avances);
+  const seriePiezas = serieDiaria(entregas);
 
   return (
     <div className="space-y-3">
@@ -94,7 +95,7 @@ export function MetricasFinancieras({
         <TarjetaMetricaConGrafica titulo="Ingresos" valor={ingresos} href="/pedidos" serie={serieIngresos} color="#16a34a" formato="moneda" />
         <TarjetaMetricaConGrafica titulo="Compras" valor={totalCompras} href="/compras" serie={serieCompras} color="#d97706" formato="moneda" />
         <TarjetaMetricaConGrafica titulo="Gastos" valor={totalGastos} href="/compras/gastos" serie={serieGastos} color="#dc2626" formato="moneda" />
-        <TarjetaMetricaConGrafica titulo="Productividad" valor={totalPiezas} href="/reportes/productividad" serie={seriePiezas} color="#2563eb" formato="piezas" />
+        <TarjetaMetricaConGrafica titulo="Piezas entregadas" valor={totalPiezas} href="/reportes/entregas" serie={seriePiezas} color="#2563eb" formato="piezas" />
       </div>
     </div>
   );

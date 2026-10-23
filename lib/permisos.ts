@@ -43,6 +43,11 @@ export const GRUPOS_PERMISOS: GrupoPermisos[] = [
     ],
   },
   {
+    id: "produccion",
+    titulo: "Producción",
+    permisos: [{ id: "produccion.pagos_maquila", etiqueta: "Ver montos y pagos a maquileros, y marcarlos como pagados" }],
+  },
+  {
     id: "modulos",
     titulo: "Acceso a módulos",
     permisos: [
@@ -95,6 +100,8 @@ const RUTAS: { prefijo: string; permiso: string }[] = [
   { prefijo: "/caja", permiso: "modulo.caja" },
   { prefijo: "/clientes", permiso: "modulo.clientes" },
   { prefijo: "/pedidos", permiso: "modulo.pedidos" },
+  // Los pagos a maquileros van antes que "/produccion": se compara por prefijo y gana la primera coincidencia.
+  { prefijo: "/produccion/pagos", permiso: "produccion.pagos_maquila" },
   { prefijo: "/produccion", permiso: "modulo.produccion" },
   { prefijo: "/inventario", permiso: "modulo.inventario" },
   { prefijo: "/catalogos", permiso: "modulo.catalogos" },
@@ -122,7 +129,7 @@ export function puedeEntrarARuta(perfil: PerfilConPermisos, pathname: string): b
 
 /** Primera pantalla a la que puede entrar el usuario (donde cae al iniciar sesión o si pide una prohibida). */
 export function rutaInicial(perfil: PerfilConPermisos): string {
-  if (perfil.rol === "colaborador") return "/mi-dia";
+  if (perfil.rol === "colaborador") return "/bordado";
   const primera = RUTAS.find((r) => r.permiso !== "admin" && tienePermiso(perfil, r.permiso));
   return primera?.prefijo ?? "/sin-acceso";
 }
