@@ -33,7 +33,8 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { ImportarProductosDialog } from "@/components/inventario/ImportarProductosDialog";
-import { CrearEtiquetasDialog, type ConteoEtiquetas } from "@/components/inventario/CrearEtiquetasDialog";
+import { CrearEtiquetasDialog, type ProductoEtiquetable } from "@/components/inventario/CrearEtiquetasDialog";
+import { TALLA_SIN_TALLAS } from "@/lib/inventario/etiquetas";
 import { EstadoVacio } from "@/components/ui/estado-vacio";
 import { formatearMoneda } from "@/lib/dinero";
 import { normalizarTexto } from "@/lib/texto";
@@ -42,8 +43,8 @@ import type { Database } from "@/types/database.types";
 
 type Modelo = Database["public"]["Tables"]["modelos"]["Row"];
 type Talla = Database["public"]["Tables"]["tallas"]["Row"];
-type ModeloTalla = Pick<Database["public"]["Tables"]["modelo_tallas"]["Row"], "modelo_id" | "precio_venta" | "codigo_barras" | "sku">;
-type StockProducto = Pick<Database["public"]["Tables"]["stock_productos"]["Row"], "modelo_id" | "ubicacion_id" | "cantidad_actual">;
+type ModeloTalla = Pick<Database["public"]["Tables"]["modelo_tallas"]["Row"], "modelo_id" | "talla_id" | "precio_venta" | "codigo_barras" | "sku">;
+type StockProducto = Pick<Database["public"]["Tables"]["stock_productos"]["Row"], "modelo_id" | "talla_id" | "ubicacion_id" | "cantidad_actual">;
 type Ubicacion = Database["public"]["Tables"]["ubicaciones"]["Row"];
 
 const OPCIONES_ORDEN = [
@@ -166,34 +167,35 @@ export function InventarioManager({
     });
   }
 
-  // Tallas de cada producto y cuántas tienen código de barras (cada una es una etiqueta).
-  const gruposEtiquetas = useMemo(() => {
-    const tallasPorModelo = new Map<string, { total: number; conCodigo: number }>();
-    for (const mt of modeloTallas) {
-      const c = tallasPorModelo.get(mt.modelo_id) ?? { total: 0, conCodigo: 0 };
-      c.total++;
-      if (mt.codigo_barras?.trim()) c.conCodigo++;
-      tallasPorModelo.set(mt.modelo_id, c);
+  // Cada producto con sus tallas, el código de barras de cada una y sus existencias, para elegir
+  // cuántas etiquetas se quieren de cada talla.
+  const productosEtiquetables = useMemo<ProductoEtiquetable[]>(() => {
+    const ordenTalla = new Map(tallas.map((t) => [t.id, t.orden]));
+    const codigoTalla = new Map(tallas.map((t) => [t.id, t.codigo.trim()]));
+    const stockPorTalla = new Map<string, number>();
+    for (const s of stock) {
+      const clave = `${s.modelo_id}|${s.talla_id}`;
+      stockPorTalla.set(clave, (stockPorTalla.get(clave) ?? 0) + s.cantidad_actual);
     }
-    const contar = (ids: string[]): ConteoEtiquetas => {
-      let tallasConCodigo = 0;
-      let tallasSinCodigo = 0;
-      const idsConCodigo: string[] = [];
-      for (const id of ids) {
-        const c = tallasPorModelo.get(id);
-        if (!c) continue;
-        tallasConCodigo += c.conCodigo;
-        tallasSinCodigo += c.total - c.conCodigo;
-        if (c.conCodigo) idsConCodigo.push(id);
-      }
-      return { idsConCodigo, productos: ids.length, tallasConCodigo, tallasSinCodigo };
-    };
-    return {
-      seleccionados: contar([...seleccion].filter((id) => modelos.some((m) => m.id === id))),
-      busqueda: contar(filtrados.map((m) => m.id)),
-      todos: contar(modelos.map((m) => m.id)),
-    };
-  }, [modeloTallas, modelos, filtrados, seleccion]);
+    const variantesPorModelo = new Map<string, ProductoEtiquetable["variantes"]>();
+    for (const mt of modeloTallas) {
+      const talla = codigoTalla.get(mt.talla_id) ?? "";
+      const lista = variantesPorModelo.get(mt.modelo_id) ?? [];
+      lista.push({
+        tallaId: mt.talla_id,
+        // Los productos sin tallas se guardan internamente en UNITALLA; no se muestra ni se imprime.
+        talla: talla && talla.toUpperCase() !== TALLA_SIN_TALLAS ? talla : null,
+        codigoBarras: mt.codigo_barras?.trim() || null,
+        stock: stockPorTalla.get(`${mt.modelo_id}|${mt.talla_id}`) ?? 0,
+      });
+      variantesPorModelo.set(mt.modelo_id, lista);
+    }
+    return modelos.map((m) => ({
+      id: m.id,
+      nombre: m.nombre,
+      variantes: (variantesPorModelo.get(m.id) ?? []).sort((a, b) => (ordenTalla.get(a.tallaId) ?? 0) - (ordenTalla.get(b.tallaId) ?? 0)),
+    }));
+  }, [modelos, modeloTallas, tallas, stock]);
 
   function alternarTalla(id: string) {
     setTallaIds((prev) => (prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]));
@@ -481,7 +483,13 @@ export function InventarioManager({
         </Table>
       </div>
 
-      <CrearEtiquetasDialog abierto={etiquetasAbierto} onOpenChange={setEtiquetasAbierto} grupos={gruposEtiquetas} />
+      <CrearEtiquetasDialog
+        abierto={etiquetasAbierto}
+        onOpenChange={setEtiquetasAbierto}
+        productos={productosEtiquetables}
+        idsSeleccionados={[...seleccion].filter((id) => modelos.some((m) => m.id === id))}
+        idsBusqueda={filtrados.map((m) => m.id)}
+      />
     </div>
   );
 }
