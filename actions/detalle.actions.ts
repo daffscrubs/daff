@@ -41,7 +41,7 @@ export async function obtenerDetalleModelo(id: string) {
         .order("created_at", { ascending: false })
         .limit(20),
       supabase.from("tallas").select("id, codigo").order("orden"),
-      supabase.from("modelo_tallas").select("talla_id, precio_venta").eq("modelo_id", id),
+      supabase.from("modelo_tallas").select("talla_id, precio_venta, codigo_barras, sku").eq("modelo_id", id),
       supabase.from("ubicaciones").select("*").order("orden").order("nombre"),
     ]);
 
@@ -58,6 +58,9 @@ export async function obtenerDetalleModelo(id: string) {
     preciosPorTalla: Object.fromEntries(
       (tallasAsignadas ?? []).map((t) => [t.talla_id, t.precio_venta])
     ) as Record<string, number | null>,
+    codigosPorTalla: Object.fromEntries(
+      (tallasAsignadas ?? []).map((t) => [t.talla_id, { codigoBarras: t.codigo_barras, sku: t.sku }])
+    ) as Record<string, { codigoBarras: string | null; sku: string | null }>,
   };
 }
 

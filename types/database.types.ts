@@ -782,21 +782,27 @@ export type Database = {
       }
       modelo_tallas: {
         Row: {
+          codigo_barras: string | null
           id: string
           modelo_id: string
           precio_venta: number | null
+          sku: string | null
           talla_id: string
         }
         Insert: {
+          codigo_barras?: string | null
           id?: string
           modelo_id: string
           precio_venta?: number | null
+          sku?: string | null
           talla_id: string
         }
         Update: {
+          codigo_barras?: string | null
           id?: string
           modelo_id?: string
           precio_venta?: number | null
+          sku?: string | null
           talla_id?: string
         }
         Relationships: [

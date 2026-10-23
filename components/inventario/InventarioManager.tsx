@@ -41,7 +41,7 @@ import type { Database } from "@/types/database.types";
 
 type Modelo = Database["public"]["Tables"]["modelos"]["Row"];
 type Talla = Database["public"]["Tables"]["tallas"]["Row"];
-type ModeloTalla = Pick<Database["public"]["Tables"]["modelo_tallas"]["Row"], "modelo_id" | "precio_venta">;
+type ModeloTalla = Pick<Database["public"]["Tables"]["modelo_tallas"]["Row"], "modelo_id" | "precio_venta" | "codigo_barras" | "sku">;
 type StockProducto = Pick<Database["public"]["Tables"]["stock_productos"]["Row"], "modelo_id" | "ubicacion_id" | "cantidad_actual">;
 type Ubicacion = Database["public"]["Tables"]["ubicaciones"]["Row"];
 
@@ -123,15 +123,23 @@ export function InventarioManager({
       existencias.set(s.modelo_id, (existencias.get(s.modelo_id) ?? 0) + s.cantidad_actual);
     }
 
+    // Códigos de barras y SKU de todas las tallas de cada producto, para poder buscar por ellos.
+    const codigos = new Map<string, string>();
+    for (const mt of modeloTallas) {
+      if (mt.codigo_barras || mt.sku) {
+        codigos.set(mt.modelo_id, `${codigos.get(mt.modelo_id) ?? ""} ${mt.codigo_barras ?? ""} ${mt.sku ?? ""}`);
+      }
+    }
+
     const lista = modelos.filter((m) => {
       if (categoriaFiltro !== "todas" && m.categoria !== categoriaFiltro) return false;
       if (!q) return true;
-      return normalizarTexto(`${m.nombre} ${m.categoria ?? ""}`).includes(q);
+      return normalizarTexto(`${m.nombre} ${m.categoria ?? ""} ${codigos.get(m.id) ?? ""}`).includes(q);
     });
     if (orden === "stock_desc") lista.sort((a, b) => (existencias.get(b.id) ?? 0) - (existencias.get(a.id) ?? 0));
     if (orden === "stock_asc") lista.sort((a, b) => (existencias.get(a.id) ?? 0) - (existencias.get(b.id) ?? 0));
     return lista;
-  }, [modelos, stock, busqueda, categoriaFiltro, orden, ubicacionFiltro]);
+  }, [modelos, modeloTallas, stock, busqueda, categoriaFiltro, orden, ubicacionFiltro]);
 
   function alternarTalla(id: string) {
     setTallaIds((prev) => (prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]));
@@ -256,7 +264,7 @@ export function InventarioManager({
           <div className="relative min-w-64 flex-1">
             <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
             <Input
-              placeholder="Buscar por nombre o categoría"
+              placeholder="Buscar por nombre, categoría, SKU o código de barras"
               value={busqueda}
               onChange={(e) => setBusqueda(e.target.value)}
               className="h-10 pl-9 text-sm"

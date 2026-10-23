@@ -59,6 +59,14 @@ export function DetalleProducto({ detalle }: { detalle: DetalleModelo }) {
       Object.entries(detalle.preciosPorTalla).map(([tallaId, precio]) => [tallaId, precio != null ? String(precio) : ""])
     )
   );
+  const codigosIniciales = () =>
+    Object.fromEntries(
+      Object.entries(detalle.codigosPorTalla).map(([tallaId, c]) => [
+        tallaId,
+        { codigoBarras: c.codigoBarras ?? "", sku: c.sku ?? "" },
+      ])
+    );
+  const [codigosPorTalla, setCodigosPorTalla] = useState<Record<string, { codigoBarras: string; sku: string }>>(codigosIniciales);
   const [pendiente, startTransition] = useTransition();
   const [guardandoTallas, startTransitionTallas] = useTransition();
   const [eliminando, startTransitionEliminar] = useTransition();
@@ -109,6 +117,7 @@ export function DetalleProducto({ detalle }: { detalle: DetalleModelo }) {
     setPrecioVenta(modelo!.precio_venta != null ? String(modelo!.precio_venta) : "");
     setCategoria(modelo!.categoria ?? "");
     setTallaIds(detalle.tallaIdsAsignadas);
+    setCodigosPorTalla(codigosIniciales());
     setPreciosPorTalla(
       Object.fromEntries(
         Object.entries(detalle.preciosPorTalla).map(([tallaId, precio]) => [tallaId, precio != null ? String(precio) : ""])
@@ -125,6 +134,10 @@ export function DetalleProducto({ detalle }: { detalle: DetalleModelo }) {
     setPreciosPorTalla((prev) => ({ ...prev, [id]: valor }));
   }
 
+  function actualizarCodigoTalla(id: string, campo: "codigoBarras" | "sku", valor: string) {
+    setCodigosPorTalla((prev) => ({ ...prev, [id]: { ...(prev[id] ?? { codigoBarras: "", sku: "" }), [campo]: valor } }));
+  }
+
   function guardarTallas() {
     startTransitionTallas(async () => {
       const res = await guardarTallasModelo(
@@ -132,6 +145,8 @@ export function DetalleProducto({ detalle }: { detalle: DetalleModelo }) {
         tallaIds.map((tallaId) => ({
           tallaId,
           precioVenta: preciosPorTalla[tallaId] ? Number(preciosPorTalla[tallaId]) : undefined,
+          codigoBarras: codigosPorTalla[tallaId]?.codigoBarras,
+          sku: codigosPorTalla[tallaId]?.sku,
         }))
       );
       if (!res.ok) {
@@ -398,15 +413,29 @@ export function DetalleProducto({ detalle }: { detalle: DetalleModelo }) {
                       {talla.codigo}
                     </label>
                     {activa && (
-                      <Input
-                        type="number"
-                        min={0}
-                        step="0.01"
-                        placeholder={modelo.precio_venta != null ? String(modelo.precio_venta) : "Precio"}
-                        className="h-7 w-24"
-                        value={preciosPorTalla[talla.id] ?? ""}
-                        onChange={(e) => actualizarPrecioTalla(talla.id, e.target.value)}
-                      />
+                      <>
+                        <Input
+                          type="number"
+                          min={0}
+                          step="0.01"
+                          placeholder={modelo.precio_venta != null ? String(modelo.precio_venta) : "Precio"}
+                          className="h-7 w-24"
+                          value={preciosPorTalla[talla.id] ?? ""}
+                          onChange={(e) => actualizarPrecioTalla(talla.id, e.target.value)}
+                        />
+                        <Input
+                          placeholder="Código de barras"
+                          className="h-7 w-36"
+                          value={codigosPorTalla[talla.id]?.codigoBarras ?? ""}
+                          onChange={(e) => actualizarCodigoTalla(talla.id, "codigoBarras", e.target.value)}
+                        />
+                        <Input
+                          placeholder="SKU"
+                          className="h-7 w-36"
+                          value={codigosPorTalla[talla.id]?.sku ?? ""}
+                          onChange={(e) => actualizarCodigoTalla(talla.id, "sku", e.target.value)}
+                        />
+                      </>
                     )}
                   </div>
                 );
@@ -417,18 +446,30 @@ export function DetalleProducto({ detalle }: { detalle: DetalleModelo }) {
             </Button>
           </>
         ) : detalle.tallaIdsAsignadas.length ? (
-          <div className="flex flex-wrap gap-2">
-            {detalle.tallaIdsAsignadas.map((tallaId) => {
-              const codigo = detalle.tallas.find((t) => t.id === tallaId)?.codigo ?? "—";
-              const precio = detalle.preciosPorTalla[tallaId];
-              return (
-                <Badge key={tallaId} variant="secondary">
-                  {codigo}
-                  {precio != null && ` · ${formatearMoneda(precio)}`}
-                </Badge>
-              );
-            })}
-          </div>
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>Talla</TableHead>
+                <TableHead>Precio</TableHead>
+                <TableHead>Código de barras</TableHead>
+                <TableHead>SKU</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {detalle.tallaIdsAsignadas.map((tallaId) => {
+                const precio = detalle.preciosPorTalla[tallaId];
+                const codigos = detalle.codigosPorTalla[tallaId];
+                return (
+                  <TableRow key={tallaId}>
+                    <TableCell className="font-medium">{nombreTalla(tallaId)}</TableCell>
+                    <TableCell>{precio != null ? formatearMoneda(precio) : "—"}</TableCell>
+                    <TableCell className="font-mono text-xs">{codigos?.codigoBarras ?? "—"}</TableCell>
+                    <TableCell className="font-mono text-xs">{codigos?.sku ?? "—"}</TableCell>
+                  </TableRow>
+                );
+              })}
+            </TableBody>
+          </Table>
         ) : (
           <p className="text-sm text-muted-foreground">
             Sin restricción de tallas — se puede usar cualquier talla del catálogo.

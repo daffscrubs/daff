@@ -7,6 +7,7 @@ import { requerirPerfil } from "@/lib/supabase/auth-helpers";
 import { filaVarianteImportadaSchema, type FilaVarianteImportada } from "@/lib/validaciones/inventarioImportar.schema";
 import { accionError, accionOk, type AccionResultado } from "@/lib/tipos/accion";
 import { normalizarTexto } from "@/lib/texto";
+import { leerTodo } from "@/lib/supabase/leer-todo";
 
 export interface ResultadoImportacion {
   creados: number;
@@ -23,12 +24,29 @@ export interface ResultadoImportacion {
 const COL_NOMBRE = ["nombre del producto"];
 const COL_CATEGORIA = ["categoria"];
 const COL_TALLA = ["variantes de tamano", "variante de tamano (talla)"];
+const COL_COLOR = ["variantes de color"];
+const COL_CODIGO_BARRAS = ["codigo de barras"];
+const COL_SKU = ["sku"];
 const COL_STOCK_SIMPLE = ["stock"];
 const COL_COSTO = ["costo"];
 const COL_PRECIO = ["precio publico", "precio de venta"];
 
+// Talla a la que van las existencias de un producto que en el Excel no trae talla
+// (en Pulpos suele variar solo por color). Las existencias del sistema son por
+// talla, así que sin ella esas piezas se perderían.
+const TALLA_SIN_TALLA = "UNITALLA";
+
 const MAX_FILAS_ENCABEZADO = 10;
 const TAMANO_LOTE = 500;
+
+/** "VERDE OLIVO" / "verde olivo" -> "Verde Olivo", para que el mismo color escrito distinto dé el mismo producto. */
+function aTitulo(texto: string): string {
+  return texto
+    .toLowerCase()
+    .split(/\s+/)
+    .map((p) => p.charAt(0).toUpperCase() + p.slice(1))
+    .join(" ");
+}
 
 /** Texto visible de una celda: Pulpos guarda los textos con formato (richText), que String() convertiría en "[object Object]". */
 function valorCelda(celda: ExcelJS.Cell): unknown {
@@ -68,11 +86,16 @@ export async function importarProductosExcel(formData: FormData): Promise<Accion
   if (!(archivo instanceof File)) return accionError("Selecciona un archivo");
 
   const supabase = await createClient();
-  const [{ data: tallasCatalogo }, { data: modelosExistentes }, { data: ubicaciones }] = await Promise.all([
-    supabase.from("tallas").select("id, codigo"),
-    supabase.from("modelos").select("nombre"),
-    supabase.from("ubicaciones").select("id, nombre").eq("activa", true).order("orden").order("nombre"),
-  ]);
+  const [{ data: tallasCatalogo }, { data: modelosExistentes }, { data: ubicaciones }, { data: codigosExistentes }] =
+    await Promise.all([
+      supabase.from("tallas").select("id, codigo"),
+      leerTodo((d, h) => supabase.from("modelos").select("nombre").order("id").range(d, h)),
+      supabase.from("ubicaciones").select("id, nombre").eq("activa", true).order("orden").order("nombre"),
+      // Los códigos son únicos en todo el sistema: se conocen los que ya están en uso para no repetirlos.
+      leerTodo((d, h) => supabase.from("modelo_tallas").select("codigo_barras, sku").order("id").range(d, h)),
+    ]);
+  const codigosEnUso = new Set((codigosExistentes ?? []).flatMap((v) => (v.codigo_barras ? [v.codigo_barras] : [])));
+  const skusEnUso = new Set((codigosExistentes ?? []).flatMap((v) => (v.sku ? [v.sku] : [])));
   const tallaIdPorCodigo = new Map((tallasCatalogo ?? []).map((t) => [t.codigo.trim().toUpperCase(), t.id]));
   const nombresExistentes = new Set((modelosExistentes ?? []).map((m) => normalizarTexto(m.nombre.trim())));
   const nombreUbicacion = new Map((ubicaciones ?? []).map((u) => [u.id, u.nombre]));
@@ -119,6 +142,9 @@ export async function importarProductosExcel(formData: FormData): Promise<Accion
   const colNombre = buscarColumna(COL_NOMBRE);
   const colCategoria = buscarColumna(COL_CATEGORIA);
   const colTalla = buscarColumna(COL_TALLA);
+  const colColor = buscarColumna(COL_COLOR);
+  const colCodigoBarras = buscarColumna(COL_CODIGO_BARRAS);
+  const colSku = buscarColumna(COL_SKU);
   const colCosto = buscarColumna(COL_COSTO);
   const colPrecio = buscarColumna(COL_PRECIO);
 
@@ -138,17 +164,29 @@ export async function importarProductosExcel(formData: FormData): Promise<Accion
   }
 
   const errores: { fila: number; mensaje: string }[] = [];
-  const filas: { datos: FilaVarianteImportada; fila: number; stock: Map<string, number> }[] = [];
+  const filas: {
+    datos: FilaVarianteImportada;
+    fila: number;
+    stock: Map<string, number>;
+    codigoBarras?: string;
+    sku?: string;
+  }[] = [];
 
   hoja.eachRow((fila, numeroFila) => {
     if (numeroFila <= filaEncabezados) return;
 
-    const nombre = leerTexto(fila, colNombre);
+    const nombreBase = leerTexto(fila, colNombre);
     const hayContenido = (fila.values as unknown[] | undefined)?.some((v) => v != null && v !== "");
-    if (!nombre) {
+    if (!nombreBase) {
       if (hayContenido) errores.push({ fila: numeroFila, mensaje: "Falta el nombre del producto" });
       return;
     }
+    // En el sistema cada color es su propio producto ("Qx. Michelle Negro",
+    // "Qx. Michelle Marino"...), así que la variante de color de Pulpos se agrega al
+    // nombre, salvo que el nombre ya la incluya.
+    const color = leerTexto(fila, colColor);
+    const nombre =
+      color && !normalizarTexto(nombreBase).includes(normalizarTexto(color)) ? `${nombreBase} ${aTitulo(color)}` : nombreBase;
 
     const tallaTexto = leerTexto(fila, colTalla);
     const tallaId = tallaTexto ? tallaIdPorCodigo.get(tallaTexto.toUpperCase()) : undefined;
@@ -170,6 +208,22 @@ export async function importarProductosExcel(formData: FormData): Promise<Accion
       if (cantidad !== undefined) stock.set(ubicacionId, cantidad);
     }
 
+    const codigoBarras = leerTexto(fila, colCodigoBarras);
+    const sku = leerTexto(fila, colSku);
+
+    // Fila sin talla pero con existencias o con código: va a la talla UNITALLA en vez de perderse.
+    let tallaIdFinal = tallaId;
+    if (!tallaTexto && ([...stock.values()].some((c) => c > 0) || codigoBarras || sku)) {
+      tallaIdFinal = tallaIdPorCodigo.get(TALLA_SIN_TALLA);
+      if (!tallaIdFinal) {
+        errores.push({
+          fila: numeroFila,
+          mensaje: `Tiene existencias o códigos pero no talla. Crea la talla "${TALLA_SIN_TALLA}" en el catálogo para productos sin talla.`,
+        });
+        return;
+      }
+    }
+
     const costoUnitario = leerNumero(fila, colCosto);
     const precioVenta = leerNumero(fila, colPrecio);
     if (Number.isNaN(costoUnitario)) {
@@ -184,7 +238,7 @@ export async function importarProductosExcel(formData: FormData): Promise<Accion
     const parseo = filaVarianteImportadaSchema.safeParse({
       nombre,
       categoria: leerTexto(fila, colCategoria),
-      tallaId,
+      tallaId: tallaIdFinal,
       costoUnitario,
       precioVenta,
     });
@@ -192,7 +246,7 @@ export async function importarProductosExcel(formData: FormData): Promise<Accion
       errores.push({ fila: numeroFila, mensaje: parseo.error.issues[0]?.message ?? "Datos inválidos" });
       return;
     }
-    filas.push({ datos: parseo.data, fila: numeroFila, stock });
+    filas.push({ datos: parseo.data, fila: numeroFila, stock, codigoBarras, sku });
   });
 
   type Producto = {
@@ -201,11 +255,17 @@ export async function importarProductosExcel(formData: FormData): Promise<Accion
     costoUnitario?: number;
     precioVenta?: number;
     primeraFila: number;
-    variantes: { tallaId: string; precioVenta?: number; stock: Map<string, number> }[];
+    variantes: {
+      tallaId: string;
+      precioVenta?: number;
+      stock: Map<string, number>;
+      codigoBarras?: string;
+      sku?: string;
+    }[];
   };
   const productos = new Map<string, Producto>();
 
-  for (const { datos, fila, stock } of filas) {
+  for (const { datos, fila, stock, codigoBarras, sku } of filas) {
     const clave = normalizarTexto(datos.nombre);
     let producto = productos.get(clave);
     if (!producto) {
@@ -219,8 +279,16 @@ export async function importarProductosExcel(formData: FormData): Promise<Accion
     if (datos.tallaId) {
       const existente = producto.variantes.find((v) => v.tallaId === datos.tallaId);
       if (!existente) {
-        producto.variantes.push({ tallaId: datos.tallaId, precioVenta: datos.precioVenta, stock: new Map(stock) });
+        producto.variantes.push({
+          tallaId: datos.tallaId,
+          precioVenta: datos.precioVenta,
+          stock: new Map(stock),
+          codigoBarras,
+          sku,
+        });
       } else {
+        existente.codigoBarras ??= codigoBarras;
+        existente.sku ??= sku;
         // Mismo producto y talla en otra fila (en Pulpos suele ser otro color, que aquí no se
         // maneja): sus existencias se suman en vez de perderse.
         for (const [ubicacionId, cantidad] of stock) {
@@ -266,7 +334,13 @@ export async function importarProductosExcel(formData: FormData): Promise<Accion
     }
 
     const idPorNombre = new Map(modelos.map((m) => [normalizarTexto(m.nombre), m.id]));
-    const tallasPorInsertar: { modelo_id: string; talla_id: string; precio_venta: number | null }[] = [];
+    const tallasPorInsertar: {
+      modelo_id: string;
+      talla_id: string;
+      precio_venta: number | null;
+      codigo_barras: string | null;
+      sku: string | null;
+    }[] = [];
     const movimientos: {
       modelo_id: string;
       talla_id: string;
@@ -285,7 +359,26 @@ export async function importarProductosExcel(formData: FormData): Promise<Accion
       }
       creados++;
       for (const v of producto.variantes) {
-        tallasPorInsertar.push({ modelo_id: modeloId, talla_id: v.tallaId, precio_venta: v.precioVenta ?? null });
+        // Un código ya usado por otra variante se omite (y se avisa) en vez de hacer fallar toda la carga.
+        let codigoBarras = v.codigoBarras;
+        if (codigoBarras && codigosEnUso.has(codigoBarras)) {
+          errores.push({ fila: producto.primeraFila, mensaje: `"${producto.nombre}": el código de barras ${codigoBarras} ya está en uso; se cargó sin él` });
+          codigoBarras = undefined;
+        }
+        let sku = v.sku;
+        if (sku && skusEnUso.has(sku)) {
+          errores.push({ fila: producto.primeraFila, mensaje: `"${producto.nombre}": el SKU ${sku} ya está en uso; se cargó sin él` });
+          sku = undefined;
+        }
+        if (codigoBarras) codigosEnUso.add(codigoBarras);
+        if (sku) skusEnUso.add(sku);
+        tallasPorInsertar.push({
+          modelo_id: modeloId,
+          talla_id: v.tallaId,
+          precio_venta: v.precioVenta ?? null,
+          codigo_barras: codigoBarras ?? null,
+          sku: sku ?? null,
+        });
         for (const [ubicacionId, cantidad] of v.stock) {
           if (cantidad <= 0) continue;
           movimientos.push({
