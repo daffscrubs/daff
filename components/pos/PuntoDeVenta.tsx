@@ -4,10 +4,9 @@ import { useMemo, useRef, useState, useSyncExternalStore, useTransition } from "
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
-import { ArrowDown, ArrowUp, Calculator, Check, CornerDownLeft, Landmark, Minus, Percent, Plus, Printer, ScanBarcode, Search, Trash2, User, UserPlus, Users, X, type LucideIcon } from "lucide-react";
+import { ArrowDown, ArrowUp, Calculator, Check, CornerDownLeft, Landmark, Minus, Percent, Plus, Printer, ScanBarcode, Search, ShoppingBag, Trash2, User, UserPlus, Users, X, type LucideIcon } from "lucide-react";
 import { crearCliente } from "@/actions/clientes.actions";
 import { registrarVenta } from "@/actions/ventas.actions";
-import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
@@ -66,7 +65,7 @@ function leerCentavos(texto: string): number {
   return Number.isFinite(n) && n >= 0 ? aCentavos(n) : NaN;
 }
 
-const MAX_RESULTADOS = 48;
+const MAX_RESULTADOS = 30;
 const CLAVE_UBICACION = "pos-ubicacion";
 
 // Última ubicación usada en este equipo (cada mostrador suele vender desde una sola). Se lee del navegador con
@@ -125,19 +124,41 @@ interface VentaAbierta {
 const ventaVacia = (id: string, nombre: string): VentaAbierta => ({ id, nombre, carrito: {}, clienteId: "", descuentoTipo: "monto", descuentoTexto: "" });
 const MAX_VENTAS = 5;
 
+// Colores suaves para las "fotos" de producto (ninguno tiene imagen todavía): cada categoría conserva siempre el suyo.
+const COLORES_PRODUCTO = [
+  "bg-sky-100 text-sky-700 dark:bg-sky-950 dark:text-sky-300",
+  "bg-emerald-100 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300",
+  "bg-violet-100 text-violet-700 dark:bg-violet-950 dark:text-violet-300",
+  "bg-amber-100 text-amber-700 dark:bg-amber-950 dark:text-amber-300",
+  "bg-rose-100 text-rose-700 dark:bg-rose-950 dark:text-rose-300",
+  "bg-teal-100 text-teal-700 dark:bg-teal-950 dark:text-teal-300",
+  "bg-indigo-100 text-indigo-700 dark:bg-indigo-950 dark:text-indigo-300",
+  "bg-orange-100 text-orange-700 dark:bg-orange-950 dark:text-orange-300",
+];
+function colorDe(texto: string): string {
+  let hash = 0;
+  for (const c of texto) hash = (hash * 31 + c.charCodeAt(0)) >>> 0;
+  return COLORES_PRODUCTO[hash % COLORES_PRODUCTO.length];
+}
+function inicialesDe(nombre: string): string {
+  const palabras = nombre.trim().split(/\s+/).filter(Boolean);
+  return ((palabras[0]?.[0] ?? "?") + (palabras[1]?.[0] ?? "")).toUpperCase();
+}
+
 function Atajo({ icono: Icono, titulo, detalle, color, ...accion }: { icono: LucideIcon; titulo: string; detalle?: string; color: string } & ({ href: string } | { onClick: () => void })) {
   const contenido = (
     <>
-      <span className={cn("flex size-11 items-center justify-center rounded-xl", color)}>
-        <Icono className="size-5" />
+      <span className={cn("flex size-12 shrink-0 items-center justify-center rounded-xl", color)}>
+        <Icono className="size-6" />
       </span>
       <span className="min-w-0">
-        <span className="block text-base font-medium leading-tight">{titulo}</span>
-        {detalle && <span className="mt-0.5 block truncate text-xs text-muted-foreground">{detalle}</span>}
+        <span className="block text-base font-semibold leading-tight">{titulo}</span>
+        {detalle && <span className="mt-1 block truncate text-sm text-muted-foreground">{detalle}</span>}
       </span>
     </>
   );
-  const clases = "flex flex-col items-start gap-3 bg-card p-5 text-left transition-colors hover:bg-muted/60";
+  const clases =
+    "group flex items-center gap-4 rounded-2xl border bg-card p-5 text-left shadow-sm transition-all hover:-translate-y-0.5 hover:border-primary/30 hover:shadow-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring";
   return "href" in accion ? (
     <Link href={accion.href} className={clases}>
       {contenido}
@@ -146,6 +167,81 @@ function Atajo({ icono: Icono, titulo, detalle, color, ...accion }: { icono: Luc
     <button type="button" onClick={accion.onClick} className={clases}>
       {contenido}
     </button>
+  );
+}
+
+interface GrupoProducto {
+  modeloId: string;
+  nombre: string;
+  categoria: string | null;
+  variantes: VarianteVenta[];
+}
+
+// Un producto con todas sus tallas: se agrega tocando la talla (como se vende en el mostrador).
+function TarjetaProducto({
+  grupo,
+  stockEn,
+  enCarrito,
+  puedeSinExistencias,
+  caja,
+  alAgregar,
+}: {
+  grupo: GrupoProducto;
+  stockEn: (v: VarianteVenta) => number;
+  enCarrito: (v: VarianteVenta) => number;
+  puedeSinExistencias: boolean;
+  caja: boolean;
+  alAgregar: (v: VarianteVenta) => void;
+}) {
+  const precios = grupo.variantes.map((v) => v.precio ?? 0).filter((p) => p > 0);
+  const minimo = Math.min(...precios);
+  const variaPrecio = precios.length > 0 && Math.max(...precios) !== minimo;
+  const total = grupo.variantes.reduce((acc, v) => acc + Math.max(0, stockEn(v)), 0);
+  return (
+    <div className="flex gap-4 rounded-2xl border bg-card p-4 shadow-sm transition-shadow hover:shadow-md">
+      <span className={cn("flex size-14 shrink-0 items-center justify-center rounded-xl text-lg font-semibold", colorDe(grupo.categoria ?? grupo.nombre))}>{inicialesDe(grupo.nombre)}</span>
+      <div className="min-w-0 flex-1 space-y-3">
+        <div className="flex items-start justify-between gap-3">
+          <div className="min-w-0">
+            <p className="line-clamp-2 font-semibold leading-snug">{grupo.nombre}</p>
+            <p className="mt-0.5 truncate text-xs text-muted-foreground">
+              {grupo.categoria ?? "Sin categoría"} · {total > 0 ? `${total} en existencia` : "Sin existencias"}
+            </p>
+          </div>
+          <p className="shrink-0 text-right text-base font-semibold tabular-nums">{precios.length ? `${variaPrecio ? "Desde " : ""}${formatearMoneda(minimo)}` : <span className="text-sm font-normal text-muted-foreground">Sin precio</span>}</p>
+        </div>
+        <div className="flex flex-wrap gap-2">
+          {grupo.variantes.map((v) => {
+            const existencias = stockEn(v);
+            const agotado = !puedeSinExistencias && existencias <= 0;
+            const sinPrecio = !v.precio || v.precio <= 0;
+            const cantidad = enCarrito(v);
+            return (
+              <button
+                key={claveDe(v)}
+                type="button"
+                disabled={!caja || sinPrecio || agotado}
+                onClick={() => alAgregar(v)}
+                title={`${v.talla ?? grupo.nombre}${v.precio ? ` · ${formatearMoneda(v.precio)}` : ""} · ${existencias > 0 ? `${existencias} disponibles` : "sin existencias"}`}
+                className={cn(
+                  "relative flex min-w-16 flex-col items-center rounded-xl border px-3 py-1.5 text-sm leading-tight transition-colors",
+                  agotado || sinPrecio ? "cursor-not-allowed border-dashed bg-muted/40 text-muted-foreground/70" : "hover:border-primary hover:bg-primary/5",
+                  !caja && "cursor-not-allowed opacity-60",
+                  cantidad > 0 && "border-primary bg-primary/10"
+                )}
+              >
+                <span className={cn("font-semibold", agotado && "line-through")}>{v.talla ?? "Agregar"}</span>
+                {variaPrecio && v.precio ? <span className="text-[11px] text-muted-foreground">{formatearMoneda(v.precio)}</span> : null}
+                <span className={cn("text-[11px]", existencias > 0 ? "text-emerald-600 dark:text-emerald-400" : "text-red-500")}>{existencias > 0 ? `${existencias} disp.` : "Agotado"}</span>
+                {cantidad > 0 && (
+                  <span className="absolute -right-1.5 -top-1.5 flex size-5 items-center justify-center rounded-full bg-primary text-[11px] font-semibold text-primary-foreground">{cantidad}</span>
+                )}
+              </button>
+            );
+          })}
+        </div>
+      </div>
+    </div>
   );
 }
 
@@ -206,6 +302,8 @@ export function PuntoDeVenta({
   const { carrito, clienteId, descuentoTipo, descuentoTexto } = activa;
   const [clienteAbierto, setClienteAbierto] = useState(false);
   const [manualAbierto, setManualAbierto] = useState(false);
+  const [resaltada, setResaltada] = useState<string | null>(null);
+  const temporizadorResalte = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [clientesNuevos, setClientesNuevos] = useState<ClienteVenta[]>([]);
   const contadorManual = useRef(0);
   const [descuentoAbierto, setDescuentoAbierto] = useState(false);
@@ -229,10 +327,29 @@ export function PuntoDeVenta({
     [catalogo]
   );
   const buscando = busqueda.trim() !== "" || categoria !== "todas";
+  const cantidadEnCarrito = (v: VarianteVenta) => carrito[claveDe(v)]?.cantidad ?? 0;
   const resultados = useMemo(() => {
     const q = normalizarTexto(busqueda.trim());
     return indice.filter((x) => (categoria === "todas" || x.v.categoria === categoria) && (!q || x.texto.includes(q))).map((x) => x.v);
   }, [indice, busqueda, categoria]);
+
+  // Un destello breve en la línea que acaba de cambiar, para ver que el producto sí entró.
+  function resaltar(clave: string) {
+    setResaltada(clave);
+    if (temporizadorResalte.current) clearTimeout(temporizadorResalte.current);
+    temporizadorResalte.current = setTimeout(() => setResaltada(null), 700);
+  }
+
+  // Los resultados se agrupan por producto: una tarjeta con todas sus tallas.
+  const grupos = useMemo(() => {
+    const porModelo = new Map<string, GrupoProducto>();
+    for (const v of resultados) {
+      const g = porModelo.get(v.modeloId) ?? { modeloId: v.modeloId, nombre: v.nombre, categoria: v.categoria, variantes: [] };
+      g.variantes.push(v);
+      porModelo.set(v.modeloId, g);
+    }
+    return [...porModelo.values()];
+  }, [resultados]);
 
   function agregar(v: VarianteVenta) {
     if (!caja) {
@@ -249,6 +366,7 @@ export function PuntoDeVenta({
       return;
     }
     setCarrito((prev) => ({ ...prev, [claveDe(v)]: { variante: v, cantidad: actual + 1 } }));
+    resaltar(claveDe(v));
   }
 
   function cambiarCantidad(clave: string, cantidad: number) {
@@ -391,68 +509,85 @@ export function PuntoDeVenta({
     <div className="-m-6 flex min-h-[calc(100vh-57px)] flex-col lg:h-[calc(100vh-57px)] lg:flex-row">
       {/* Izquierda: buscar productos y atajos */}
       <section className="flex min-h-0 min-w-0 flex-1 flex-col gap-5 overflow-y-auto p-6">
-        <div className="flex flex-wrap items-center justify-between gap-3">
-          <h1 className="text-3xl font-semibold tracking-tight">Buscar productos</h1>
-          <Select
-            items={ubicaciones.map((u) => ({ value: u.id, label: u.nombre }))}
-            value={ubicacionId}
-            onValueChange={(v) => v && cambiarUbicacion(v)}
-          >
-            <SelectTrigger className="h-10 w-52 bg-background" aria-label="Ubicación de la venta">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              {ubicaciones.map((u) => (
-                <SelectItem key={u.id} value={u.id}>
-                  {u.nombre}
-                  {cajasAbiertas.some((c) => c.ubicacionId === u.id) ? "" : " (caja cerrada)"}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
+        <div className="flex flex-wrap items-start justify-between gap-4">
+          <div>
+            <h1 className="text-3xl font-semibold tracking-tight">Buscar productos</h1>
+            <p className="mt-1 text-sm text-muted-foreground">Escribe el nombre o el SKU, o escanea el código de barras.</p>
+          </div>
+          <div className="flex flex-wrap items-center gap-2">
+            <Select
+              items={ubicaciones.map((u) => ({ value: u.id, label: u.nombre }))}
+              value={ubicacionId}
+              onValueChange={(v) => v && cambiarUbicacion(v)}
+            >
+              <SelectTrigger className="h-10 w-48 rounded-full bg-background" aria-label="Ubicación de la venta">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {ubicaciones.map((u) => (
+                  <SelectItem key={u.id} value={u.id}>
+                    {u.nombre}
+                    {cajasAbiertas.some((c) => c.ubicacionId === u.id) ? "" : " (caja cerrada)"}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            {caja ? (
+              <span className="inline-flex h-10 items-center gap-2 rounded-full border border-emerald-200 bg-emerald-50 px-4 text-sm font-medium text-emerald-700 dark:border-emerald-900 dark:bg-emerald-950/50 dark:text-emerald-300" title={caja.abiertaPor ? `Abierta por ${caja.abiertaPor}` : undefined}>
+                <span className="size-2 rounded-full bg-emerald-500" />
+                Caja abierta · {formatearHoraMexico(caja.desde)}
+              </span>
+            ) : (
+              <span className="inline-flex h-10 items-center gap-2 rounded-full border border-red-200 bg-red-50 px-4 text-sm font-medium text-red-700 dark:border-red-900 dark:bg-red-950/50 dark:text-red-300">
+                <span className="size-2 rounded-full bg-red-500" />
+                Caja cerrada
+              </span>
+            )}
+          </div>
         </div>
 
-        <div className="flex flex-wrap gap-2">
-          <div className="relative min-w-64 flex-1">
-            <Search className="pointer-events-none absolute left-4 top-1/2 size-5 -translate-y-1/2 text-muted-foreground" />
-            <Input
-              ref={inputBusqueda}
-              autoFocus
-              value={busqueda}
-              onChange={(e) => setBusqueda(e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key === "Enter") {
-                  e.preventDefault();
-                  alEnter();
-                }
-              }}
-              placeholder="Buscar productos"
-              aria-label="Buscar productos o escanear código de barras"
-              className="h-14 rounded-xl bg-background pl-12 pr-12 text-base"
-            />
-            <ScanBarcode className="pointer-events-none absolute right-4 top-1/2 size-6 -translate-y-1/2 text-muted-foreground" />
-          </div>
-          <Select
-            items={[{ value: "todas", label: "Todas las categorías" }, ...categorias.map((c) => ({ value: c, label: c }))]}
-            value={categoria}
-            onValueChange={(v) => setCategoria(v ?? "todas")}
-          >
-            <SelectTrigger className="h-14 w-52 rounded-xl bg-background" aria-label="Categoría">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="todas">Todas las categorías</SelectItem>
-              {categorias.map((c) => (
-                <SelectItem key={c} value={c}>
-                  {c}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
+        <div className="relative">
+          <Search className="pointer-events-none absolute left-5 top-1/2 size-5 -translate-y-1/2 text-muted-foreground" />
+          <Input
+            ref={inputBusqueda}
+            autoFocus
+            value={busqueda}
+            onChange={(e) => setBusqueda(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter") {
+                e.preventDefault();
+                alEnter();
+              }
+            }}
+            placeholder="Buscar productos"
+            aria-label="Buscar productos o escanear código de barras"
+            className="h-14 rounded-2xl bg-background pl-13 pr-24 text-base shadow-sm"
+          />
+          <span className="pointer-events-none absolute right-5 top-1/2 flex -translate-y-1/2 items-center gap-2 text-muted-foreground">
+            {busqueda.trim() !== "" && <kbd className="flex h-6 items-center gap-1 rounded border bg-muted px-1.5 text-xs">Enter</kbd>}
+            <ScanBarcode className="size-6" />
+          </span>
+        </div>
+
+        <div className="-mt-1 flex gap-2 overflow-x-auto pb-1" role="group" aria-label="Categorías">
+          {["todas", ...categorias].map((c) => (
+            <button
+              key={c}
+              type="button"
+              onClick={() => setCategoria(c)}
+              aria-pressed={categoria === c}
+              className={cn(
+                "shrink-0 rounded-full border px-4 py-1.5 text-sm transition-colors",
+                categoria === c ? "border-primary bg-primary text-primary-foreground" : "bg-background hover:bg-muted"
+              )}
+            >
+              {c === "todas" ? "Todas" : c}
+            </button>
+          ))}
         </div>
 
         {!caja && (
-          <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-amber-300 bg-amber-50 p-4 text-sm text-amber-900 dark:border-amber-800 dark:bg-amber-950/40 dark:text-amber-200">
+          <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-amber-300 bg-amber-50 p-4 text-sm text-amber-900 dark:border-amber-800 dark:bg-amber-950/40 dark:text-amber-200">
             <p>
               No hay una caja abierta en <strong>{ubicacion?.nombre}</strong>. Para vender, primero hay que abrirla con el fondo inicial.
             </p>
@@ -467,104 +602,79 @@ export function PuntoDeVenta({
         )}
 
         {buscando ? (
-          <div className="space-y-2">
-            {resultados.slice(0, MAX_RESULTADOS).map((v) => {
-              const existencias = stockEn(v);
-              const agotado = !puedeVenderSinExistencias && existencias <= 0;
-              const sinPrecio = !v.precio || v.precio <= 0;
-              return (
-                <button
-                  key={claveDe(v)}
-                  type="button"
-                  disabled={!caja || sinPrecio}
-                  onClick={() => agregar(v)}
-                  className={cn(
-                    "flex w-full items-center gap-4 rounded-xl border bg-card px-4 py-3 text-left transition-colors hover:border-primary hover:bg-primary/5 disabled:cursor-not-allowed disabled:opacity-60",
-                    agotado && "opacity-70"
-                  )}
-                >
-                  <span className="min-w-0 flex-1">
-                    <span className="line-clamp-2 text-sm font-medium">{v.nombre}</span>
-                    <span className="mt-1 flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
-                      {v.talla && <Badge variant="secondary">{v.talla}</Badge>}
-                      {v.categoria}
-                      {v.sku && <span className="font-mono">{v.sku}</span>}
-                    </span>
-                  </span>
-                  <span className="shrink-0 text-right">
-                    <span className="block text-base font-semibold">{sinPrecio ? "Sin precio" : formatearMoneda(v.precio!)}</span>
-                    <span
-                      className={cn(
-                        "mt-0.5 inline-block rounded-full px-2 py-0.5 text-xs font-medium",
-                        existencias > 0
-                          ? "bg-emerald-100 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300"
-                          : "bg-red-100 text-red-700 dark:bg-red-950 dark:text-red-300"
-                      )}
-                    >
-                      {existencias > 0 ? `${existencias} disp.` : "Sin existencias"}
-                    </span>
-                  </span>
-                </button>
-              );
-            })}
-            {!resultados.length && (
-              <div className="flex flex-col items-center gap-2 rounded-xl border border-dashed bg-card py-12 text-center text-sm text-muted-foreground">
+          <div className="space-y-3">
+            <p className="text-sm text-muted-foreground">
+              {grupos.length.toLocaleString("es-MX")} producto{grupos.length === 1 ? "" : "s"}
+              {resultados.length !== grupos.length && ` · ${resultados.length.toLocaleString("es-MX")} tallas`}
+            </p>
+            <div className="grid grid-cols-1 gap-3 2xl:grid-cols-2">
+              {grupos.slice(0, MAX_RESULTADOS).map((g) => (
+                <TarjetaProducto
+                  key={g.modeloId}
+                  grupo={g}
+                  stockEn={stockEn}
+                  enCarrito={cantidadEnCarrito}
+                  puedeSinExistencias={puedeVenderSinExistencias}
+                  caja={!!caja}
+                  alAgregar={agregar}
+                />
+              ))}
+            </div>
+            {!grupos.length && (
+              <div className="flex flex-col items-center gap-2 rounded-2xl border border-dashed bg-card py-14 text-center text-sm text-muted-foreground">
                 <ScanBarcode className="size-8" />
                 No se encontró ningún producto con esa búsqueda.
               </div>
             )}
-            {resultados.length > MAX_RESULTADOS && (
+            {grupos.length > MAX_RESULTADOS && (
               <p className="text-center text-xs text-muted-foreground">
-                Mostrando {MAX_RESULTADOS} de {resultados.length.toLocaleString("es-MX")}. Escribe más para afinar la búsqueda.
+                Mostrando {MAX_RESULTADOS} de {grupos.length.toLocaleString("es-MX")}. Escribe más para afinar la búsqueda.
               </p>
             )}
           </div>
         ) : (
-          <div className="grid grid-cols-1 gap-px overflow-hidden rounded-xl border bg-border shadow-sm sm:grid-cols-2">
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
             {puedeEntradaManual && (
-              <Atajo icono={Calculator} titulo="Entrada manual" color="bg-sky-50 text-sky-600 dark:bg-sky-950 dark:text-sky-300" onClick={() => setManualAbierto(true)} />
+              <Atajo
+                icono={Calculator}
+                titulo="Entrada manual"
+                detalle="Cobra algo que no está en el inventario"
+                color="bg-sky-100 text-sky-600 dark:bg-sky-950 dark:text-sky-300"
+                onClick={() => setManualAbierto(true)}
+              />
             )}
             <Atajo
               icono={UserPlus}
               titulo={cliente ? "Cambiar cliente" : "Añadir cliente"}
-              detalle={cliente?.nombre_comercial}
-              color="bg-rose-50 text-rose-600 dark:bg-rose-950 dark:text-rose-300"
+              detalle={cliente?.nombre_comercial ?? "Asigna la venta a un cliente"}
+              color="bg-rose-100 text-rose-600 dark:bg-rose-950 dark:text-rose-300"
               onClick={() => setClienteAbierto(true)}
             />
             {puedeDescuentos && (
               <Atajo
                 icono={Percent}
                 titulo="Añadir descuento"
-                detalle={descuentoCentavos > 0 && !descuentoInvalido ? `-${formatearMoneda(aPesos(descuentoCentavos))}` : undefined}
-                color="bg-indigo-50 text-indigo-600 dark:bg-indigo-950 dark:text-indigo-300"
+                detalle={descuentoCentavos > 0 && !descuentoInvalido ? `Descuento de ${formatearMoneda(aPesos(descuentoCentavos))}` : "En pesos o en porcentaje"}
+                color="bg-indigo-100 text-indigo-600 dark:bg-indigo-950 dark:text-indigo-300"
                 onClick={() => setDescuentoAbierto(true)}
               />
             )}
             {puedeVerCaja && (
-              <Atajo icono={Landmark} titulo="Caja y ventas del día" color="bg-amber-50 text-amber-600 dark:bg-amber-950 dark:text-amber-300" href={`/caja?ubicacion=${ubicacionId}`} />
+              <Atajo
+                icono={Landmark}
+                titulo="Caja y ventas del día"
+                detalle="Ingresos, retiros y corte de caja"
+                color="bg-amber-100 text-amber-600 dark:bg-amber-950 dark:text-amber-300"
+                href={`/caja?ubicacion=${ubicacionId}`}
+              />
             )}
           </div>
         )}
-
-        <div className="mt-auto flex flex-wrap items-center justify-between gap-2 rounded-xl border bg-card px-4 py-3 text-sm shadow-sm">
-          <span className="flex items-center gap-2 font-medium">
-            <Landmark className="size-4 text-muted-foreground" />
-            Caja de {ubicacion?.nombre ?? "—"}
-          </span>
-          {caja ? (
-            <Badge className="border-transparent bg-emerald-100 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300">
-              Abierta desde las {formatearHoraMexico(caja.desde)}
-              {caja.abiertaPor ? ` · ${caja.abiertaPor}` : ""}
-            </Badge>
-          ) : (
-            <Badge className="border-transparent bg-red-100 text-red-700 dark:bg-red-950 dark:text-red-300">Cerrada</Badge>
-          )}
-        </div>
       </section>
 
       {/* Derecha: venta en curso */}
-      <aside className="flex min-h-[32rem] w-full shrink-0 flex-col border-t bg-background lg:min-h-0 lg:w-[26rem] lg:border-l lg:border-t-0 xl:w-[32rem]">
-        <div className="flex items-end gap-1 overflow-x-auto border-b bg-muted/40 px-4 pt-3" role="tablist" aria-label="Ventas abiertas">
+      <aside className="flex min-h-[32rem] w-full shrink-0 flex-col border-t bg-background shadow-[-8px_0_24px_-16px_rgba(0,0,0,0.15)] lg:min-h-0 lg:w-[26rem] lg:border-l lg:border-t-0 xl:w-[32rem]">
+        <div className="flex items-center gap-2 overflow-x-auto border-b px-4 py-3" role="tablist" aria-label="Ventas abiertas">
           {ventas.map((v) => {
             const esActiva = v.id === activa.id;
             const articulos = Object.keys(v.carrito).length;
@@ -572,41 +682,59 @@ export function PuntoDeVenta({
               <div
                 key={v.id}
                 className={cn(
-                  "flex shrink-0 items-center gap-1 rounded-t-lg border border-b-0 px-3 py-2 text-sm",
-                  esActiva ? "-mb-px bg-background font-medium" : "bg-transparent text-muted-foreground hover:bg-muted"
+                  "flex shrink-0 items-center gap-1 rounded-full border py-1 pl-3.5 pr-1.5 text-sm transition-colors",
+                  esActiva ? "border-primary bg-primary text-primary-foreground" : "bg-background hover:bg-muted"
                 )}
               >
-                <button type="button" role="tab" aria-selected={esActiva} onClick={() => setActivaId(v.id)} className="flex items-center gap-2">
+                <button type="button" role="tab" aria-selected={esActiva} onClick={() => setActivaId(v.id)} className="flex items-center gap-2 font-medium">
                   {v.nombre}
-                  {articulos > 0 && <span className="rounded-full bg-primary px-1.5 text-xs font-medium text-primary-foreground">{articulos}</span>}
+                  {articulos > 0 && (
+                    <span className={cn("rounded-full px-1.5 text-xs font-semibold", esActiva ? "bg-primary-foreground/20 text-primary-foreground" : "bg-primary text-primary-foreground")}>{articulos}</span>
+                  )}
                 </button>
-                {(ventas.length > 1 || articulos > 0) && (
-                  <button type="button" aria-label={`Cerrar ${v.nombre}`} className="rounded p-0.5 text-muted-foreground hover:bg-muted hover:text-destructive" onClick={() => cerrarPestana(v.id)}>
+                {(ventas.length > 1 || articulos > 0) ? (
+                  <button
+                    type="button"
+                    aria-label={`Cerrar ${v.nombre}`}
+                    className={cn("rounded-full p-1 transition-colors", esActiva ? "hover:bg-primary-foreground/20" : "text-muted-foreground hover:bg-background hover:text-destructive")}
+                    onClick={() => cerrarPestana(v.id)}
+                  >
                     <X className="size-3.5" />
                   </button>
+                ) : (
+                  <span className="w-2" />
                 )}
               </div>
             );
           })}
-          <button type="button" aria-label="Nueva venta" title="Abrir otra venta" className="mb-1 ml-1 shrink-0 rounded-md p-1.5 text-muted-foreground hover:bg-muted" onClick={nuevaPestana}>
-            <Plus className="size-5" />
+          <button
+            type="button"
+            aria-label="Nueva venta"
+            title="Abrir otra venta"
+            className="flex size-8 shrink-0 items-center justify-center rounded-full border border-dashed text-muted-foreground transition-colors hover:border-primary hover:bg-muted hover:text-foreground"
+            onClick={nuevaPestana}
+          >
+            <Plus className="size-4" />
           </button>
         </div>
 
         <div className="flex min-h-0 flex-1 flex-col overflow-y-auto">
           {lineas.length === 0 ? (
             <div className="flex flex-1 flex-col items-center justify-center gap-2 px-6 py-12 text-center">
-              <p className="text-2xl font-semibold text-muted-foreground">Tu carrito está vacío</p>
+              <span className="mb-2 flex size-20 items-center justify-center rounded-full bg-muted text-muted-foreground">
+                <ShoppingBag className="size-9" />
+              </span>
+              <p className="text-2xl font-semibold">Tu carrito está vacío</p>
               <p className="text-muted-foreground">Agrega productos a tu venta</p>
               <div className="mt-4 flex flex-wrap justify-center gap-3">
-                <Button type="button" variant="outline" className="h-11 gap-2 px-4" onClick={() => inputBusqueda.current?.focus()}>
+                <Button type="button" variant="outline" className="h-11 gap-2 rounded-xl px-4" onClick={() => inputBusqueda.current?.focus()}>
                   <Search className="size-4" />
                   Buscar productos
                 </Button>
                 <Button
                   type="button"
                   variant="outline"
-                  className="h-11 gap-2 px-4"
+                  className="h-11 gap-2 rounded-xl px-4"
                   onClick={() => {
                     inputBusqueda.current?.focus();
                     toast.info("Listo para escanear: apunta el lector al código de barras.");
@@ -620,38 +748,43 @@ export function PuntoDeVenta({
           ) : (
             <div className="divide-y">
               {lineas.map(([clave, l]) => (
-                <div key={clave} className="space-y-2 px-5 py-4">
-                  <div className="flex items-start justify-between gap-2">
-                    <p className="text-sm font-medium leading-tight">
-                      {l.variante.nombre}
-                      {l.variante.talla && <span className="text-muted-foreground"> · {l.variante.talla}</span>}
-                      {l.manual && <span className="text-muted-foreground"> · {l.manual.unidad}</span>}
-                    </p>
-                    <button type="button" aria-label="Quitar del carrito" className="text-muted-foreground hover:text-destructive" onClick={() => cambiarCantidad(clave, 0)}>
-                      <Trash2 className="size-4" />
-                    </button>
-                  </div>
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-1">
-                      <Button type="button" variant="outline" size="icon-sm" aria-label="Menos" onClick={() => cambiarCantidad(clave, l.cantidad - 1)}>
-                        <Minus className="size-3.5" />
-                      </Button>
-                      <Input
-                        type="number"
-                        min={l.manual ? 0.001 : 1}
-                        step={l.manual ? "any" : 1}
-                        aria-label={`Cantidad de ${l.variante.nombre}`}
-                        className="h-7 w-14 px-1 text-center"
-                        value={l.cantidad}
-                        onChange={(e) => cambiarCantidad(clave, Number(e.target.value))}
-                      />
-                      <Button type="button" variant="outline" size="icon-sm" aria-label="Más" onClick={() => cambiarCantidad(clave, l.cantidad + 1)}>
-                        <Plus className="size-3.5" />
-                      </Button>
-                    </div>
-                    <div className="text-right">
-                      <p className="text-sm font-semibold">{formatearMoneda(aPesos(Math.round(l.cantidad * aCentavos(l.variante.precio ?? 0))))}</p>
-                      <p className="text-xs text-muted-foreground">{formatearMoneda(l.variante.precio ?? 0)} c/u</p>
+                <div key={clave} className={cn("px-5 py-4 transition-colors duration-500", resaltada === clave && "bg-primary/10")}>
+                  <div className="flex items-start gap-3">
+                    <span className={cn("flex size-11 shrink-0 items-center justify-center rounded-xl text-sm font-semibold", colorDe(l.variante.categoria ?? l.variante.nombre))}>{inicialesDe(l.variante.nombre)}</span>
+                    <div className="min-w-0 flex-1">
+                      <div className="flex items-start justify-between gap-2">
+                        <div className="min-w-0">
+                          <p className="line-clamp-2 text-sm font-semibold leading-snug">{l.variante.nombre}</p>
+                          <p className="mt-0.5 text-xs text-muted-foreground">
+                            {l.variante.talla && <span className="mr-1.5 rounded bg-muted px-1.5 py-0.5 font-medium text-foreground">{l.variante.talla}</span>}
+                            {l.manual && <span className="mr-1.5 rounded bg-muted px-1.5 py-0.5 font-medium text-foreground">{l.manual.unidad}</span>}
+                            {formatearMoneda(l.variante.precio ?? 0)} c/u
+                          </p>
+                        </div>
+                        <button type="button" aria-label="Quitar del carrito" className="rounded-md p-1 text-muted-foreground transition-colors hover:bg-destructive/10 hover:text-destructive" onClick={() => cambiarCantidad(clave, 0)}>
+                          <Trash2 className="size-4" />
+                        </button>
+                      </div>
+                      <div className="mt-2.5 flex items-center justify-between">
+                        <div className="inline-flex items-center rounded-full border bg-background">
+                          <button type="button" aria-label="Menos" className="flex size-8 items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-muted hover:text-foreground" onClick={() => cambiarCantidad(clave, l.cantidad - 1)}>
+                            <Minus className="size-3.5" />
+                          </button>
+                          <Input
+                            type="number"
+                            min={l.manual ? 0.001 : 1}
+                            step={l.manual ? "any" : 1}
+                            aria-label={`Cantidad de ${l.variante.nombre}`}
+                            className="h-8 w-12 border-0 bg-transparent px-0 text-center text-sm font-semibold shadow-none focus-visible:ring-0"
+                            value={l.cantidad}
+                            onChange={(e) => cambiarCantidad(clave, Number(e.target.value))}
+                          />
+                          <button type="button" aria-label="Más" className="flex size-8 items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-muted hover:text-foreground" onClick={() => cambiarCantidad(clave, l.cantidad + 1)}>
+                            <Plus className="size-3.5" />
+                          </button>
+                        </div>
+                        <p className="text-base font-semibold tabular-nums">{formatearMoneda(aPesos(Math.round(l.cantidad * aCentavos(l.variante.precio ?? 0))))}</p>
+                      </div>
                     </div>
                   </div>
                 </div>
@@ -660,44 +793,48 @@ export function PuntoDeVenta({
           )}
         </div>
 
-        <div className="space-y-3 border-t px-5 py-4">
+        <div className="space-y-4 border-t bg-muted/20 px-5 py-4">
           {(cliente || lineas.length > 0) && (
             <div className="flex flex-wrap items-center gap-2 text-sm">
-              <button type="button" className="inline-flex items-center gap-1.5 rounded-full border px-3 py-1 text-xs hover:bg-muted" onClick={() => setClienteAbierto(true)}>
+              <button type="button" className="inline-flex items-center gap-1.5 rounded-full border bg-background px-3 py-1.5 text-xs font-medium transition-colors hover:bg-muted" onClick={() => setClienteAbierto(true)}>
                 <UserPlus className="size-3.5" />
                 {cliente ? cliente.nombre_comercial : "Público en general"}
               </button>
               {puedeDescuentos && lineas.length > 0 && (
-                <button type="button" className="inline-flex items-center gap-1.5 rounded-full border px-3 py-1 text-xs hover:bg-muted" onClick={() => setDescuentoAbierto(true)}>
+                <button type="button" className="inline-flex items-center gap-1.5 rounded-full border bg-background px-3 py-1.5 text-xs font-medium transition-colors hover:bg-muted" onClick={() => setDescuentoAbierto(true)}>
                   <Percent className="size-3.5" />
                   {descuentoCentavos > 0 && !descuentoInvalido ? "Editar descuento" : "Descuento"}
                 </button>
               )}
               {lineas.length > 0 && (
-                <button type="button" className="ml-auto text-xs text-muted-foreground hover:text-destructive" onClick={() => setCarrito(() => ({}))}>
+                <button type="button" className="ml-auto text-xs text-muted-foreground transition-colors hover:text-destructive" onClick={() => setCarrito(() => ({}))}>
                   Vaciar
                 </button>
               )}
             </div>
           )}
           {lineas.length > 0 && (
-            <div className="space-y-1 text-sm">
+            <div className="space-y-1.5 text-sm">
               <div className="flex justify-between text-muted-foreground">
                 <span>
                   Subtotal · {piezas} pieza{piezas === 1 ? "" : "s"}
                 </span>
-                <span>{formatearMoneda(aPesos(subtotalCentavos))}</span>
+                <span className="tabular-nums">{formatearMoneda(aPesos(subtotalCentavos))}</span>
               </div>
               {descuentoCentavos > 0 && !descuentoInvalido && (
-                <div className="flex justify-between text-muted-foreground">
+                <div className="flex justify-between text-emerald-600 dark:text-emerald-400">
                   <span>Descuento</span>
-                  <span>-{formatearMoneda(aPesos(descuentoCentavos))}</span>
+                  <span className="tabular-nums">-{formatearMoneda(aPesos(descuentoCentavos))}</span>
                 </div>
               )}
               {descuentoInvalido && descuentoTexto && <p className="text-xs text-destructive">El descuento no puede ser igual o mayor al subtotal.</p>}
+              <div className="flex items-baseline justify-between border-t pt-2.5">
+                <span className="text-base font-semibold">Total</span>
+                <span className="text-3xl font-bold tabular-nums tracking-tight">{formatearMoneda(aPesos(totalCentavos))}</span>
+              </div>
             </div>
           )}
-          <Button type="button" className="h-14 w-full rounded-xl text-lg font-semibold" disabled={!puedeCobrar} onClick={() => setCobroAbierto(true)}>
+          <Button type="button" className="h-14 w-full rounded-2xl text-lg font-semibold shadow-sm" disabled={!puedeCobrar} onClick={() => setCobroAbierto(true)}>
             Cobrar {formatearMoneda(aPesos(lineas.length ? totalCentavos : 0))}
           </Button>
         </div>

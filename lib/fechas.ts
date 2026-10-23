@@ -74,3 +74,18 @@ export function rangoDiaMexico(fecha: string): { desde: string; hasta: string } 
 export function formatearHoraMexico(fechaIso: string): string {
   return new Date(fechaIso).toLocaleTimeString("es-MX", { timeZone: ZONA_MEXICO, hour: "numeric", minute: "2-digit" });
 }
+
+const MESES_CORTOS = ["ene", "feb", "mar", "abr", "may", "jun", "jul", "ago", "sep", "oct", "nov", "dic"];
+
+/** "23 oct 2026" a partir de "YYYY-MM-DD..." (sin pasar por Date: no se corre de día por la zona horaria). */
+export function formatearFechaCorta(fecha: string): string {
+  const [anio, mes, dia] = fecha.slice(0, 10).split("-").map(Number);
+  if (!anio || !mes || !dia) return fecha;
+  return `${dia} ${MESES_CORTOS[mes - 1]} ${anio}`;
+}
+
+/** "23 oct 2026, 1:34 p. m." de un instante (timestamptz), siempre en la hora de México. */
+export function formatearFechaHoraMexico(fechaIso: string): string {
+  const fecha = new Intl.DateTimeFormat("en-CA", { timeZone: ZONA_MEXICO, year: "numeric", month: "2-digit", day: "2-digit" }).format(new Date(fechaIso));
+  return `${formatearFechaCorta(fecha)}, ${formatearHoraMexico(fechaIso)}`;
+}
