@@ -65,6 +65,8 @@ export default async function PosPage() {
       puedeDescuentos={tienePermiso(perfil, "pos.descuentos")}
       puedeVenderSinExistencias={tienePermiso(perfil, "pos.sin_existencias")}
       puedeAbrirCaja={tienePermiso(perfil, "modulo.caja") && tienePermiso(perfil, "caja.abrir_cerrar")}
+      puedeVerCaja={tienePermiso(perfil, "modulo.caja")}
+      puedeCrearProductos={tienePermiso(perfil, "modulo.inventario")}
     />
   );
 }
