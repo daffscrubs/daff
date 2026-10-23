@@ -17,7 +17,7 @@ export default async function PosPage() {
       supabase.from("tallas").select("id, codigo, orden"),
       leerTodo((d, h) => supabase.from("modelo_tallas").select("modelo_id, talla_id, precio_venta, codigo_barras, sku").order("id").range(d, h)),
       leerTodo((d, h) => supabase.from("stock_productos").select("modelo_id, talla_id, ubicacion_id, cantidad_actual").order("id").range(d, h)),
-      supabase.from("clientes").select("id, nombre_comercial").order("nombre_comercial"),
+      supabase.from("clientes").select("id, nombre_comercial, razon_social, telefono, email").order("nombre_comercial"),
     ]);
 
   const modeloPorId = new Map((modelos ?? []).map((m) => [m.id, m]));
@@ -66,7 +66,8 @@ export default async function PosPage() {
       puedeVenderSinExistencias={tienePermiso(perfil, "pos.sin_existencias")}
       puedeAbrirCaja={tienePermiso(perfil, "modulo.caja") && tienePermiso(perfil, "caja.abrir_cerrar")}
       puedeVerCaja={tienePermiso(perfil, "modulo.caja")}
-      puedeCrearProductos={tienePermiso(perfil, "modulo.inventario")}
+      puedeEntradaManual={tienePermiso(perfil, "pos.entrada_manual")}
+      puedeCrearClientes={perfil.rol === "admin" || perfil.rol === "ventas"}
     />
   );
 }

@@ -1,6 +1,7 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
+import type { ZodError } from "zod";
 import { createClient } from "@/lib/supabase/server";
 import { requerirPerfil } from "@/lib/supabase/auth-helpers";
 import { cancelarVentaSchema, registrarVentaSchema, type RegistrarVentaInput } from "@/lib/validaciones/ventas.schema";
@@ -9,17 +10,34 @@ import { accionError, accionOk, type AccionResultado } from "@/lib/tipos/accion"
 // La validación de fondo (permisos, caja abierta, existencias, que los pagos sumen el total, precios
 // tomados de la base) vive en fn_registrar_venta: ahí es una sola transacción. Aquí solo se revisa la
 // forma de los datos y se pasa el mensaje de la base tal cual, que ya está escrito para el usuario.
+// Una partida puede ser de inventario o de entrada manual (z.union): si no cumple ninguna, zod solo dice
+// "Invalid input". Aquí se toma el mensaje de la rama que corresponde a la partida (manual o de inventario).
+function mensajeDeError(error: ZodError, input: RegistrarVentaInput): string {
+  const issue = error.issues[0];
+  if (!issue) return "Datos de la venta inválidos";
+  if (issue.code === "invalid_union") {
+    const partida = issue.path[0] === "items" && typeof issue.path[1] === "number" ? input.items?.[issue.path[1]] : undefined;
+    const rama = issue.errors[partida && "manual" in partida ? 0 : 1];
+    return rama?.[0]?.message ?? "Datos de la venta inválidos";
+  }
+  return issue.message;
+}
+
 export async function registrarVenta(input: RegistrarVentaInput): Promise<AccionResultado<{ id: string; folio: string }>> {
   await requerirPerfil();
   const datos = registrarVentaSchema.safeParse(input);
-  if (!datos.success) return accionError(datos.error.issues[0]?.message ?? "Datos de la venta inválidos");
+  if (!datos.success) return accionError(mensajeDeError(datos.error, input));
   const v = datos.data;
 
   const supabase = await createClient();
   const { data: id, error } = await supabase.rpc("fn_registrar_venta", {
     p_ubicacion_id: v.ubicacionId,
     p_cliente_id: v.clienteId,
-    p_items: v.items.map((i) => ({ modelo_id: i.modeloId, talla_id: i.tallaId, cantidad: i.cantidad })),
+    p_items: v.items.map((i) =>
+      "manual" in i
+        ? { manual: true, nombre: i.nombre, cantidad: i.cantidad, unidad: i.unidad, precio: i.precio, costo: i.costo ?? null, iva: i.iva, ieps: i.ieps }
+        : { modelo_id: i.modeloId, talla_id: i.tallaId, cantidad: i.cantidad }
+    ),
     p_pagos: v.pagos.map((p) => ({ metodo: p.metodo, monto: p.monto, recibido: p.recibido ?? null, referencia: p.referencia ?? null })),
     p_descuento: v.descuento,
     p_notas: v.notas,

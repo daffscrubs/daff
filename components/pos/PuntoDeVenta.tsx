@@ -4,7 +4,8 @@ import { useMemo, useRef, useState, useSyncExternalStore, useTransition } from "
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
-import { Check, Landmark, Minus, PackagePlus, Percent, Plus, Printer, ScanBarcode, Search, Trash2, UserPlus, X, type LucideIcon } from "lucide-react";
+import { ArrowDown, ArrowUp, Calculator, Check, CornerDownLeft, Landmark, Minus, Percent, Plus, Printer, ScanBarcode, Search, Trash2, User, UserPlus, Users, X, type LucideIcon } from "lucide-react";
+import { crearCliente } from "@/actions/clientes.actions";
 import { registrarVenta } from "@/actions/ventas.actions";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -15,7 +16,16 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { formatearMoneda } from "@/lib/dinero";
 import { formatearHoraMexico } from "@/lib/fechas";
 import { normalizarTexto } from "@/lib/texto";
+import { TASAS_IEPS, TASAS_IVA, UNIDADES_VENTA } from "@/lib/validaciones/ventas.schema";
 import { cn } from "@/lib/utils";
+
+export interface ClienteVenta {
+  id: string;
+  nombre_comercial: string;
+  razon_social: string | null;
+  telefono: string | null;
+  email: string | null;
+}
 
 export interface VarianteVenta {
   modeloId: string;
@@ -86,9 +96,18 @@ function guardarUbicacion(id: string) {
   oyentesUbicacion.forEach((aviso) => aviso());
 }
 
+// Datos de una partida de "entrada manual" (no está en el inventario).
+interface DatosManual {
+  unidad: string;
+  costo: number | null;
+  iva: number;
+  ieps: number;
+}
 interface LineaCarrito {
   variante: VarianteVenta;
   cantidad: number;
+  /** Solo en las partidas de entrada manual; la "variante" es entonces un reflejo del nombre y precio capturados. */
+  manual?: DatosManual;
 }
 const claveDe = (v: { modeloId: string; tallaId: string }) => `${v.modeloId}|${v.tallaId}`;
 
@@ -139,17 +158,19 @@ export function PuntoDeVenta({
   puedeVenderSinExistencias,
   puedeAbrirCaja,
   puedeVerCaja,
-  puedeCrearProductos,
+  puedeEntradaManual,
+  puedeCrearClientes,
 }: {
   ubicaciones: { id: string; nombre: string }[];
   cajasAbiertas: CajaAbierta[];
   catalogo: VarianteVenta[];
-  clientes: { id: string; nombre_comercial: string }[];
+  clientes: ClienteVenta[];
   puedeDescuentos: boolean;
   puedeVenderSinExistencias: boolean;
   puedeAbrirCaja: boolean;
   puedeVerCaja: boolean;
-  puedeCrearProductos: boolean;
+  puedeEntradaManual: boolean;
+  puedeCrearClientes: boolean;
 }) {
   const router = useRouter();
   const inputBusqueda = useRef<HTMLInputElement>(null);
@@ -184,13 +205,21 @@ export function PuntoDeVenta({
   const activa = ventas.find((v) => v.id === activaId) ?? ventas[0];
   const { carrito, clienteId, descuentoTipo, descuentoTexto } = activa;
   const [clienteAbierto, setClienteAbierto] = useState(false);
+  const [manualAbierto, setManualAbierto] = useState(false);
+  const [clientesNuevos, setClientesNuevos] = useState<ClienteVenta[]>([]);
+  const contadorManual = useRef(0);
   const [descuentoAbierto, setDescuentoAbierto] = useState(false);
   const [cobroAbierto, setCobroAbierto] = useState(false);
   const [venta, setVenta] = useState<{ id: string; folio: string; totalCentavos: number; cambioCentavos: number } | null>(null);
 
   const ubicacion = ubicaciones.find((u) => u.id === ubicacionId);
   const caja = cajasAbiertas.find((c) => c.ubicacionId === ubicacionId) ?? null;
-  const cliente = clientes.find((c) => c.id === clienteId) ?? null;
+  // Los clientes creados desde esta ventana se suman a la lista sin recargar la página.
+  const todosClientes = useMemo(() => {
+    const ids = new Set(clientes.map((c) => c.id));
+    return [...clientes, ...clientesNuevos.filter((c) => !ids.has(c.id))].sort((a, b) => a.nombre_comercial.localeCompare(b.nombre_comercial, "es"));
+  }, [clientes, clientesNuevos]);
+  const cliente = todosClientes.find((c) => c.id === clienteId) ?? null;
   const stockEn = (v: VarianteVenta) => v.stock[ubicacionId] ?? 0;
   const maximo = (v: VarianteVenta) => (puedeVenderSinExistencias ? 9999 : Math.max(0, stockEn(v)));
 
@@ -227,6 +256,12 @@ export function PuntoDeVenta({
       const linea = prev[clave];
       if (!linea) return prev;
       const siguiente = { ...prev };
+      if (linea.manual) {
+        // Partida de entrada manual: sin existencias que respetar y con hasta 3 decimales (metros, kilos...).
+        if (!Number.isFinite(cantidad) || cantidad <= 0) delete siguiente[clave];
+        else siguiente[clave] = { ...linea, cantidad: Math.min(999_999, Math.round(cantidad * 1000) / 1000) };
+        return siguiente;
+      }
       if (!Number.isFinite(cantidad) || cantidad < 1) {
         delete siguiente[clave];
         return siguiente;
@@ -242,6 +277,29 @@ export function PuntoDeVenta({
     });
   }
 
+  function agregarManual(d: { nombre: string; cantidad: number; unidad: string; precio: number; costo: number | null; iva: number; ieps: number }) {
+    if (!caja) {
+      toast.error(`No hay una caja abierta en ${ubicacion?.nombre ?? "esta ubicación"}.`);
+      return false;
+    }
+    contadorManual.current += 1;
+    const clave = `manual-${contadorManual.current}`;
+    const variante: VarianteVenta = {
+      modeloId: "",
+      tallaId: "",
+      nombre: d.nombre,
+      categoria: null,
+      talla: null,
+      ordenTalla: 0,
+      precio: d.precio,
+      codigoBarras: null,
+      sku: null,
+      stock: {},
+    };
+    setCarrito((prev) => ({ ...prev, [clave]: { variante, cantidad: d.cantidad, manual: { unidad: d.unidad, costo: d.costo, iva: d.iva, ieps: d.ieps } } }));
+    return true;
+  }
+
   function cambiarUbicacion(id: string) {
     guardarUbicacion(id);
     // Las existencias son de cada ubicación: se ajusta lo que ya estaba en todas las ventas abiertas.
@@ -250,6 +308,10 @@ export function PuntoDeVenta({
       ventasActual.current.map((v) => {
         const carritoAjustado: Record<string, LineaCarrito> = {};
         for (const [clave, linea] of Object.entries(v.carrito)) {
+          if (linea.manual) {
+            carritoAjustado[clave] = linea;
+            continue;
+          }
           const tope = puedeVenderSinExistencias ? 9999 : Math.max(0, linea.variante.stock[id] ?? 0);
           if (tope < 1) {
             ajustado = true;
@@ -306,8 +368,8 @@ export function PuntoDeVenta({
   }
 
   const lineas = Object.entries(carrito);
-  const piezas = lineas.reduce((acc, [, l]) => acc + l.cantidad, 0);
-  const subtotalCentavos = lineas.reduce((acc, [, l]) => acc + l.cantidad * aCentavos(l.variante.precio ?? 0), 0);
+  const piezas = Number(lineas.reduce((acc, [, l]) => acc + l.cantidad, 0).toFixed(3));
+  const subtotalCentavos = lineas.reduce((acc, [, l]) => acc + Math.round(l.cantidad * aCentavos(l.variante.precio ?? 0)), 0);
   const descuentoLeido = leerCentavos(descuentoTexto);
   const descuentoCentavos = !puedeDescuentos || Number.isNaN(descuentoLeido)
     ? 0
@@ -459,7 +521,9 @@ export function PuntoDeVenta({
           </div>
         ) : (
           <div className="grid grid-cols-1 gap-px overflow-hidden rounded-xl border bg-border shadow-sm sm:grid-cols-2">
-            {puedeCrearProductos && <Atajo icono={PackagePlus} titulo="Crear producto" color="bg-emerald-50 text-emerald-600 dark:bg-emerald-950 dark:text-emerald-300" href="/inventario" />}
+            {puedeEntradaManual && (
+              <Atajo icono={Calculator} titulo="Entrada manual" color="bg-sky-50 text-sky-600 dark:bg-sky-950 dark:text-sky-300" onClick={() => setManualAbierto(true)} />
+            )}
             <Atajo
               icono={UserPlus}
               titulo={cliente ? "Cambiar cliente" : "Añadir cliente"}
@@ -503,7 +567,7 @@ export function PuntoDeVenta({
         <div className="flex items-end gap-1 overflow-x-auto border-b bg-muted/40 px-4 pt-3" role="tablist" aria-label="Ventas abiertas">
           {ventas.map((v) => {
             const esActiva = v.id === activa.id;
-            const articulos = Object.values(v.carrito).reduce((a, l) => a + l.cantidad, 0);
+            const articulos = Object.keys(v.carrito).length;
             return (
               <div
                 key={v.id}
@@ -561,6 +625,7 @@ export function PuntoDeVenta({
                     <p className="text-sm font-medium leading-tight">
                       {l.variante.nombre}
                       {l.variante.talla && <span className="text-muted-foreground"> · {l.variante.talla}</span>}
+                      {l.manual && <span className="text-muted-foreground"> · {l.manual.unidad}</span>}
                     </p>
                     <button type="button" aria-label="Quitar del carrito" className="text-muted-foreground hover:text-destructive" onClick={() => cambiarCantidad(clave, 0)}>
                       <Trash2 className="size-4" />
@@ -573,7 +638,8 @@ export function PuntoDeVenta({
                       </Button>
                       <Input
                         type="number"
-                        min={1}
+                        min={l.manual ? 0.001 : 1}
+                        step={l.manual ? "any" : 1}
                         aria-label={`Cantidad de ${l.variante.nombre}`}
                         className="h-7 w-14 px-1 text-center"
                         value={l.cantidad}
@@ -584,7 +650,7 @@ export function PuntoDeVenta({
                       </Button>
                     </div>
                     <div className="text-right">
-                      <p className="text-sm font-semibold">{formatearMoneda(aPesos(l.cantidad * aCentavos(l.variante.precio ?? 0)))}</p>
+                      <p className="text-sm font-semibold">{formatearMoneda(aPesos(Math.round(l.cantidad * aCentavos(l.variante.precio ?? 0))))}</p>
                       <p className="text-xs text-muted-foreground">{formatearMoneda(l.variante.precio ?? 0)} c/u</p>
                     </div>
                   </div>
@@ -638,15 +704,30 @@ export function PuntoDeVenta({
       </aside>
 
       <Dialog open={clienteAbierto} onOpenChange={setClienteAbierto}>
-        <DialogContent className="sm:max-w-md">
+        <DialogContent className="gap-0 overflow-hidden p-0 sm:max-w-xl">
           {clienteAbierto && (
             <SelectorCliente
-              clientes={clientes}
+              clientes={todosClientes}
               clienteId={clienteId}
+              puedeCrear={puedeCrearClientes}
               alElegir={(id) => {
                 editarActiva((v) => ({ ...v, clienteId: id }));
                 setClienteAbierto(false);
               }}
+              alCrear={(nuevo) => setClientesNuevos((prev) => [...prev, nuevo])}
+            />
+          )}
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={manualAbierto} onOpenChange={setManualAbierto}>
+        <DialogContent className="flex max-h-[92vh] flex-col gap-0 overflow-hidden p-0 sm:max-w-xl">
+          {manualAbierto && (
+            <EntradaManual
+              alAgregar={(datos) => {
+                if (agregarManual(datos)) setManualAbierto(false);
+              }}
+              alCancelar={() => setManualAbierto(false)}
             />
           )}
         </DialogContent>
@@ -703,7 +784,11 @@ export function PuntoDeVenta({
                 const res = await registrarVenta({
                   ubicacionId,
                   clienteId: clienteId || null,
-                  items: lineas.map(([, l]) => ({ modeloId: l.variante.modeloId, tallaId: l.variante.tallaId, cantidad: l.cantidad })),
+                  items: lineas.map(([, l]) =>
+                    l.manual
+                      ? { manual: true as const, nombre: l.variante.nombre, cantidad: l.cantidad, unidad: l.manual.unidad as (typeof UNIDADES_VENTA)[number], precio: l.variante.precio ?? 0, costo: l.manual.costo, iva: l.manual.iva, ieps: l.manual.ieps }
+                      : { modeloId: l.variante.modeloId, tallaId: l.variante.tallaId, cantidad: l.cantidad }
+                  ),
                   pagos: pagos.map((p) => ({ metodo: p.metodo, monto: aPesos(p.montoCentavos), recibido: p.recibidoCentavos ? aPesos(p.recibidoCentavos) : undefined, referencia: p.referencia || undefined })),
                   descuento: aPesos(descuentoInvalido ? 0 : descuentoCentavos),
                 });
@@ -729,50 +814,379 @@ export function PuntoDeVenta({
   );
 }
 
+// Selector de cliente: búsqueda, "Nuevo cliente", "Público en General" y la lista, con navegación por teclado
+// (flechas para moverse, Enter para confirmar) como en el resto de las cajas de punto de venta.
 function SelectorCliente({
   clientes,
   clienteId,
+  puedeCrear,
   alElegir,
+  alCrear,
 }: {
-  clientes: { id: string; nombre_comercial: string }[];
+  clientes: ClienteVenta[];
   clienteId: string;
+  puedeCrear: boolean;
   alElegir: (id: string) => void;
+  alCrear: (cliente: ClienteVenta) => void;
 }) {
+  const [vista, setVista] = useState<"lista" | "nuevo">("lista");
   const [texto, setTexto] = useState("");
+  const [resaltado, setResaltado] = useState(0);
+  const lista = useRef<HTMLDivElement>(null);
+
   const q = normalizarTexto(texto.trim());
-  const filtrados = clientes.filter((c) => !q || normalizarTexto(c.nombre_comercial).includes(q));
+  const filtrados = useMemo(
+    () =>
+      clientes
+        .filter((c) => !q || normalizarTexto(`${c.nombre_comercial} ${c.razon_social ?? ""} ${c.telefono ?? ""} ${c.email ?? ""}`).includes(q))
+        .slice(0, 100),
+    [clientes, q]
+  );
+  // "Público en General" va siempre primero (si la búsqueda está vacía o lo menciona).
+  const mostrarPublico = !q || normalizarTexto("Público en General").includes(q);
+  const opciones: { id: string; titulo: string; detalle: string | null }[] = [
+    ...(mostrarPublico ? [{ id: "", titulo: "Público en General", detalle: null }] : []),
+    ...filtrados.map((c) => ({ id: c.id, titulo: c.nombre_comercial, detalle: c.telefono || c.email || c.razon_social })),
+  ];
+  const posicion = Math.min(resaltado, Math.max(0, opciones.length - 1));
+
+  function moverA(nueva: number) {
+    const destino = Math.max(0, Math.min(opciones.length - 1, nueva));
+    setResaltado(destino);
+    lista.current?.querySelector<HTMLElement>(`[data-indice="${destino}"]`)?.scrollIntoView({ block: "nearest" });
+  }
+
+  if (vista === "nuevo") {
+    return <NuevoCliente alVolver={() => setVista("lista")} alGuardar={(c) => { alCrear(c); alElegir(c.id); }} />;
+  }
+
   return (
-    <div className="space-y-3">
-      <DialogHeader>
-        <DialogTitle>Cliente de la venta</DialogTitle>
-      </DialogHeader>
-      <div className="relative">
-        <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
-        <Input autoFocus value={texto} onChange={(e) => setTexto(e.target.value)} placeholder="Buscar cliente" aria-label="Buscar cliente" className="h-10 pl-9" />
+    <div className="flex max-h-[85vh] flex-col">
+      <div className="border-b px-6 py-5">
+        <DialogTitle className="text-xl font-semibold">Añadir Cliente</DialogTitle>
       </div>
-      <div className="max-h-72 space-y-1 overflow-y-auto">
-        <button
-          type="button"
-          onClick={() => alElegir("")}
-          className={cn("flex w-full items-center justify-between rounded-lg border px-3 py-2 text-left text-sm hover:bg-muted", !clienteId && "border-primary bg-primary/5")}
-        >
-          Público en general
-          {!clienteId && <Check className="size-4 text-primary" />}
-        </button>
-        {filtrados.map((c) => (
+      <div className="space-y-3 px-6 pt-5">
+        <div className="relative">
+          <Search className="pointer-events-none absolute left-3.5 top-1/2 size-5 -translate-y-1/2 text-muted-foreground" />
+          <Input
+            autoFocus
+            value={texto}
+            onChange={(e) => {
+              setTexto(e.target.value);
+              setResaltado(0);
+            }}
+            onKeyDown={(e) => {
+              if (e.key === "ArrowDown") {
+                e.preventDefault();
+                moverA(posicion + 1);
+              } else if (e.key === "ArrowUp") {
+                e.preventDefault();
+                moverA(posicion - 1);
+              } else if (e.key === "Enter") {
+                e.preventDefault();
+                if (opciones[posicion]) alElegir(opciones[posicion].id);
+              }
+            }}
+            placeholder="Buscar por nombre, teléfono, email o razón social"
+            aria-label="Buscar cliente"
+            className="h-12 rounded-lg pl-11 text-base"
+          />
+        </div>
+        {puedeCrear && (
+          <button type="button" onClick={() => setVista("nuevo")} className="flex w-full items-center gap-3 border-b px-2 py-3 text-left text-base font-medium text-sky-600 hover:text-sky-700">
+            <Plus className="size-5" />
+            Nuevo cliente
+          </button>
+        )}
+      </div>
+      <div ref={lista} className="min-h-40 flex-1 overflow-y-auto px-4 py-3" role="listbox" aria-label="Clientes">
+        {opciones.map((o, i) => (
           <button
-            key={c.id}
+            key={o.id || "publico"}
             type="button"
-            onClick={() => alElegir(c.id)}
-            className={cn("flex w-full items-center justify-between rounded-lg border px-3 py-2 text-left text-sm hover:bg-muted", c.id === clienteId && "border-primary bg-primary/5")}
+            role="option"
+            aria-selected={o.id === clienteId}
+            data-indice={i}
+            onMouseMove={() => setResaltado(i)}
+            onClick={() => alElegir(o.id)}
+            className={cn("flex w-full items-center gap-4 rounded-xl px-3 py-2.5 text-left transition-colors", i === posicion ? "bg-sky-50 dark:bg-sky-950/40" : "hover:bg-muted/50")}
           >
-            {c.nombre_comercial}
-            {c.id === clienteId && <Check className="size-4 text-primary" />}
+            <span className="flex size-11 shrink-0 items-center justify-center rounded-full bg-sky-100 text-sky-600 dark:bg-sky-950 dark:text-sky-300">
+              {o.id ? <User className="size-5" /> : <Users className="size-5" />}
+            </span>
+            <span className="min-w-0 flex-1">
+              <span className="block truncate text-base font-medium">{o.titulo}</span>
+              {o.detalle && <span className="block truncate text-sm text-muted-foreground">{o.detalle}</span>}
+            </span>
+            {o.id === clienteId && <Check className="size-5 shrink-0 text-sky-600" />}
           </button>
         ))}
-        {!filtrados.length && <p className="py-6 text-center text-sm text-muted-foreground">Ningún cliente coincide.</p>}
+        {!opciones.length && <p className="py-10 text-center text-sm text-muted-foreground">Ningún cliente coincide con la búsqueda.</p>}
+      </div>
+      <div className="flex items-center justify-between border-t bg-muted/40 px-5 py-3 text-sm text-muted-foreground">
+        <span className="flex items-center gap-2">
+          <kbd className="flex size-6 items-center justify-center rounded border bg-background">
+            <ArrowUp className="size-3.5" />
+          </kbd>
+          <kbd className="flex size-6 items-center justify-center rounded border bg-background">
+            <ArrowDown className="size-3.5" />
+          </kbd>
+          Navegar
+        </span>
+        <span className="flex items-center gap-2">
+          <kbd className="flex h-6 items-center justify-center rounded border bg-background px-2">
+            <CornerDownLeft className="size-3.5" />
+          </kbd>
+          Confirmar
+        </span>
       </div>
     </div>
+  );
+}
+
+function NuevoCliente({ alVolver, alGuardar }: { alVolver: () => void; alGuardar: (cliente: ClienteVenta) => void }) {
+  const [nombre, setNombre] = useState("");
+  const [telefono, setTelefono] = useState("");
+  const [email, setEmail] = useState("");
+  const [razonSocial, setRazonSocial] = useState("");
+  const [guardando, startTransition] = useTransition();
+  const valido = nombre.trim().length >= 2;
+
+  function guardar() {
+    startTransition(async () => {
+      const res = await crearCliente({ nombreComercial: nombre.trim(), telefono: telefono.trim(), email: email.trim(), razonSocial: razonSocial.trim() });
+      if (!res.ok) {
+        toast.error(res.error);
+        return;
+      }
+      toast.success(`Cliente "${nombre.trim()}" creado`);
+      alGuardar({ id: res.data, nombre_comercial: nombre.trim(), telefono: telefono.trim() || null, email: email.trim() || null, razon_social: razonSocial.trim() || null });
+    });
+  }
+
+  return (
+    <form
+      onSubmit={(e) => {
+        e.preventDefault();
+        if (valido && !guardando) guardar();
+      }}
+    >
+      <div className="border-b px-6 py-5">
+        <DialogTitle className="text-xl font-semibold">Nuevo cliente</DialogTitle>
+      </div>
+      <div className="space-y-4 px-6 py-5">
+        <div className="space-y-1.5">
+          <Label htmlFor="nc-nombre">Nombre</Label>
+          <Input id="nc-nombre" autoFocus value={nombre} onChange={(e) => setNombre(e.target.value)} placeholder="Nombre del cliente o negocio" className="h-11" />
+        </div>
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+          <div className="space-y-1.5">
+            <Label htmlFor="nc-tel">Teléfono (opcional)</Label>
+            <Input id="nc-tel" inputMode="tel" value={telefono} onChange={(e) => setTelefono(e.target.value)} className="h-11" />
+          </div>
+          <div className="space-y-1.5">
+            <Label htmlFor="nc-mail">Email (opcional)</Label>
+            <Input id="nc-mail" type="email" value={email} onChange={(e) => setEmail(e.target.value)} className="h-11" />
+          </div>
+        </div>
+        <div className="space-y-1.5">
+          <Label htmlFor="nc-razon">Razón social (opcional)</Label>
+          <Input id="nc-razon" value={razonSocial} onChange={(e) => setRazonSocial(e.target.value)} className="h-11" />
+        </div>
+      </div>
+      <div className="flex justify-end gap-3 border-t bg-muted/40 px-6 py-4">
+        <Button type="button" variant="outline" className="h-10 px-5" onClick={alVolver} disabled={guardando}>
+          Volver
+        </Button>
+        <Button type="submit" className="h-10 px-5" disabled={!valido || guardando}>
+          {guardando ? "Guardando..." : "Guardar y seleccionar"}
+        </Button>
+      </div>
+    </form>
+  );
+}
+
+// Entrada manual: agrega al carrito algo que no está en el inventario (servicios, productos sueltos, cobros varios).
+// No mueve existencias. El precio capturado es el precio final: el IVA/IEPS se guardan para el desglose y no se
+// suman otra vez al total.
+function EntradaManual({
+  alAgregar,
+  alCancelar,
+}: {
+  alAgregar: (datos: { nombre: string; cantidad: number; unidad: string; precio: number; costo: number | null; iva: number; ieps: number }) => void;
+  alCancelar: () => void;
+}) {
+  const [nombre, setNombre] = useState("");
+  const [cantidad, setCantidad] = useState("1");
+  const [unidad, setUnidad] = useState<string>("Unidad");
+  const [precio, setPrecio] = useState("");
+  const [costo, setCosto] = useState("");
+  const [conImpuestos, setConImpuestos] = useState(true);
+  const [iva, setIva] = useState("16");
+  const [ieps, setIeps] = useState("0");
+
+  const cantidadNum = Number(cantidad.replace(/,/g, ""));
+  const precioCentavos = leerCentavos(precio);
+  const costoCentavos = costo.trim() ? leerCentavos(costo) : 0;
+  const cantidadValida = Number.isFinite(cantidadNum) && cantidadNum > 0 && cantidadNum <= 999_999 && Math.abs(Math.round(cantidadNum * 1000) - cantidadNum * 1000) < 1e-6;
+  const valido = nombre.trim().length > 0 && cantidadValida && !Number.isNaN(precioCentavos) && precioCentavos > 0 && !Number.isNaN(costoCentavos);
+
+  function agregar() {
+    if (!valido) return;
+    alAgregar({
+      nombre: nombre.trim(),
+      cantidad: Math.round(cantidadNum * 1000) / 1000,
+      unidad,
+      precio: aPesos(precioCentavos),
+      costo: costo.trim() ? aPesos(costoCentavos) : null,
+      iva: conImpuestos ? Number(iva) : 0,
+      ieps: conImpuestos ? Number(ieps) : 0,
+    });
+  }
+
+  const tarjeta = "space-y-5 rounded-xl border bg-card p-5 shadow-sm";
+  return (
+    <form
+      className="flex min-h-0 flex-1 flex-col"
+      onSubmit={(e) => {
+        e.preventDefault();
+        agregar();
+      }}
+    >
+      <div className="shrink-0 border-b px-7 py-6 pr-14">
+        <DialogTitle className="text-2xl font-semibold">Entrada Manual de Producto</DialogTitle>
+        <p className="mt-1.5 text-muted-foreground">Añade un producto al carrito sin agregarlo a tu inventario</p>
+      </div>
+
+      <div className="min-h-0 flex-1 space-y-4 overflow-y-auto bg-muted/40 px-7 py-6">
+        <div className={tarjeta}>
+          <div className="space-y-1.5">
+            <Label htmlFor="em-nombre" className="text-base font-medium">
+              Nombre del producto
+            </Label>
+            <Input id="em-nombre" autoFocus value={nombre} onChange={(e) => setNombre(e.target.value)} placeholder="Ej. Bordado de nombre" className="h-11 text-base" />
+          </div>
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+            <div className="space-y-1.5">
+              <Label htmlFor="em-cantidad" className="text-base font-medium">
+                Cantidad
+              </Label>
+              <Input
+                id="em-cantidad"
+                inputMode="decimal"
+                value={cantidad}
+                onChange={(e) => setCantidad(e.target.value)}
+                placeholder="0"
+                className={cn("h-11 text-base", cantidad && !cantidadValida && "border-destructive")}
+              />
+            </div>
+            <div className="space-y-1.5">
+              <Label className="text-base font-medium">Unidad de Venta</Label>
+              <Select items={UNIDADES_VENTA.map((u) => ({ value: u, label: u }))} value={unidad} onValueChange={(v) => v && setUnidad(v)}>
+                <SelectTrigger className="h-11 w-full text-base" aria-label="Unidad de venta">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {UNIDADES_VENTA.map((u) => (
+                    <SelectItem key={u} value={u}>
+                      {u}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-1.5">
+              <Label htmlFor="em-precio" className="text-base font-medium">
+                Precio de Venta
+              </Label>
+              <div className="relative">
+                <span className="pointer-events-none absolute left-3.5 top-1/2 -translate-y-1/2 text-muted-foreground">$</span>
+                <Input
+                  id="em-precio"
+                  inputMode="decimal"
+                  value={precio}
+                  onChange={(e) => setPrecio(e.target.value)}
+                  placeholder="0.00"
+                  className={cn("h-11 pl-8 pr-24 text-base", precio && (Number.isNaN(precioCentavos) || precioCentavos <= 0) && "border-destructive")}
+                />
+                <span className="pointer-events-none absolute right-3.5 top-1/2 -translate-y-1/2 text-muted-foreground">por {unidad}</span>
+              </div>
+            </div>
+            <div className="space-y-1.5">
+              <Label htmlFor="em-costo" className="text-base font-medium">
+                Costo (opcional)
+              </Label>
+              <div className="relative">
+                <span className="pointer-events-none absolute left-3.5 top-1/2 -translate-y-1/2 text-muted-foreground">$</span>
+                <Input
+                  id="em-costo"
+                  inputMode="decimal"
+                  value={costo}
+                  onChange={(e) => setCosto(e.target.value)}
+                  placeholder="0.00"
+                  className={cn("h-11 pl-8 pr-24 text-base", Number.isNaN(costoCentavos) && "border-destructive")}
+                />
+                <span className="pointer-events-none absolute right-3.5 top-1/2 -translate-y-1/2 text-muted-foreground">por {unidad}</span>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div className={tarjeta}>
+          <label className="flex cursor-pointer items-center gap-3 text-base font-medium">
+            <input type="checkbox" className="size-5 cursor-pointer accent-sky-600" checked={conImpuestos} onChange={(e) => setConImpuestos(e.target.checked)} />
+            Cobrar impuestos del producto
+          </label>
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+            <div className="space-y-1.5">
+              <Label className="text-base font-medium">IVA</Label>
+              <Select items={TASAS_IVA.map((t) => ({ value: String(t), label: `${t}%` }))} value={iva} onValueChange={(v) => v && setIva(v)} disabled={!conImpuestos}>
+                <SelectTrigger className="h-11 w-full text-base" aria-label="IVA">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {TASAS_IVA.map((t) => (
+                    <SelectItem key={t} value={String(t)}>
+                      {t}%
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-1.5">
+              <Label className="text-base font-medium">IEPS</Label>
+              <Select
+                items={TASAS_IEPS.map((t) => ({ value: String(t), label: t === 0 ? "No aplica" : `${t}%` }))}
+                value={ieps}
+                onValueChange={(v) => v && setIeps(v)}
+                disabled={!conImpuestos}
+              >
+                <SelectTrigger className="h-11 w-full text-base" aria-label="IEPS">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {TASAS_IEPS.map((t) => (
+                    <SelectItem key={t} value={String(t)}>
+                      {t === 0 ? "No aplica" : `${t}%`}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+          <p className="text-xs text-muted-foreground">El precio que captures es el precio final: los impuestos se registran con la partida y no se suman otra vez al total.</p>
+        </div>
+      </div>
+
+      <div className="flex shrink-0 justify-end gap-3 border-t px-7 py-5">
+        <Button type="button" variant="outline" className="h-11 px-6 text-base" onClick={alCancelar}>
+          Cancelar
+        </Button>
+        <Button type="submit" className="h-11 px-6 text-base" disabled={!valido}>
+          Crear y Agregar
+        </Button>
+      </div>
+    </form>
   );
 }
 
