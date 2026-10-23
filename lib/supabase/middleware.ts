@@ -1,6 +1,7 @@
 import { createServerClient } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
 import type { Database } from "@/types/database.types";
+import { puedeEntrarARuta, rutaInicial } from "@/lib/permisos";
 
 const RUTAS_ADMIN = ["/dashboard", "/clientes", "/pedidos", "/produccion", "/inventario", "/catalogos", "/materiales", "/reportes", "/usuarios"];
 
@@ -42,12 +43,13 @@ export async function updateSession(request: NextRequest) {
 
   const { data: perfil } = await supabase
     .from("perfiles")
-    .select("rol")
+    .select("rol, permisos")
     .eq("id", user.id)
     .single();
 
   const rol = perfil?.rol;
-  const inicioSegunRol = rol === "colaborador" ? "/mi-dia" : "/dashboard";
+  // Primera pantalla a la que el usuario tiene acceso (según sus permisos, no solo su rol).
+  const inicioSegunRol = perfil ? rutaInicial(perfil) : "/dashboard";
 
   if (esPantallaLogin || pathname === "/") {
     const url = request.nextUrl.clone();
@@ -59,6 +61,13 @@ export async function updateSession(request: NextRequest) {
   if (esRutaAdmin && rol === "colaborador") {
     const url = request.nextUrl.clone();
     url.pathname = "/mi-dia";
+    return NextResponse.redirect(url);
+  }
+
+  // Pantallas del panel que el administrador le quitó (o nunca le dio) a este usuario.
+  if (perfil && rol !== "colaborador" && !puedeEntrarARuta(perfil, pathname)) {
+    const url = request.nextUrl.clone();
+    url.pathname = inicioSegunRol;
     return NextResponse.redirect(url);
   }
 

@@ -29,7 +29,7 @@ export default async function AdminLayout({ children }: { children: React.ReactN
             <p className="mt-0.5 text-xs text-sidebar-foreground/60">{ROL_LABEL[perfil.rol] ?? perfil.rol}</p>
           </div>
         </div>
-        <SidebarAdmin rol={perfil.rol} />
+        <SidebarAdmin perfil={perfil} />
       </aside>
       <div className="flex min-w-0 flex-1 flex-col">
         <header className="flex items-center justify-between border-b bg-background px-6 py-3 shadow-sm">

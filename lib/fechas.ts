@@ -50,3 +50,27 @@ export function sumarDias(fechaISO: string, dias: number): string {
   const diaOut = String(d.getUTCDate()).padStart(2, "0");
   return `${anioOut}-${mesOut}-${diaOut}`;
 }
+
+// La caja y las ventas del día se cortan en la hora de México, no en la del servidor (UTC): una venta de las
+// 8 pm en Puebla ya es "mañana" en UTC y caería en el día equivocado. México no tiene horario de verano desde
+// 2022, así que el desfase es fijo (UTC-6).
+const ZONA_MEXICO = "America/Mexico_City";
+const DESFASE_MEXICO = "-06:00";
+
+/** "YYYY-MM-DD" de hoy en la hora de México. */
+export function hoyMexico(): string {
+  return new Intl.DateTimeFormat("en-CA", { timeZone: ZONA_MEXICO, year: "numeric", month: "2-digit", day: "2-digit" }).format(new Date());
+}
+
+/** Inicio (inclusive) y fin (exclusive) de un día de México, como instantes ISO para consultar timestamptz. */
+export function rangoDiaMexico(fecha: string): { desde: string; hasta: string } {
+  return {
+    desde: new Date(`${fecha}T00:00:00${DESFASE_MEXICO}`).toISOString(),
+    hasta: new Date(new Date(`${fecha}T00:00:00${DESFASE_MEXICO}`).getTime() + 24 * 60 * 60 * 1000).toISOString(),
+  };
+}
+
+/** Hora legible ("9:05 p. m.") en la hora de México. */
+export function formatearHoraMexico(fechaIso: string): string {
+  return new Date(fechaIso).toLocaleTimeString("es-MX", { timeZone: ZONA_MEXICO, hour: "numeric", minute: "2-digit" });
+}
