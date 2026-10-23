@@ -32,7 +32,7 @@ export interface TicketVentaPDF {
   cliente: string | null;
   cancelada: boolean;
   motivoCancelacion: string | null;
-  partidas: { descripcion: string; cantidad: number; precioUnitario: number; importe: number }[];
+  partidas: { descripcion: string; cantidad: number; unidad?: string; precioUnitario: number; importe: number }[];
   subtotal: number;
   descuento: number;
   total: number;
@@ -77,7 +77,8 @@ export function TicketVenta({ ticket }: { ticket: TicketVentaPDF }) {
             <Text>{p.descripcion}</Text>
             <View style={estilos.fila}>
               <Text style={estilos.partidaDetalle}>
-                {p.cantidad} x {formatearMoneda(p.precioUnitario)}
+                {p.cantidad}
+                {p.unidad && !["Unidad", "Pieza"].includes(p.unidad) ? ` ${p.unidad}` : ""} x {formatearMoneda(p.precioUnitario)}
               </Text>
               <Text style={estilos.negrita}>{formatearMoneda(p.importe)}</Text>
             </View>

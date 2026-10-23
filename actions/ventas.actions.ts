@@ -19,7 +19,11 @@ export async function registrarVenta(input: RegistrarVentaInput): Promise<Accion
   const { data: id, error } = await supabase.rpc("fn_registrar_venta", {
     p_ubicacion_id: v.ubicacionId,
     p_cliente_id: v.clienteId,
-    p_items: v.items.map((i) => ({ modelo_id: i.modeloId, talla_id: i.tallaId, cantidad: i.cantidad })),
+    p_items: v.items.map((i) =>
+      "manual" in i
+        ? { manual: true, nombre: i.nombre, cantidad: i.cantidad, unidad: i.unidad, precio: i.precio, costo: i.costo ?? null, iva: i.iva, ieps: i.ieps }
+        : { modelo_id: i.modeloId, talla_id: i.tallaId, cantidad: i.cantidad }
+    ),
     p_pagos: v.pagos.map((p) => ({ metodo: p.metodo, monto: p.monto, recibido: p.recibido ?? null, referencia: p.referencia ?? null })),
     p_descuento: v.descuento,
     p_notas: v.notas,

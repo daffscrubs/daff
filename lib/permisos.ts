@@ -27,6 +27,7 @@ export const GRUPOS_PERMISOS: GrupoPermisos[] = [
       { id: "modulo.pos", etiqueta: "Acceder al punto de venta y vender" },
       { id: "pos.descuentos", etiqueta: "Aplicar descuentos" },
       { id: "pos.sin_existencias", etiqueta: "Vender sin existencias" },
+      { id: "pos.entrada_manual", etiqueta: "Agregar productos con entrada manual (precio libre)" },
       { id: "pos.ver_ventas", etiqueta: "Ver las ventas del día" },
       { id: "pos.cancelar", etiqueta: "Cancelar ventas" },
     ],
@@ -66,12 +67,12 @@ export const PERMISOS_POR_ROL: Record<RolUsuarioBase, string[]> = {
   admin: [],
   ventas: [
     "modulo.dashboard", "modulo.clientes", "modulo.pedidos", "modulo.compras", "modulo.bordados", "modulo.reportes",
-    "modulo.pos", "modulo.caja", "pos.ver_ventas", "caja.abrir_cerrar", "caja.ingresos",
+    "modulo.pos", "modulo.caja", "pos.ver_ventas", "pos.entrada_manual", "caja.abrir_cerrar", "caja.ingresos",
   ],
   supervisor: [
     "modulo.dashboard", "modulo.produccion", "modulo.inventario", "modulo.catalogos", "modulo.materiales",
     "modulo.compras", "modulo.bordados", "modulo.reportes",
-    "modulo.pos", "modulo.caja", "pos.ver_ventas", "pos.descuentos", "pos.cancelar",
+    "modulo.pos", "modulo.caja", "pos.ver_ventas", "pos.entrada_manual", "pos.descuentos", "pos.cancelar",
     "caja.abrir_cerrar", "caja.ingresos", "caja.retiros",
   ],
   colaborador: [],

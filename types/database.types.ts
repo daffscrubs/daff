@@ -1635,32 +1635,44 @@ export type Database = {
       venta_items: {
         Row: {
           cantidad: number
+          costo_unitario: number | null
           descripcion: string
           id: string
+          ieps_tasa: number
           importe: number
-          modelo_id: string
+          iva_tasa: number
+          modelo_id: string | null
           precio_unitario: number
-          talla_id: string
+          talla_id: string | null
+          unidad: string
           venta_id: string
         }
         Insert: {
           cantidad: number
+          costo_unitario?: number | null
           descripcion: string
           id?: string
+          ieps_tasa?: number
           importe: number
-          modelo_id: string
+          iva_tasa?: number
+          modelo_id?: string | null
           precio_unitario: number
-          talla_id: string
+          talla_id?: string | null
+          unidad?: string
           venta_id: string
         }
         Update: {
           cantidad?: number
+          costo_unitario?: number | null
           descripcion?: string
           id?: string
+          ieps_tasa?: number
           importe?: number
-          modelo_id?: string
+          iva_tasa?: number
+          modelo_id?: string | null
           precio_unitario?: number
-          talla_id?: string
+          talla_id?: string | null
+          unidad?: string
           venta_id?: string
         }
         Relationships: [

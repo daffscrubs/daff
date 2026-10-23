@@ -18,7 +18,7 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
   const { data: venta, error } = await supabase
     .from("ventas")
     .select(
-      "folio, created_at, subtotal, descuento, total, estatus, motivo_cancelacion, ubicaciones(nombre), vendedor:perfiles!ventas_vendedor_id_fkey(nombre_completo), clientes(nombre_comercial), venta_items(descripcion, cantidad, precio_unitario, importe), venta_pagos(metodo, monto, recibido)"
+      "folio, created_at, subtotal, descuento, total, estatus, motivo_cancelacion, ubicaciones(nombre), vendedor:perfiles!ventas_vendedor_id_fkey(nombre_completo), clientes(nombre_comercial), venta_items(descripcion, cantidad, unidad, precio_unitario, importe), venta_pagos(metodo, monto, recibido)"
     )
     .eq("id", id)
     .maybeSingle();
@@ -34,7 +34,7 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
     cliente: venta.clientes?.nombre_comercial ?? null,
     cancelada: venta.estatus === "cancelada",
     motivoCancelacion: venta.motivo_cancelacion,
-    partidas: venta.venta_items.map((i) => ({ descripcion: i.descripcion, cantidad: i.cantidad, precioUnitario: Number(i.precio_unitario), importe: Number(i.importe) })),
+    partidas: venta.venta_items.map((i) => ({ descripcion: i.descripcion, cantidad: Number(i.cantidad), unidad: i.unidad, precioUnitario: Number(i.precio_unitario), importe: Number(i.importe) })),
     subtotal: Number(venta.subtotal),
     descuento: Number(venta.descuento),
     total: Number(venta.total),

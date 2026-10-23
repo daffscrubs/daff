@@ -2,18 +2,35 @@ import { z } from "zod";
 
 export const METODOS_PAGO = ["efectivo", "transferencia", "tarjeta"] as const;
 
+export const UNIDADES_VENTA = ["Unidad", "Pieza", "Par", "Metro", "Kilogramo", "Litro", "Caja", "Paquete", "Hora", "Servicio"] as const;
+export const TASAS_IVA = [16, 8, 0] as const;
+export const TASAS_IEPS = [0, 3, 6, 8, 25, 30, 50] as const;
+
+const maxDecimales = (n: number, decimales: number) => Math.abs(Math.round(n * 10 ** decimales) - n * 10 ** decimales) < 1e-6;
+
+// Partida de "entrada manual": algo que se cobra pero no está en el inventario. El precio lo captura quien vende
+// (por eso la base de datos exige el permiso pos.entrada_manual).
+export const itemManualSchema = z.object({
+  manual: z.literal(true),
+  nombre: z.string().trim().min(1, "Escribe el nombre del producto").max(120, "El nombre es demasiado largo"),
+  cantidad: z.number().positive("La cantidad debe ser mayor a cero").max(999_999).refine((n) => maxDecimales(n, 3), "La cantidad admite hasta 3 decimales"),
+  unidad: z.enum(UNIDADES_VENTA),
+  precio: z.number().positive("El precio debe ser mayor a cero").max(9_999_999).refine((n) => maxDecimales(n, 2), "El precio admite hasta 2 decimales"),
+  costo: z.number().min(0, "El costo no puede ser negativo").max(9_999_999).refine((n) => maxDecimales(n, 2), "El costo admite hasta 2 decimales").nullable().optional(),
+  iva: z.number().min(0).max(100),
+  ieps: z.number().min(0).max(200),
+});
+
+const itemProductoSchema = z.object({
+  modeloId: z.string().uuid(),
+  tallaId: z.string().uuid(),
+  cantidad: z.number().int("La cantidad debe ser entera").min(1, "La cantidad mínima es 1").max(10_000),
+});
+
 export const registrarVentaSchema = z.object({
   ubicacionId: z.string().uuid("Elige la ubicación de la venta"),
   clienteId: z.string().uuid().nullable(),
-  items: z
-    .array(
-      z.object({
-        modeloId: z.string().uuid(),
-        tallaId: z.string().uuid(),
-        cantidad: z.number().int("La cantidad debe ser entera").min(1, "La cantidad mínima es 1").max(10_000),
-      })
-    )
-    .min(1, "Agrega al menos un producto a la venta"),
+  items: z.array(z.union([itemManualSchema, itemProductoSchema])).min(1, "Agrega al menos un producto a la venta"),
   pagos: z
     .array(
       z.object({
