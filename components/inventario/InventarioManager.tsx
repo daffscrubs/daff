@@ -2,7 +2,7 @@
 
 import { useMemo, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { Search, Boxes, Shirt } from "lucide-react";
+import { Search, Boxes, Shirt, Barcode } from "lucide-react";
 import { toast } from "sonner";
 import { crearModelo } from "@/actions/catalogos.actions";
 import { Badge } from "@/components/ui/badge";
@@ -33,6 +33,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { ImportarProductosDialog } from "@/components/inventario/ImportarProductosDialog";
+import { CrearEtiquetasDialog, type ConteoEtiquetas } from "@/components/inventario/CrearEtiquetasDialog";
 import { EstadoVacio } from "@/components/ui/estado-vacio";
 import { formatearMoneda } from "@/lib/dinero";
 import { normalizarTexto } from "@/lib/texto";
@@ -98,6 +99,9 @@ export function InventarioManager({
   const [categoriaFiltro, setCategoriaFiltro] = useState("todas");
   const [orden, setOrden] = useState("nombre");
   const [ubicacionFiltro, setUbicacionFiltro] = useState("todas");
+  // La selección es independiente de la búsqueda: se puede seleccionar, cambiar el filtro y seguir seleccionando.
+  const [seleccion, setSeleccion] = useState<Set<string>>(new Set());
+  const [etiquetasAbierto, setEtiquetasAbierto] = useState(false);
   const [pendiente, startTransition] = useTransition();
   const router = useRouter();
 
@@ -141,6 +145,56 @@ export function InventarioManager({
     return lista;
   }, [modelos, modeloTallas, stock, busqueda, categoriaFiltro, orden, ubicacionFiltro]);
 
+  const todosFiltradosSeleccionados = filtrados.length > 0 && filtrados.every((m) => seleccion.has(m.id));
+  const algunoFiltradoSeleccionado = filtrados.some((m) => seleccion.has(m.id));
+
+  function alternarSeleccion(id: string) {
+    setSeleccion((prev) => {
+      const siguiente = new Set(prev);
+      if (siguiente.has(id)) siguiente.delete(id);
+      else siguiente.add(id);
+      return siguiente;
+    });
+  }
+
+  function alternarTodosLosFiltrados() {
+    setSeleccion((prev) => {
+      const siguiente = new Set(prev);
+      if (todosFiltradosSeleccionados) filtrados.forEach((m) => siguiente.delete(m.id));
+      else filtrados.forEach((m) => siguiente.add(m.id));
+      return siguiente;
+    });
+  }
+
+  // Tallas de cada producto y cuántas tienen código de barras (cada una es una etiqueta).
+  const gruposEtiquetas = useMemo(() => {
+    const tallasPorModelo = new Map<string, { total: number; conCodigo: number }>();
+    for (const mt of modeloTallas) {
+      const c = tallasPorModelo.get(mt.modelo_id) ?? { total: 0, conCodigo: 0 };
+      c.total++;
+      if (mt.codigo_barras?.trim()) c.conCodigo++;
+      tallasPorModelo.set(mt.modelo_id, c);
+    }
+    const contar = (ids: string[]): ConteoEtiquetas => {
+      let tallasConCodigo = 0;
+      let tallasSinCodigo = 0;
+      const idsConCodigo: string[] = [];
+      for (const id of ids) {
+        const c = tallasPorModelo.get(id);
+        if (!c) continue;
+        tallasConCodigo += c.conCodigo;
+        tallasSinCodigo += c.total - c.conCodigo;
+        if (c.conCodigo) idsConCodigo.push(id);
+      }
+      return { idsConCodigo, productos: ids.length, tallasConCodigo, tallasSinCodigo };
+    };
+    return {
+      seleccionados: contar([...seleccion].filter((id) => modelos.some((m) => m.id === id))),
+      busqueda: contar(filtrados.map((m) => m.id)),
+      todos: contar(modelos.map((m) => m.id)),
+    };
+  }, [modeloTallas, modelos, filtrados, seleccion]);
+
   function alternarTalla(id: string) {
     setTallaIds((prev) => (prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]));
   }
@@ -176,6 +230,10 @@ export function InventarioManager({
     <div className="space-y-4">
       <div className="flex flex-wrap items-center justify-end gap-4">
         <div className="flex items-center gap-2">
+          <Button variant="outline" onClick={() => setEtiquetasAbierto(true)}>
+            <Barcode className="size-4" />
+            Crear etiquetas
+          </Button>
           <ImportarProductosDialog />
           <Dialog open={abierto} onOpenChange={setAbierto}>
             <DialogTrigger render={<Button />}>Nuevo producto</DialogTrigger>
@@ -311,10 +369,36 @@ export function InventarioManager({
             </SelectContent>
           </Select>
         </div>
+        {seleccion.size > 0 && (
+          <div className="flex flex-wrap items-center gap-3 border-y bg-primary/5 px-4 py-2 text-sm">
+            <span className="font-medium">
+              {seleccion.size} seleccionado{seleccion.size === 1 ? "" : "s"}
+            </span>
+            <Button size="sm" onClick={() => setEtiquetasAbierto(true)}>
+              <Barcode className="size-4" />
+              Crear etiquetas ({seleccion.size})
+            </Button>
+            <Button size="sm" variant="ghost" onClick={() => setSeleccion(new Set())}>
+              Quitar selección
+            </Button>
+          </div>
+        )}
         <Table>
           <TableHeader>
             <TableRow>
-              <TableHead className="pl-4">Producto</TableHead>
+              <TableHead className="w-10 pl-4">
+                <input
+                  type="checkbox"
+                  className="size-4 cursor-pointer"
+                  aria-label="Seleccionar todos los productos de la lista"
+                  checked={todosFiltradosSeleccionados}
+                  ref={(el) => {
+                    if (el) el.indeterminate = algunoFiltradoSeleccionado && !todosFiltradosSeleccionados;
+                  }}
+                  onChange={alternarTodosLosFiltrados}
+                />
+              </TableHead>
+              <TableHead>Producto</TableHead>
               <TableHead>Existencias</TableHead>
               <TableHead>Categoría</TableHead>
               <TableHead>Costo</TableHead>
@@ -331,7 +415,16 @@ export function InventarioManager({
                   className="cursor-pointer"
                   onClick={() => router.push(`/inventario/${modelo.id}`)}
                 >
-                  <TableCell className="py-3 pl-4">
+                  <TableCell className="w-10 pl-4" onClick={(e) => e.stopPropagation()}>
+                    <input
+                      type="checkbox"
+                      className="size-4 cursor-pointer"
+                      aria-label={`Seleccionar ${modelo.nombre}`}
+                      checked={seleccion.has(modelo.id)}
+                      onChange={() => alternarSeleccion(modelo.id)}
+                    />
+                  </TableCell>
+                  <TableCell className="py-3">
                     <div className="flex items-center gap-3">
                       <div className="flex size-10 shrink-0 items-center justify-center overflow-hidden rounded-lg border bg-muted">
                         {modelo.imagen_url?.startsWith("http") ? (
@@ -375,7 +468,7 @@ export function InventarioManager({
             })}
             {!filtrados.length && (
               <TableRow>
-                <TableCell colSpan={5}>
+                <TableCell colSpan={6}>
                   <EstadoVacio
                     icon={Boxes}
                     titulo={modelos.length ? "Sin resultados" : "Sin productos todavía"}
@@ -387,6 +480,8 @@ export function InventarioManager({
           </TableBody>
         </Table>
       </div>
+
+      <CrearEtiquetasDialog abierto={etiquetasAbierto} onOpenChange={setEtiquetasAbierto} grupos={gruposEtiquetas} />
     </div>
   );
 }
