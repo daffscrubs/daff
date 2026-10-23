@@ -66,6 +66,9 @@ export const movimientoCajaSchema = z.object({
 export const cerrarCajaSchema = z.object({
   sesionId: z.string().uuid(),
   efectivoContado: z.number().min(0, "Cuenta el efectivo del cajón (puede ser 0)").max(10_000_000),
+  // Opcionales: vacío = "sin contar" (no es lo mismo que contar $0).
+  tarjetaContado: z.number().min(0, "El recuento de tarjeta no puede ser negativo").max(10_000_000).nullable().optional(),
+  transferenciaContado: z.number().min(0, "El recuento de transferencia no puede ser negativo").max(10_000_000).nullable().optional(),
   notas: z.string().trim().max(500).optional(),
 });
 

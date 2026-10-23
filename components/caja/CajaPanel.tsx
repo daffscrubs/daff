@@ -4,7 +4,8 @@ import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import { ArrowDownToLine, ArrowUpFromLine, Banknote, CreditCard, Landmark, Lock, Receipt, Smartphone, Store, Wallet } from "lucide-react";
-import { abrirCaja, cerrarCaja, registrarMovimientoCaja } from "@/actions/caja.actions";
+import { abrirCaja, registrarMovimientoCaja } from "@/actions/caja.actions";
+import { CorteCaja } from "@/components/caja/CorteCaja";
 import { cancelarVenta } from "@/actions/ventas.actions";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -23,6 +24,8 @@ interface SesionAbierta {
   fondo: number;
   abiertaPor: string;
   efectivoEsperado: number;
+  tarjetaEsperado: number;
+  transferenciaEsperado: number;
 }
 interface Turno {
   id: string;
@@ -31,6 +34,8 @@ interface Turno {
   fondo: number;
   esperado: number | null;
   contado: number | null;
+  tarjeta: { esperado: number; contado: number } | null;
+  transferencia: { esperado: number; contado: number } | null;
   notas: string | null;
   abiertaPor: string;
   cerradaPor: string;
@@ -108,9 +113,9 @@ export function CajaPanel({
   permisos: PermisosCaja;
 }) {
   const router = useRouter();
-  const [dialogo, setDialogo] = useState<"abrir" | "ingreso" | "retiro" | "cerrar" | null>(null);
+  const [dialogo, setDialogo] = useState<"abrir" | "ingreso" | "retiro" | null>(null);
+  const [corteAbierto, setCorteAbierto] = useState(false);
   const [cancelando, setCancelando] = useState<VentaCaja | null>(null);
-  const [resultadoCierre, setResultadoCierre] = useState<number | null>(null);
   const [pendiente, startTransition] = useTransition();
   const [monto, setMonto] = useState("");
   const [texto, setTexto] = useState("");
@@ -130,10 +135,9 @@ export function CajaPanel({
     router.push(`/caja?${params.toString()}`);
   }
 
-  function abrirDialogo(tipo: "abrir" | "ingreso" | "retiro" | "cerrar") {
+  function abrirDialogo(tipo: "abrir" | "ingreso" | "retiro") {
     setMonto("");
     setTexto("");
-    setResultadoCierre(null);
     setDialogo(tipo);
   }
 
@@ -153,8 +157,7 @@ export function CajaPanel({
   function enviarDialogo(e: React.FormEvent) {
     e.preventDefault();
     const cantidad = leerMonto(monto);
-    if (dialogo === "cerrar" && !monto.trim()) return void toast.error("Cuenta el efectivo del cajón e ingresa la cantidad (puede ser 0).");
-    if (dialogo !== "cerrar" && !(cantidad >= 0)) return void toast.error("Escribe un monto válido.");
+    if (!(cantidad >= 0)) return void toast.error("Escribe un monto válido.");
 
     ejecutar(async () => {
       if (dialogo === "abrir") {
@@ -162,12 +165,8 @@ export function CajaPanel({
         return res.ok ? { ok: true, mensaje: "Caja abierta", alTerminar: () => setDialogo(null) } : res;
       }
       if (!sesionAbierta) return { ok: false, error: "No hay una caja abierta." };
-      if (dialogo === "ingreso" || dialogo === "retiro") {
-        const res = await registrarMovimientoCaja(sesionAbierta.id, dialogo, cantidad, texto);
-        return res.ok ? { ok: true, mensaje: dialogo === "ingreso" ? "Ingreso registrado" : "Retiro registrado", alTerminar: () => setDialogo(null) } : res;
-      }
-      const res = await cerrarCaja(sesionAbierta.id, cantidad, texto);
-      return res.ok ? { ok: true, alTerminar: () => setResultadoCierre(res.data.diferencia) } : res;
+      const res = await registrarMovimientoCaja(sesionAbierta.id, dialogo as "ingreso" | "retiro", cantidad, texto);
+      return res.ok ? { ok: true, mensaje: dialogo === "ingreso" ? "Ingreso registrado" : "Retiro registrado", alTerminar: () => setDialogo(null) } : res;
     });
   }
 
@@ -180,7 +179,7 @@ export function CajaPanel({
     });
   }
 
-  const titulosDialogo = { abrir: "Abrir caja", ingreso: "Registrar ingreso de efectivo", retiro: "Registrar retiro de efectivo", cerrar: "Cerrar caja" } as const;
+  const titulosDialogo = { abrir: "Abrir caja", ingreso: "Registrar ingreso de efectivo", retiro: "Registrar retiro de efectivo", } as const;
 
   return (
     <div className="space-y-6">
@@ -254,7 +253,7 @@ export function CajaPanel({
                   Retiro
                 </Button>
               )}
-              {permisos.abrirCerrar && <Button onClick={() => abrirDialogo("cerrar")}>Cerrar caja</Button>}
+              {permisos.abrirCerrar && <Button onClick={() => setCorteAbierto(true)}>Cerrar caja</Button>}
             </>
           ) : (
             permisos.abrirCerrar && <Button onClick={() => abrirDialogo("abrir")}>Abrir caja</Button>
@@ -433,6 +432,15 @@ export function CajaPanel({
                     <TableCell className="text-right">{s.contado !== null ? formatearMoneda(s.contado) : "—"}</TableCell>
                     <TableCell className={cn("pr-4 text-right font-medium", diferencia !== null && diferencia < 0 && "text-red-600", diferencia !== null && diferencia > 0 && "text-amber-600")}>
                       {diferencia === null ? "—" : diferencia === 0 ? "Cuadra" : `${diferencia > 0 ? "+" : "−"}${formatearMoneda(Math.abs(diferencia))}`}
+                      {([["Tarjeta", s.tarjeta], ["Transferencia", s.transferencia]] as const).map(([nombre, m]) => {
+                        if (!m) return null;
+                        const d = Math.round((m.contado - m.esperado) * 100) / 100;
+                        return (
+                          <span key={nombre} className={cn("block text-xs font-normal", d < 0 ? "text-red-600" : d > 0 ? "text-amber-600" : "text-muted-foreground")}>
+                            {nombre}: {d === 0 ? "cuadra" : `${d > 0 ? "+" : "−"}${formatearMoneda(Math.abs(d))}`}
+                          </span>
+                        );
+                      })}
                       {s.notas && <span className="block text-xs font-normal text-muted-foreground">{s.notas}</span>}
                     </TableCell>
                   </TableRow>
@@ -450,30 +458,23 @@ export function CajaPanel({
         </div>
       </section>
 
-      {/* Abrir / ingreso / retiro / cerrar */}
+      {/* Abrir / ingreso / retiro */}
       <Dialog open={!!dialogo} onOpenChange={(abierto) => !abierto && !pendiente && setDialogo(null)}>
         <DialogContent>
-          {dialogo && resultadoCierre === null && (
+          {dialogo && (
             <>
               <DialogHeader>
                 <DialogTitle>{titulosDialogo[dialogo]}</DialogTitle>
               </DialogHeader>
               <form className="space-y-4" onSubmit={enviarDialogo}>
-                {dialogo === "cerrar" && sesionAbierta && (
-                  <p className="rounded-lg bg-muted/50 p-3 text-sm text-muted-foreground">
-                    Cuenta el efectivo que hay en el cajón y escríbelo. El sistema lo compara con lo que debería haber ({formatearMoneda(sesionAbierta.efectivoEsperado)}) y deja el corte guardado.
-                  </p>
-                )}
                 <div className="space-y-2">
-                  <Label htmlFor="montoCaja">
-                    {dialogo === "abrir" ? "Fondo inicial (efectivo con el que empieza la caja)" : dialogo === "cerrar" ? "Efectivo contado en el cajón" : "Monto"}
-                  </Label>
+                  <Label htmlFor="montoCaja">{dialogo === "abrir" ? "Fondo inicial (efectivo con el que empieza la caja)" : "Monto"}</Label>
                   <Input id="montoCaja" inputMode="decimal" autoFocus placeholder="0.00" value={monto} onChange={(e) => setMonto(e.target.value)} />
                 </div>
                 {dialogo !== "abrir" && (
                   <div className="space-y-2">
-                    <Label htmlFor="textoCaja">{dialogo === "cerrar" ? "Notas del corte (opcional)" : "Motivo"}</Label>
-                    <Input id="textoCaja" placeholder={dialogo === "ingreso" ? "Ej. cambio para la caja" : dialogo === "retiro" ? "Ej. pago a proveedor" : ""} value={texto} onChange={(e) => setTexto(e.target.value)} />
+                    <Label htmlFor="textoCaja">Motivo</Label>
+                    <Input id="textoCaja" placeholder={dialogo === "ingreso" ? "Ej. cambio para la caja" : "Ej. pago a proveedor"} value={texto} onChange={(e) => setTexto(e.target.value)} />
                   </div>
                 )}
                 <div className="flex justify-end gap-2">
@@ -481,25 +482,29 @@ export function CajaPanel({
                     Cancelar
                   </Button>
                   <Button type="submit" disabled={pendiente}>
-                    {pendiente ? "Guardando..." : dialogo === "abrir" ? "Abrir caja" : dialogo === "cerrar" ? "Cerrar caja" : "Registrar"}
+                    {pendiente ? "Guardando..." : dialogo === "abrir" ? "Abrir caja" : "Registrar"}
                   </Button>
                 </div>
               </form>
             </>
           )}
-          {dialogo === "cerrar" && resultadoCierre !== null && (
-            <div className="space-y-4 text-center">
-              <DialogHeader>
-                <DialogTitle>Caja cerrada</DialogTitle>
-              </DialogHeader>
-              <p className={cn("text-3xl font-bold", resultadoCierre === 0 ? "text-emerald-600" : resultadoCierre < 0 ? "text-red-600" : "text-amber-600")}>
-                {resultadoCierre === 0 ? "La caja cuadra" : `${resultadoCierre < 0 ? "Faltan" : "Sobran"} ${formatearMoneda(Math.abs(resultadoCierre))}`}
-              </p>
-              <p className="text-sm text-muted-foreground">El corte quedó guardado en la sección Turnos de caja.</p>
-              <Button className="w-full" onClick={() => setDialogo(null)}>
-                Listo
-              </Button>
-            </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Corte de caja */}
+      <Dialog open={corteAbierto} onOpenChange={setCorteAbierto}>
+        <DialogContent className="max-h-[92vh] gap-0 overflow-y-auto p-0 sm:max-w-3xl" showCloseButton>
+          {corteAbierto && sesionAbierta && (
+            <CorteCaja
+              sesionId={sesionAbierta.id}
+              ubicacion={ubicacion?.nombre ?? ""}
+              esperado={{ efectivo: sesionAbierta.efectivoEsperado, tarjeta: sesionAbierta.tarjetaEsperado, transferencia: sesionAbierta.transferenciaEsperado }}
+              alCancelar={() => setCorteAbierto(false)}
+              alTerminar={() => {
+                setCorteAbierto(false);
+                router.refresh();
+              }}
+            />
           )}
         </DialogContent>
       </Dialog>
