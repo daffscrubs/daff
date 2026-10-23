@@ -721,7 +721,7 @@ export function PuntoDeVenta({
       </Dialog>
 
       <Dialog open={manualAbierto} onOpenChange={setManualAbierto}>
-        <DialogContent className="max-h-[92vh] gap-0 overflow-y-auto p-0 sm:max-w-xl">
+        <DialogContent className="flex max-h-[92vh] flex-col gap-0 overflow-hidden p-0 sm:max-w-xl">
           {manualAbierto && (
             <EntradaManual
               alAgregar={(datos) => {
@@ -1047,17 +1047,18 @@ function EntradaManual({
   const tarjeta = "space-y-5 rounded-xl border bg-card p-5 shadow-sm";
   return (
     <form
+      className="flex min-h-0 flex-1 flex-col"
       onSubmit={(e) => {
         e.preventDefault();
         agregar();
       }}
     >
-      <div className="border-b px-7 py-6 pr-14">
+      <div className="shrink-0 border-b px-7 py-6 pr-14">
         <DialogTitle className="text-2xl font-semibold">Entrada Manual de Producto</DialogTitle>
         <p className="mt-1.5 text-muted-foreground">Añade un producto al carrito sin agregarlo a tu inventario</p>
       </div>
 
-      <div className="space-y-4 bg-muted/40 px-7 py-6">
+      <div className="min-h-0 flex-1 space-y-4 overflow-y-auto bg-muted/40 px-7 py-6">
         <div className={tarjeta}>
           <div className="space-y-1.5">
             <Label htmlFor="em-nombre" className="text-base font-medium">
@@ -1177,7 +1178,7 @@ function EntradaManual({
         </div>
       </div>
 
-      <div className="flex justify-end gap-3 border-t px-7 py-5">
+      <div className="flex shrink-0 justify-end gap-3 border-t px-7 py-5">
         <Button type="button" variant="outline" className="h-11 px-6 text-base" onClick={alCancelar}>
           Cancelar
         </Button>
