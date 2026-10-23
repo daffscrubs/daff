@@ -24,8 +24,8 @@ import { tienePermiso, type PerfilConPermisos } from "@/lib/permisos";
 
 // "permiso": el que debe tener el usuario para ver la opción ("admin" = solo el administrador).
 const ITEMS: { href: string; label: string; icon: LucideIcon; permiso: string }[] = [
-  { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard, permiso: "modulo.dashboard" },
   { href: "/pos", label: "Punto de venta", icon: Store, permiso: "modulo.pos" },
+  { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard, permiso: "modulo.dashboard" },
   { href: "/caja", label: "Caja", icon: Landmark, permiso: "modulo.caja" },
   { href: "/clientes", label: "Clientes", icon: Users, permiso: "modulo.clientes" },
   { href: "/pedidos", label: "Pedidos", icon: ClipboardList, permiso: "modulo.pedidos" },
@@ -54,6 +54,9 @@ export function SidebarAdmin({ perfil }: { perfil: PerfilConPermisos }) {
             href={item.href}
             className={cn(
               "flex items-center gap-2.5 rounded-lg px-3 py-2 text-sm font-medium text-sidebar-foreground/80 transition-colors hover:bg-sidebar-accent hover:text-sidebar-accent-foreground",
+              // El punto de venta va primero y resaltado: es lo que más se usa en el mostrador.
+              item.href === "/pos" && !activo && "mb-1.5 bg-sidebar-accent font-semibold text-sidebar-accent-foreground",
+              item.href === "/pos" && activo && "mb-1.5",
               activo && "bg-sidebar-primary text-sidebar-primary-foreground hover:bg-sidebar-primary hover:text-sidebar-primary-foreground"
             )}
           >
