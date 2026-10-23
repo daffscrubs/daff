@@ -147,9 +147,11 @@ async function principal() {
   const { data: existentes, error: errExist } = await supabase.from("clientes").select("id, nombre_comercial, telefono, email");
   if (errExist) throw errExist;
   const porNombre = new Map(existentes.map((c) => [normalizar(c.nombre_comercial), c]));
+  const pendientes = new Set(); // clientes nuevos que en modo prueba aún no existen en la base
   if (archivoClientes) {
     const clientes = await leerClientes(archivoClientes);
     const nuevos = clientes.filter((c) => !porNombre.has(normalizar(c.nombre)));
+    if (!aplicar) for (const c of nuevos) pendientes.add(normalizar(c.nombre));
     const completar = clientes.filter((c) => porNombre.has(normalizar(c.nombre)) && ((c.telefono && !porNombre.get(normalizar(c.nombre)).telefono) || (c.email && !porNombre.get(normalizar(c.nombre)).email)));
     console.log(`Clientes en el archivo: ${clientes.length} (${clientes.filter((c) => c.repetido).length} venía repetido y se unió) | ya existían: ${clientes.length - nuevos.length} | nuevos: ${nuevos.length} | a completar con teléfono/correo: ${completar.length}`);
     if (aplicar) {
@@ -175,6 +177,7 @@ async function principal() {
     const { data: clientesAhora, error } = await supabase.from("clientes").select("id, nombre_comercial");
     if (error) throw error;
     const mapa = new Map(clientesAhora.map((c) => [normalizar(c.nombre_comercial), c.id]));
+    for (const nombre of pendientes) mapa.set(nombre, "(se creará)");
     const enlazado = enlazarClientes(ventas, mapa);
     const activas = ventas.filter((v) => v.estatus !== "cancelada");
     const suma = (k, lista = activas) => lista.reduce((a, v) => a + v[k], 0);
