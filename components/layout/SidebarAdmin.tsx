@@ -14,31 +14,38 @@ import {
   Shirt,
   BarChart3,
   UserCog,
+  Store,
+  Landmark,
+  Settings,
   type LucideIcon,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
-import type { RolUsuario } from "@/types/database.types";
+import { tienePermiso, type PerfilConPermisos } from "@/lib/permisos";
 
-const ITEMS = [
-  { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard, roles: ["admin", "ventas", "supervisor"] },
-  { href: "/clientes", label: "Clientes", icon: Users, roles: ["admin", "ventas"] },
-  { href: "/pedidos", label: "Pedidos", icon: ClipboardList, roles: ["admin", "ventas"] },
-  { href: "/produccion", label: "Producción", icon: Factory, roles: ["admin", "supervisor"] },
-  { href: "/inventario", label: "Inventario", icon: Package, roles: ["admin", "supervisor"] },
-  { href: "/catalogos/tallas", label: "Catálogos", icon: BookOpen, roles: ["admin", "supervisor"] },
-  { href: "/materiales", label: "Materiales", icon: Boxes, roles: ["admin", "supervisor"] },
-  { href: "/compras", label: "Compras", icon: ShoppingCart, roles: ["admin", "supervisor", "ventas"] },
-  { href: "/bordados", label: "Bordados", icon: Shirt, roles: ["admin", "supervisor", "ventas"] },
-  { href: "/reportes/productividad", label: "Reportes", icon: BarChart3, roles: ["admin", "ventas", "supervisor"] },
-  { href: "/usuarios", label: "Usuarios", icon: UserCog, roles: ["admin"] },
-] as const satisfies ReadonlyArray<{ href: string; label: string; icon: LucideIcon; roles: RolUsuario[] }>;
+// "permiso": el que debe tener el usuario para ver la opción ("admin" = solo el administrador).
+const ITEMS: { href: string; label: string; icon: LucideIcon; permiso: string }[] = [
+  { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard, permiso: "modulo.dashboard" },
+  { href: "/pos", label: "Punto de venta", icon: Store, permiso: "modulo.pos" },
+  { href: "/caja", label: "Caja", icon: Landmark, permiso: "modulo.caja" },
+  { href: "/clientes", label: "Clientes", icon: Users, permiso: "modulo.clientes" },
+  { href: "/pedidos", label: "Pedidos", icon: ClipboardList, permiso: "modulo.pedidos" },
+  { href: "/produccion", label: "Producción", icon: Factory, permiso: "modulo.produccion" },
+  { href: "/inventario", label: "Inventario", icon: Package, permiso: "modulo.inventario" },
+  { href: "/catalogos/tallas", label: "Catálogos", icon: BookOpen, permiso: "modulo.catalogos" },
+  { href: "/materiales", label: "Materiales", icon: Boxes, permiso: "modulo.materiales" },
+  { href: "/compras", label: "Compras", icon: ShoppingCart, permiso: "modulo.compras" },
+  { href: "/bordados", label: "Bordados", icon: Shirt, permiso: "modulo.bordados" },
+  { href: "/reportes/productividad", label: "Reportes", icon: BarChart3, permiso: "modulo.reportes" },
+  { href: "/usuarios", label: "Usuarios", icon: UserCog, permiso: "admin" },
+  { href: "/ajustes", label: "Ajustes", icon: Settings, permiso: "admin" },
+];
 
-export function SidebarAdmin({ rol }: { rol: RolUsuario }) {
+export function SidebarAdmin({ perfil }: { perfil: PerfilConPermisos }) {
   const pathname = usePathname();
 
   return (
     <nav className="flex flex-col gap-0.5 p-3">
-      {ITEMS.filter((item) => (item.roles as readonly string[]).includes(rol)).map((item) => {
+      {ITEMS.filter((item) => (item.permiso === "admin" ? perfil.rol === "admin" : tienePermiso(perfil, item.permiso))).map((item) => {
         const activo = pathname.startsWith(item.href);
         const Icon = item.icon;
         return (

@@ -39,6 +39,112 @@ export type Database = {
   }
   public: {
     Tables: {
+      caja_movimientos: {
+        Row: {
+          concepto: string
+          created_at: string
+          id: string
+          monto: number
+          registrado_por: string
+          sesion_id: string
+          tipo: Database["public"]["Enums"]["tipo_movimiento_caja"]
+        }
+        Insert: {
+          concepto: string
+          created_at?: string
+          id?: string
+          monto: number
+          registrado_por: string
+          sesion_id: string
+          tipo: Database["public"]["Enums"]["tipo_movimiento_caja"]
+        }
+        Update: {
+          concepto?: string
+          created_at?: string
+          id?: string
+          monto?: number
+          registrado_por?: string
+          sesion_id?: string
+          tipo?: Database["public"]["Enums"]["tipo_movimiento_caja"]
+        }
+        Relationships: [
+          {
+            foreignKeyName: "caja_movimientos_registrado_por_fkey"
+            columns: ["registrado_por"]
+            isOneToOne: false
+            referencedRelation: "perfiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "caja_movimientos_sesion_id_fkey"
+            columns: ["sesion_id"]
+            isOneToOne: false
+            referencedRelation: "cajas_sesiones"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      cajas_sesiones: {
+        Row: {
+          abierta_por: string
+          cerrada_por: string | null
+          efectivo_contado: number | null
+          efectivo_esperado: number | null
+          fecha_apertura: string
+          fecha_cierre: string | null
+          fondo_inicial: number
+          id: string
+          notas_cierre: string | null
+          ubicacion_id: string
+        }
+        Insert: {
+          abierta_por: string
+          cerrada_por?: string | null
+          efectivo_contado?: number | null
+          efectivo_esperado?: number | null
+          fecha_apertura?: string
+          fecha_cierre?: string | null
+          fondo_inicial?: number
+          id?: string
+          notas_cierre?: string | null
+          ubicacion_id: string
+        }
+        Update: {
+          abierta_por?: string
+          cerrada_por?: string | null
+          efectivo_contado?: number | null
+          efectivo_esperado?: number | null
+          fecha_apertura?: string
+          fecha_cierre?: string | null
+          fondo_inicial?: number
+          id?: string
+          notas_cierre?: string | null
+          ubicacion_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "cajas_sesiones_abierta_por_fkey"
+            columns: ["abierta_por"]
+            isOneToOne: false
+            referencedRelation: "perfiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "cajas_sesiones_cerrada_por_fkey"
+            columns: ["cerrada_por"]
+            isOneToOne: false
+            referencedRelation: "perfiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "cajas_sesiones_ubicacion_id_fkey"
+            columns: ["ubicacion_id"]
+            isOneToOne: false
+            referencedRelation: "ubicaciones"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       clientes: {
         Row: {
           contacto_nombre: string | null
@@ -1106,6 +1212,7 @@ export type Database = {
           created_at: string
           id: string
           nombre_completo: string
+          permisos: string[]
           rol: Database["public"]["Enums"]["rol_usuario"]
           telefono: string | null
           usuario_corto: string | null
@@ -1115,6 +1222,7 @@ export type Database = {
           created_at?: string
           id: string
           nombre_completo: string
+          permisos?: string[]
           rol?: Database["public"]["Enums"]["rol_usuario"]
           telefono?: string | null
           usuario_corto?: string | null
@@ -1124,6 +1232,7 @@ export type Database = {
           created_at?: string
           id?: string
           nombre_completo?: string
+          permisos?: string[]
           rol?: Database["public"]["Enums"]["rol_usuario"]
           telefono?: string | null
           usuario_corto?: string | null
@@ -1523,14 +1632,238 @@ export type Database = {
           },
         ]
       }
+      venta_items: {
+        Row: {
+          cantidad: number
+          descripcion: string
+          id: string
+          importe: number
+          modelo_id: string
+          precio_unitario: number
+          talla_id: string
+          venta_id: string
+        }
+        Insert: {
+          cantidad: number
+          descripcion: string
+          id?: string
+          importe: number
+          modelo_id: string
+          precio_unitario: number
+          talla_id: string
+          venta_id: string
+        }
+        Update: {
+          cantidad?: number
+          descripcion?: string
+          id?: string
+          importe?: number
+          modelo_id?: string
+          precio_unitario?: number
+          talla_id?: string
+          venta_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "venta_items_modelo_id_fkey"
+            columns: ["modelo_id"]
+            isOneToOne: false
+            referencedRelation: "modelos"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "venta_items_talla_id_fkey"
+            columns: ["talla_id"]
+            isOneToOne: false
+            referencedRelation: "tallas"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "venta_items_venta_id_fkey"
+            columns: ["venta_id"]
+            isOneToOne: false
+            referencedRelation: "ventas"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      venta_pagos: {
+        Row: {
+          id: string
+          metodo: Database["public"]["Enums"]["metodo_pago"]
+          monto: number
+          recibido: number | null
+          referencia: string | null
+          venta_id: string
+        }
+        Insert: {
+          id?: string
+          metodo: Database["public"]["Enums"]["metodo_pago"]
+          monto: number
+          recibido?: number | null
+          referencia?: string | null
+          venta_id: string
+        }
+        Update: {
+          id?: string
+          metodo?: Database["public"]["Enums"]["metodo_pago"]
+          monto?: number
+          recibido?: number | null
+          referencia?: string | null
+          venta_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "venta_pagos_venta_id_fkey"
+            columns: ["venta_id"]
+            isOneToOne: false
+            referencedRelation: "ventas"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      ventas: {
+        Row: {
+          cancelada_por: string | null
+          cliente_id: string | null
+          created_at: string
+          descuento: number
+          estatus: Database["public"]["Enums"]["estatus_venta"]
+          fecha_cancelacion: string | null
+          folio: string
+          id: string
+          motivo_cancelacion: string | null
+          notas: string | null
+          sesion_id: string
+          subtotal: number
+          total: number
+          ubicacion_id: string
+          vendedor_id: string
+        }
+        Insert: {
+          cancelada_por?: string | null
+          cliente_id?: string | null
+          created_at?: string
+          descuento?: number
+          estatus?: Database["public"]["Enums"]["estatus_venta"]
+          fecha_cancelacion?: string | null
+          folio: string
+          id?: string
+          motivo_cancelacion?: string | null
+          notas?: string | null
+          sesion_id: string
+          subtotal?: number
+          total?: number
+          ubicacion_id: string
+          vendedor_id: string
+        }
+        Update: {
+          cancelada_por?: string | null
+          cliente_id?: string | null
+          created_at?: string
+          descuento?: number
+          estatus?: Database["public"]["Enums"]["estatus_venta"]
+          fecha_cancelacion?: string | null
+          folio?: string
+          id?: string
+          motivo_cancelacion?: string | null
+          notas?: string | null
+          sesion_id?: string
+          subtotal?: number
+          total?: number
+          ubicacion_id?: string
+          vendedor_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "ventas_cancelada_por_fkey"
+            columns: ["cancelada_por"]
+            isOneToOne: false
+            referencedRelation: "perfiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "ventas_cliente_id_fkey"
+            columns: ["cliente_id"]
+            isOneToOne: false
+            referencedRelation: "clientes"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "ventas_sesion_id_fkey"
+            columns: ["sesion_id"]
+            isOneToOne: false
+            referencedRelation: "cajas_sesiones"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "ventas_ubicacion_id_fkey"
+            columns: ["ubicacion_id"]
+            isOneToOne: false
+            referencedRelation: "ubicaciones"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "ventas_vendedor_id_fkey"
+            columns: ["vendedor_id"]
+            isOneToOne: false
+            referencedRelation: "perfiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
     }
     Views: {
       [_ in never]: never
     }
     Functions: {
+      fn_abrir_caja: {
+        Args: { p_fondo_inicial?: number; p_ubicacion_id: string }
+        Returns: string
+      }
+      fn_cancelar_venta: {
+        Args: { p_motivo: string; p_venta_id: string }
+        Returns: undefined
+      }
+      fn_cerrar_caja: {
+        Args: { p_efectivo_contado: number; p_notas?: string; p_sesion_id: string }
+        Returns: number
+      }
+      fn_efectivo_esperado: {
+        Args: { p_sesion_id: string }
+        Returns: number
+      }
+      fn_permisos_por_rol: {
+        Args: { p_rol: Database["public"]["Enums"]["rol_usuario"] }
+        Returns: string[]
+      }
+      fn_registrar_movimiento_caja: {
+        Args: {
+          p_concepto: string
+          p_monto: number
+          p_sesion_id: string
+          p_tipo: Database["public"]["Enums"]["tipo_movimiento_caja"]
+        }
+        Returns: string
+      }
+      fn_registrar_venta: {
+        Args: {
+          p_cliente_id: string | null
+          p_descuento?: number
+          p_items: Json
+          p_notas?: string
+          p_pagos: Json
+          p_ubicacion_id: string
+        }
+        Returns: string
+      }
       fn_rol_actual: {
         Args: never
         Returns: Database["public"]["Enums"]["rol_usuario"]
+      }
+      fn_tiene_permiso: {
+        Args: { p_permiso: string }
+        Returns: boolean
       }
       fn_traspasar_stock_producto: {
         Args: {
@@ -1564,9 +1897,12 @@ export type Database = {
         | "bordada"
         | "regresada_a_tienda"
       estatus_unidad_material: "disponible" | "agotado" | "de_baja"
+      estatus_venta: "completada" | "cancelada"
+      metodo_pago: "efectivo" | "transferencia" | "tarjeta"
       origen_avance: "colaborador" | "ajuste_supervisor"
       rol_usuario: "admin" | "ventas" | "supervisor" | "colaborador"
       tipo_movimiento: "entrada" | "salida" | "ajuste"
+      tipo_movimiento_caja: "ingreso" | "retiro"
     }
     CompositeTypes: {
       [_ in never]: never
@@ -1714,9 +2050,12 @@ export const Constants = {
         "regresada_a_tienda",
       ],
       estatus_unidad_material: ["disponible", "agotado", "de_baja"],
+      estatus_venta: ["completada", "cancelada"],
+      metodo_pago: ["efectivo", "transferencia", "tarjeta"],
       origen_avance: ["colaborador", "ajuste_supervisor"],
       rol_usuario: ["admin", "ventas", "supervisor", "colaborador"],
       tipo_movimiento: ["entrada", "salida", "ajuste"],
+      tipo_movimiento_caja: ["ingreso", "retiro"],
     },
   },
 } as const
@@ -1731,3 +2070,6 @@ export type EstatusEntrega = Database["public"]["Enums"]["estatus_entrega"]
 export type EstatusUnidadMaterial = Database["public"]["Enums"]["estatus_unidad_material"]
 export type EstatusPrendaBordado = Database["public"]["Enums"]["estatus_prenda_bordado"]
 export type Ubicacion = Database["public"]["Tables"]["ubicaciones"]["Row"]
+export type MetodoPago = Database["public"]["Enums"]["metodo_pago"]
+export type EstatusVenta = Database["public"]["Enums"]["estatus_venta"]
+export type TipoMovimientoCaja = Database["public"]["Enums"]["tipo_movimiento_caja"]

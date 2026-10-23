@@ -1,6 +1,7 @@
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import type { RolUsuario } from "@/types/database.types";
+import { rutaInicial, tienePermiso } from "@/lib/permisos";
 
 export async function getPerfilActual() {
   const supabase = await createClient();
@@ -27,5 +28,12 @@ export async function requerirPerfil(rolesPermitidos?: RolUsuario[]) {
     redirect(perfil.rol === "colaborador" ? "/mi-dia" : "/dashboard");
   }
 
+  return perfil;
+}
+
+/** Exige un permiso concreto (el administrador siempre lo tiene); si no, manda a su pantalla de inicio. */
+export async function requerirPermiso(permiso: string) {
+  const perfil = await requerirPerfil();
+  if (!tienePermiso(perfil, permiso)) redirect(rutaInicial(perfil));
   return perfil;
 }
