@@ -14,10 +14,11 @@ import { ResumenEntregas } from "@/components/produccion/ResumenEntregas";
 import { RegistrarEntregaDialog } from "@/components/produccion/RegistrarEntregaDialog";
 import { HistorialEntregas, type PagoEntrega } from "@/components/produccion/HistorialEntregas";
 import { CierreOrden } from "@/components/produccion/CierreOrden";
+import { AsignarOrden } from "@/components/produccion/AsignarOrden";
 import { construirHistorialOrden } from "@/lib/produccion/historial";
 import { resumenPorItem, totalesResumen, type EntregaConItems } from "@/lib/produccion/entregas";
 import { formatearMoneda } from "@/lib/dinero";
-import { hoyMexico } from "@/lib/fechas";
+import { formatearFechaCorta, hoyMexico } from "@/lib/fechas";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { ESTATUS_ORDEN_LABEL } from "@/lib/labels";
@@ -38,6 +39,7 @@ export default async function LoteDetallePage({
     { data: items },
     { data: entregasProd },
     { data: perfiles },
+    { data: maquileros },
     { data: incidencias },
     { data: modelos },
     { data: tallas },
@@ -54,6 +56,7 @@ export default async function LoteDetallePage({
       .order("fecha", { ascending: false })
       .order("created_at", { ascending: false }),
     supabase.from("perfiles").select("id, nombre_completo, rol, activo"),
+    supabase.from("maquileros").select("id, nombre, activo").order("nombre"),
     supabase.from("incidencias_produccion").select("*").eq("lote_id", loteId).order("created_at", { ascending: false }),
     supabase.from("modelos").select("id, nombre"),
     supabase.from("tallas").select("id, codigo, orden"),
@@ -91,12 +94,23 @@ export default async function LoteDetallePage({
   const ordenTalla = (id: string) => tallas?.find((t) => t.id === id)?.orden ?? 0;
   const puedeGestionar = perfil.rol === "admin" || perfil.rol === "supervisor";
   const esMaquila = lote.tipo_produccion === "maquila";
+  const sinAsignar = lote.tipo_produccion === "sin_asignar";
   const nombreMaquilero = lote.maquileros?.nombre ?? null;
 
   const resumen = resumenPorItem(itemsOrden, entregas, nombreModelo, codigoTalla, ordenTalla);
   const total = totalesResumen(resumen);
   const hayEntregasVigentes = entregas.some((e) => e.estatus === "registrada");
   const abierta = lote.estatus === "planeada" || lote.estatus === "en_proceso";
+  const modelosOrden = [...new Set(itemsOrden.map((i) => i.modelo_id))].map((id) => ({ id, nombre: nombreModelo(id) }));
+  const asignarProps = {
+    loteId,
+    tipoActual: sinAsignar ? ("sin_asignar" as const) : esMaquila ? ("maquila" as const) : ("interna" as const),
+    maquileroActual: lote.maquilero_id ?? "",
+    maquileros: maquileros ?? [],
+    modelosOrden,
+    preciosIniciales: Object.fromEntries((preciosData ?? []).map((p) => [p.modelo_id, String(p.precio_por_pieza)])),
+    puedeVerPrecios: puedeVerPagos,
+  };
 
   const nombrePerfil = Object.fromEntries((perfiles ?? []).map((p) => [p.id, p.nombre_completo]));
   const textoItem = Object.fromEntries(resumen.map((r) => [r.itemId, `${r.modelo} ${r.talla}`]));
@@ -136,12 +150,15 @@ export default async function LoteDetallePage({
           <h1 className="text-2xl font-semibold">{lote.folio}</h1>
           <p className="text-muted-foreground">
             {itemsOrden.length} producto(s) · {total.pedido} piezas en total
+            {lote.fecha_asignacion && !sinAsignar && ` · ${esMaquila ? "Mandada a maquila" : "Asignada al taller"} el ${formatearFechaCorta(lote.fecha_asignacion)}`}
             {lote.ubicaciones?.nombre && ` · Entran a ${lote.ubicaciones.nombre}`}
           </p>
           <div className="mt-2 flex flex-wrap items-center gap-2">
             <Badge className={CLASE_ESTATUS_ORDEN[lote.estatus]}>{ESTATUS_ORDEN_LABEL[lote.estatus]}</Badge>
             {lote.cerrada_con_faltantes && <Badge variant="outline">Con faltantes</Badge>}
-            {esMaquila ? (
+            {sinAsignar ? (
+              <Badge variant="outline" className="border-amber-400 text-amber-700 dark:text-amber-300">Sin asignar</Badge>
+            ) : esMaquila ? (
               <Badge variant="secondary">
                 Maquila ·{" "}
                 {lote.maquilero_id ? (
@@ -158,7 +175,7 @@ export default async function LoteDetallePage({
           </div>
         </div>
         <div className="flex flex-wrap items-center gap-2">
-          {puedeGestionar && abierta && total.pendiente > 0 && (
+          {puedeGestionar && abierta && !sinAsignar && total.pendiente > 0 && (
             <RegistrarEntregaDialog
               loteId={loteId}
               folio={lote.folio}
@@ -172,6 +189,7 @@ export default async function LoteDetallePage({
               preciosPorModelo={preciosPorModelo}
             />
           )}
+          {puedeGestionar && !sinAsignar && lote.estatus !== "cancelada" && !hayEntregasVigentes && <AsignarOrden modo="boton" {...asignarProps} />}
           <Button
             variant="outline"
             size="sm"
@@ -202,6 +220,8 @@ export default async function LoteDetallePage({
       {puedeGestionar && lote.cerrada_con_faltantes && (
         <CierreOrden loteId={loteId} puedeCerrar={false} cerradaConFaltantes motivoCierre={lote.motivo_cierre} faltan={total.pendiente} />
       )}
+
+      {puedeGestionar && sinAsignar && lote.estatus !== "cancelada" && <AsignarOrden modo="tarjeta" {...asignarProps} />}
 
       <div className="space-y-3">
         <h2 className="text-lg font-semibold">Pedido, entregado y pendiente por talla</h2>

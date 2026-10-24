@@ -33,6 +33,13 @@ const OPCIONES_ESTATUS = [
   ...Object.entries(ESTATUS_ORDEN_LABEL).map(([value, label]) => ({ value, label })),
 ];
 
+const OPCIONES_ASIGNACION = [
+  { value: "todas", label: "Todas las asignaciones" },
+  { value: "sin_asignar", label: "Sin asignar" },
+  { value: "interna", label: "Internas" },
+  { value: "maquila", label: "Maquila" },
+];
+
 export function ProduccionTable({
   lotes,
   items,
@@ -51,6 +58,7 @@ export function ProduccionTable({
 }) {
   const [busqueda, setBusqueda] = useState("");
   const [estatus, setEstatus] = useState("todos");
+  const [asignacion, setAsignacion] = useState("todas");
 
   const nombreModelo = (id: string) => modelos.find((m) => m.id === id)?.nombre ?? "—";
   const codigoTalla = (id: string) => tallas.find((t) => t.id === id)?.codigo ?? "—";
@@ -66,11 +74,12 @@ export function ProduccionTable({
     const q = busqueda.trim().toLowerCase();
     return lotes.filter((l) => {
       if (estatus !== "todos" && l.estatus !== estatus) return false;
+      if (asignacion !== "todas" && l.tipo_produccion !== asignacion) return false;
       if (!q) return true;
-      return `${l.folio} ${descripcionProductos(l.id)} ${l.maquilero_id ? nombreMaquilero(l.maquilero_id) : "interna"}`.toLowerCase().includes(q);
+      return `${l.folio} ${descripcionProductos(l.id)} ${l.maquilero_id ? nombreMaquilero(l.maquilero_id) : l.tipo_produccion === "interna" ? "interna" : "sin asignar"}`.toLowerCase().includes(q);
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [lotes, items, busqueda, estatus]);
+  }, [lotes, items, busqueda, estatus, asignacion]);
 
   return (
     <div className="space-y-4">
@@ -90,6 +99,16 @@ export function ProduccionTable({
           </SelectTrigger>
           <SelectContent>
             {OPCIONES_ESTATUS.map((o) => (
+              <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+        <Select items={OPCIONES_ASIGNACION} value={asignacion} onValueChange={(v) => setAsignacion(v ?? "todas")}>
+          <SelectTrigger className="w-56" aria-label="Asignación">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            {OPCIONES_ASIGNACION.map((o) => (
               <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>
             ))}
           </SelectContent>
@@ -126,8 +145,10 @@ export function ProduccionTable({
                     <span>
                       <Badge variant="secondary">Maquila</Badge> <span className="ml-1 text-sm">{nombreMaquilero(lote.maquilero_id)}</span>
                     </span>
-                  ) : (
+                  ) : lote.tipo_produccion === "interna" ? (
                     <Badge variant="outline">Interna</Badge>
+                  ) : (
+                    <Badge variant="outline" className="border-amber-400 text-amber-700 dark:text-amber-300">Sin asignar</Badge>
                   )}
                 </TableCell>
                 <TableCell className="min-w-40">

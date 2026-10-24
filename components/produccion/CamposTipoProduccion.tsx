@@ -1,6 +1,6 @@
 "use client";
 
-import { Factory, HandCoins } from "lucide-react";
+import { Factory, HandCoins, PauseCircle } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -14,12 +14,14 @@ export interface MaquileroOpcion {
 }
 
 const OPCIONES: { valor: TipoProduccion; titulo: string; detalle: string; icono: typeof Factory }[] = [
+  { valor: "sin_asignar", titulo: "Sin asignar", detalle: "El corte espera; se decide después", icono: PauseCircle },
   { valor: "interna", titulo: "Interna", detalle: "Se hace en nuestro taller", icono: Factory },
   { valor: "maquila", titulo: "Maquila", detalle: "Se la lleva un maquilero a su taller", icono: HandCoins },
 ];
 
-// Quién va a hacer la orden: nuestro taller o un maquilero (con su precio por pieza por modelo). Los precios son
-// montos: solo los captura y ve quien tiene el permiso de pagos de maquila.
+// Quién hace la orden: nuestro taller, un maquilero (con su precio por pieza por modelo) o todavía nadie (el corte
+// está parado y se decide cuando haga falta). Los precios son montos: solo los captura y ve quien tiene el permiso
+// de pagos de maquila.
 export function CamposTipoProduccion({
   tipo,
   onTipo,
@@ -31,6 +33,7 @@ export function CamposTipoProduccion({
   onPrecio,
   puedeVerPrecios,
   bloqueado = false,
+  titulo = "¿Quién va a hacer esta orden?",
 }: {
   tipo: TipoProduccion;
   onTipo: (tipo: TipoProduccion) => void;
@@ -43,13 +46,14 @@ export function CamposTipoProduccion({
   puedeVerPrecios: boolean;
   /** La orden ya tiene entregas: el tipo y el maquilero no se pueden cambiar. */
   bloqueado?: boolean;
+  titulo?: string;
 }) {
   const disponibles = maquileros.filter((m) => m.activo || m.id === maquileroId);
   return (
     <div className="space-y-4 rounded-xl border p-4">
       <div className="space-y-2">
-        <Label>¿Quién va a hacer esta orden?</Label>
-        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+        <Label>{titulo}</Label>
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
           {OPCIONES.map((o) => {
             const activa = tipo === o.valor;
             return (

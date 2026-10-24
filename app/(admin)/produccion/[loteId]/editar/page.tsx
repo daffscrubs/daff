@@ -64,7 +64,7 @@ export default async function EditarOrdenPage({
         }))}
         tieneEntregas={tieneEntregas}
         entregadoPorItem={entregadoPorModeloTalla}
-        tipoInicial={lote.tipo_produccion === "maquila" ? "maquila" : "interna"}
+        tipoInicial={lote.tipo_produccion === "maquila" ? "maquila" : lote.tipo_produccion === "interna" ? "interna" : "sin_asignar"}
         maquileroInicial={lote.maquilero_id ?? ""}
         preciosIniciales={Object.fromEntries((precios ?? []).map((p) => [p.modelo_id, String(p.precio_por_pieza)]))}
         maquileros={maquileros ?? []}
