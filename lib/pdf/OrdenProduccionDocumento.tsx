@@ -6,7 +6,8 @@ import { formatearFechaHora, formatearFechaSolo } from "@/lib/fechas";
 export interface ItemOrdenPDF {
   producto: string;
   talla: string;
-  cantidad: number;
+  pedido: number;
+  entregado: number;
 }
 
 export interface InsumoOrdenPDF {
@@ -23,12 +24,12 @@ export interface EventoHistorialPDF {
   detalle?: string;
 }
 
-export interface RegistroAvancePDF {
+export interface EntregaPDF {
   fecha: string;
-  colaborador: string;
-  proceso: string;
-  producto: string;
-  cantidad: number;
+  entrego: string;
+  recibio: string;
+  piezas: string;
+  cancelada: boolean;
 }
 
 export interface OrdenProduccionPDFProps {
@@ -39,10 +40,11 @@ export interface OrdenProduccionPDFProps {
   fechaFinEstimada: string | null;
   notas: string | null;
   items: ItemOrdenPDF[];
-  procesos: string[];
+  /** "Interna" o "Maquila · nombre del maquilero" (sin montos: este PDF lo ve también ventas). */
+  quienLaHace: string;
   insumos: InsumoOrdenPDF[];
   cronologia: EventoHistorialPDF[];
-  registrosAvance: RegistroAvancePDF[];
+  entregas: EntregaPDF[];
 }
 
 export function OrdenProduccionDocumento({
@@ -53,10 +55,10 @@ export function OrdenProduccionDocumento({
   fechaFinEstimada,
   notas,
   items,
-  procesos,
+  quienLaHace,
   insumos,
   cronologia,
-  registrosAvance,
+  entregas,
 }: OrdenProduccionPDFProps) {
   return (
     <Document>
@@ -81,8 +83,8 @@ export function OrdenProduccionDocumento({
             <Text style={estilos.valor}>{fechaFinEstimada ?? "—"}</Text>
           </View>
           <View style={estilos.columnaDato}>
-            <Text style={estilos.etiqueta}>Proceso</Text>
-            <Text style={estilos.valor}>{procesos.length ? procesos.join(" → ") : "Sin definir"}</Text>
+            <Text style={estilos.etiqueta}>La hace</Text>
+            <Text style={estilos.valor}>{quienLaHace}</Text>
           </View>
         </View>
 
@@ -90,15 +92,19 @@ export function OrdenProduccionDocumento({
           <Text style={[estilos.etiqueta, { marginBottom: 6 }]}>Productos a fabricar</Text>
           <View style={estilos.tabla}>
             <View style={estilos.filaEncabezadoTabla}>
-              <Text style={[estilos.celdaEncabezado, { width: "60%" }]}>Producto</Text>
-              <Text style={[estilos.celdaEncabezado, { width: "20%" }]}>Talla</Text>
-              <Text style={[estilos.celdaEncabezado, { width: "20%", textAlign: "right" }]}>Cantidad</Text>
+              <Text style={[estilos.celdaEncabezado, { width: "40%" }]}>Producto</Text>
+              <Text style={[estilos.celdaEncabezado, { width: "15%" }]}>Talla</Text>
+              <Text style={[estilos.celdaEncabezado, { width: "15%", textAlign: "right" }]}>Pedido</Text>
+              <Text style={[estilos.celdaEncabezado, { width: "15%", textAlign: "right" }]}>Entregado</Text>
+              <Text style={[estilos.celdaEncabezado, { width: "15%", textAlign: "right" }]}>Pendiente</Text>
             </View>
             {items.map((item, i) => (
               <View key={i} style={estilos.filaTabla}>
-                <Text style={[estilos.celda, { width: "60%" }]}>{item.producto}</Text>
-                <Text style={[estilos.celda, { width: "20%" }]}>{item.talla}</Text>
-                <Text style={[estilos.celda, { width: "20%", textAlign: "right" }]}>{item.cantidad}</Text>
+                <Text style={[estilos.celda, { width: "40%" }]}>{item.producto}</Text>
+                <Text style={[estilos.celda, { width: "15%" }]}>{item.talla}</Text>
+                <Text style={[estilos.celda, { width: "15%", textAlign: "right" }]}>{item.pedido}</Text>
+                <Text style={[estilos.celda, { width: "15%", textAlign: "right" }]}>{item.entregado}</Text>
+                <Text style={[estilos.celda, { width: "15%", textAlign: "right" }]}>{Math.max(0, item.pedido - item.entregado)}</Text>
               </View>
             ))}
           </View>
@@ -158,26 +164,25 @@ export function OrdenProduccionDocumento({
           </View>
         )}
 
-        {!!registrosAvance.length && (
+        {!!entregas.length && (
           <View style={estilos.seccion} break>
-            <Text style={[estilos.etiqueta, { marginBottom: 6 }]}>Registros de avance por colaborador</Text>
+            <Text style={[estilos.etiqueta, { marginBottom: 6 }]}>Entregas</Text>
             <View style={estilos.tabla}>
               <View style={estilos.filaEncabezadoTabla}>
-                <Text style={[estilos.celdaEncabezado, { width: "20%" }]}>Fecha</Text>
-                <Text style={[estilos.celdaEncabezado, { width: "25%" }]}>Colaborador</Text>
-                <Text style={[estilos.celdaEncabezado, { width: "20%" }]}>Proceso</Text>
-                <Text style={[estilos.celdaEncabezado, { width: "25%" }]}>Producto</Text>
-                <Text style={[estilos.celdaEncabezado, { width: "10%", textAlign: "right" }]}>Cant.</Text>
+                <Text style={[estilos.celdaEncabezado, { width: "18%" }]}>Fecha</Text>
+                <Text style={[estilos.celdaEncabezado, { width: "22%" }]}>Entregó</Text>
+                <Text style={[estilos.celdaEncabezado, { width: "22%" }]}>Recibió</Text>
+                <Text style={[estilos.celdaEncabezado, { width: "38%" }]}>Piezas</Text>
               </View>
-              {registrosAvance.map((registro, i) => (
+              {entregas.map((entrega, i) => (
                 <View key={i} style={estilos.filaTabla}>
-                  <Text style={[estilos.celda, { width: "20%" }]}>
-                    {formatearFechaHora(registro.fecha)}
+                  <Text style={[estilos.celda, { width: "18%" }]}>{formatearFechaSolo(entrega.fecha)}</Text>
+                  <Text style={[estilos.celda, { width: "22%" }]}>{entrega.entrego}</Text>
+                  <Text style={[estilos.celda, { width: "22%" }]}>{entrega.recibio}</Text>
+                  <Text style={[estilos.celda, { width: "38%" }]}>
+                    {entrega.piezas}
+                    {entrega.cancelada ? " (cancelada)" : ""}
                   </Text>
-                  <Text style={[estilos.celda, { width: "25%" }]}>{registro.colaborador}</Text>
-                  <Text style={[estilos.celda, { width: "20%" }]}>{registro.proceso}</Text>
-                  <Text style={[estilos.celda, { width: "25%" }]}>{registro.producto}</Text>
-                  <Text style={[estilos.celda, { width: "10%", textAlign: "right" }]}>{registro.cantidad}</Text>
                 </View>
               ))}
             </View>

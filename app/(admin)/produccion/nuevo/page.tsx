@@ -1,9 +1,12 @@
 import { createClient } from "@/lib/supabase/server";
 import { leerTodo } from "@/lib/supabase/leer-todo";
 import { sugerirFolioOrdenAction } from "@/actions/produccion.actions";
+import { requerirPerfil } from "@/lib/supabase/auth-helpers";
+import { tienePermiso } from "@/lib/permisos";
 import { FormLote } from "@/components/produccion/FormLote";
 
 export default async function NuevoLotePage() {
+  const perfil = await requerirPerfil(["admin", "supervisor"]);
   const supabase = await createClient();
 
   const [
@@ -16,6 +19,7 @@ export default async function NuevoLotePage() {
     { data: materiales },
     { data: stockProductos },
     { data: ubicaciones },
+    { data: maquileros },
   ] = await Promise.all([
     sugerirFolioOrdenAction(),
     supabase.from("pedidos").select("*").order("created_at", { ascending: false }),
@@ -26,6 +30,7 @@ export default async function NuevoLotePage() {
     supabase.from("materiales").select("*").order("nombre"),
     leerTodo((d, h) => supabase.from("stock_productos").select("modelo_id, cantidad_actual").order("id").range(d, h)),
     supabase.from("ubicaciones").select("*").eq("activa", true).order("orden").order("nombre"),
+    supabase.from("maquileros").select("id, nombre, activo").eq("activo", true).order("nombre"),
   ]);
 
   const folioSugerido = resultadoFolio.ok ? resultadoFolio.data : "";
@@ -55,6 +60,8 @@ export default async function NuevoLotePage() {
         materiales={materiales ?? []}
         existencias={existencias}
         ubicaciones={ubicaciones ?? []}
+        maquileros={maquileros ?? []}
+        puedeVerPrecios={tienePermiso(perfil, "produccion.pagos_maquila")}
       />
     </div>
   );

@@ -38,11 +38,16 @@ export function ProduccionTable({
   items,
   modelos,
   tallas,
+  maquileros,
+  entregadoPorItem,
 }: {
   lotes: Lote[];
   items: ItemOrden[];
   modelos: { id: string; nombre: string }[];
   tallas: { id: string; codigo: string }[];
+  maquileros: { id: string; nombre: string }[];
+  /** Piezas entregadas (entregas vigentes) por renglón de la orden. */
+  entregadoPorItem: Record<string, number>;
 }) {
   const [busqueda, setBusqueda] = useState("");
   const [estatus, setEstatus] = useState("todos");
@@ -50,6 +55,7 @@ export function ProduccionTable({
   const nombreModelo = (id: string) => modelos.find((m) => m.id === id)?.nombre ?? "—";
   const codigoTalla = (id: string) => tallas.find((t) => t.id === id)?.codigo ?? "—";
   const itemsDe = (loteId: string) => items.filter((i) => i.lote_id === loteId);
+  const nombreMaquilero = (id: string | null) => maquileros.find((m) => m.id === id)?.nombre ?? "—";
 
   const descripcionProductos = (loteId: string) =>
     itemsDe(loteId)
@@ -61,7 +67,7 @@ export function ProduccionTable({
     return lotes.filter((l) => {
       if (estatus !== "todos" && l.estatus !== estatus) return false;
       if (!q) return true;
-      return `${l.folio} ${descripcionProductos(l.id)}`.toLowerCase().includes(q);
+      return `${l.folio} ${descripcionProductos(l.id)} ${l.maquilero_id ? nombreMaquilero(l.maquilero_id) : "interna"}`.toLowerCase().includes(q);
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [lotes, items, busqueda, estatus]);
@@ -72,7 +78,7 @@ export function ProduccionTable({
         <div className="relative max-w-sm flex-1">
           <Search className="pointer-events-none absolute left-2.5 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
           <Input
-            placeholder="Buscar por folio o producto..."
+            placeholder="Buscar por folio, producto o maquilero..."
             value={busqueda}
             onChange={(e) => setBusqueda(e.target.value)}
             className="pl-8"
@@ -95,13 +101,16 @@ export function ProduccionTable({
           <TableRow>
             <TableHead>Folio</TableHead>
             <TableHead>Productos</TableHead>
-            <TableHead>Cantidad total</TableHead>
+            <TableHead>Quién la hace</TableHead>
+            <TableHead>Entregado</TableHead>
             <TableHead>Estatus</TableHead>
           </TableRow>
         </TableHeader>
         <TableBody>
           {filtrados.map((lote) => {
             const itemsLote = itemsDe(lote.id);
+            const pedido = itemsLote.reduce((acc, i) => acc + i.cantidad_planeada, 0);
+            const entregado = itemsLote.reduce((acc, i) => acc + Math.min(entregadoPorItem[i.id] ?? 0, i.cantidad_planeada), 0);
             return (
               <TableRow key={lote.id}>
                 <TableCell>
@@ -112,16 +121,35 @@ export function ProduccionTable({
                 <TableCell className="min-w-64 whitespace-normal text-muted-foreground">
                   {descripcionProductos(lote.id) || "—"}
                 </TableCell>
-                <TableCell>{itemsLote.reduce((acc, i) => acc + i.cantidad_planeada, 0)}</TableCell>
+                <TableCell>
+                  {lote.tipo_produccion === "maquila" ? (
+                    <span>
+                      <Badge variant="secondary">Maquila</Badge> <span className="ml-1 text-sm">{nombreMaquilero(lote.maquilero_id)}</span>
+                    </span>
+                  ) : (
+                    <Badge variant="outline">Interna</Badge>
+                  )}
+                </TableCell>
+                <TableCell className="min-w-40">
+                  <div className="flex items-center gap-2">
+                    <div className="h-1.5 w-20 overflow-hidden rounded-full bg-muted">
+                      <div className="h-full rounded-full bg-emerald-500" style={{ width: `${pedido ? Math.round((entregado / pedido) * 100) : 0}%` }} />
+                    </div>
+                    <span className="text-sm tabular-nums text-muted-foreground">
+                      {entregado}/{pedido}
+                    </span>
+                  </div>
+                </TableCell>
                 <TableCell>
                   <Badge className={CLASE_ESTATUS_ORDEN[lote.estatus]}>{ESTATUS_ORDEN_LABEL[lote.estatus]}</Badge>
+                  {lote.cerrada_con_faltantes && <span className="ml-1.5 text-xs text-amber-600">con faltantes</span>}
                 </TableCell>
               </TableRow>
             );
           })}
           {!filtrados.length && (
             <TableRow>
-              <TableCell colSpan={4}>
+              <TableCell colSpan={5}>
                 <EstadoVacio
                   icon={Factory}
                   titulo={lotes.length ? "Sin resultados" : "Sin órdenes de producción todavía"}

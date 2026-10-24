@@ -25,7 +25,7 @@ export async function requerirPerfil(rolesPermitidos?: RolUsuario[]) {
 
   if (!perfil) redirect("/login");
   if (rolesPermitidos && !rolesPermitidos.includes(perfil.rol)) {
-    redirect(perfil.rol === "colaborador" ? "/mi-dia" : "/dashboard");
+    redirect(perfil.rol === "colaborador" ? "/bordado" : "/dashboard");
   }
 
   return perfil;

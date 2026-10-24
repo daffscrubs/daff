@@ -4,19 +4,14 @@ import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import { requerirPerfil } from "@/lib/supabase/auth-helpers";
 import {
-  agregarEtapaLoteSchema,
-  agregarSubprocesosLoteSchema,
   editarOrdenProduccionSchema,
   incidenciaSchema,
   ordenProduccionSchema,
-  quitarSubprocesoLoteSchema,
-  type AgregarEtapaLoteInput,
-  type AgregarSubprocesosLoteInput,
   type EditarOrdenProduccionInput,
   type IncidenciaInput,
   type OrdenProduccionInput,
-  type QuitarSubprocesoLoteInput,
 } from "@/lib/validaciones/produccion.schema";
+import { tienePermiso } from "@/lib/permisos";
 import { fechaISOLocal } from "@/lib/fechas";
 import { accionError, accionOk, type AccionResultado } from "@/lib/tipos/accion";
 
@@ -40,7 +35,9 @@ export async function sugerirFolioOrdenAction(): Promise<AccionResultado<string>
 
 export async function crearOrdenProduccion(input: OrdenProduccionInput): Promise<AccionResultado<string>> {
   const perfil = await requerirPerfil(["admin", "supervisor"]);
-  const datos = ordenProduccionSchema.parse(input);
+  const validado = ordenProduccionSchema.safeParse(input);
+  if (!validado.success) return accionError(validado.error.issues[0]?.message ?? "Datos de la orden inválidos");
+  const datos = validado.data;
   const supabase = await createClient();
 
   const { data: lote, error } = await supabase
@@ -51,6 +48,8 @@ export async function crearOrdenProduccion(input: OrdenProduccionInput): Promise
       fecha_inicio: fechaISOLocal(new Date()),
       fecha_fin_estimada: datos.fechaFinEstimada || null,
       ubicacion_destino_id: datos.ubicacionDestinoId,
+      tipo_produccion: datos.tipoProduccion,
+      maquilero_id: datos.tipoProduccion === "maquila" ? datos.maquileroId : null,
       creado_por: perfil.id,
     })
     .select("id")
@@ -77,6 +76,15 @@ export async function crearOrdenProduccion(input: OrdenProduccionInput): Promise
     return accionError(errorItems.message);
   }
 
+  // Los precios por pieza son montos: solo los guarda quien tiene el permiso de pagos de maquila.
+  if (datos.tipoProduccion === "maquila" && tienePermiso(perfil, "produccion.pagos_maquila") && datos.precios?.length) {
+    const modelosOrden = new Set(datos.items.map((i) => i.modeloId));
+    const { error: errorPrecios } = await supabase.from("precios_maquila_orden").insert(
+      datos.precios.filter((p) => modelosOrden.has(p.modeloId)).map((p) => ({ lote_id: lote.id, modelo_id: p.modeloId, precio_por_pieza: p.precioPorPieza }))
+    );
+    if (errorPrecios) return accionError(`La orden se creó, pero no se guardaron los precios: ${errorPrecios.message}`);
+  }
+
   if (datos.insumos.length) {
     const { error: errorInsumos } = await supabase.from("consumo_material_orden").insert(
       datos.insumos.map((insumo) => ({
@@ -93,8 +101,10 @@ export async function crearOrdenProduccion(input: OrdenProduccionInput): Promise
 }
 
 export async function actualizarOrdenProduccion(loteId: string, input: EditarOrdenProduccionInput): Promise<AccionResultado> {
-  await requerirPerfil(["admin", "supervisor"]);
-  const datos = editarOrdenProduccionSchema.parse(input);
+  const perfil = await requerirPerfil(["admin", "supervisor"]);
+  const datos = editarOrdenProduccionSchema.safeParse(input);
+  if (!datos.success) return accionError(datos.error.issues[0]?.message ?? "Datos de la orden inválidos");
+  const v = datos.data;
   const supabase = await createClient();
 
   const { data: lote, error: errorLote } = await supabase
@@ -107,68 +117,82 @@ export async function actualizarOrdenProduccion(loteId: string, input: EditarOrd
     return accionError("No se puede modificar una orden cancelada.");
   }
 
+  // El tipo y el maquilero solo cambian mientras no haya entregas: la base de datos lo exige y avisa.
   const { error: errorFecha } = await supabase
     .from("lotes_produccion")
     .update({
-      fecha_fin_estimada: datos.fechaFinEstimada || null,
-      ubicacion_destino_id: datos.ubicacionDestinoId || null,
+      fecha_fin_estimada: v.fechaFinEstimada || null,
+      ubicacion_destino_id: v.ubicacionDestinoId || null,
+      tipo_produccion: v.tipoProduccion,
+      maquilero_id: v.tipoProduccion === "maquila" ? v.maquileroId : null,
     })
     .eq("id", loteId);
   if (errorFecha) return accionError(errorFecha.message);
 
-  // Los productos solo se pueden reemplazar mientras la orden no tenga
-  // procesos configurados (lote_etapas): una vez configurados, el avance ya
-  // depende de la cantidad planeada original de cada producto.
-  const { count: etapasCount } = await supabase
-    .from("lote_etapas")
-    .select("id", { count: "exact", head: true })
+  // Los productos se ajustan renglón por renglón (no se borran y recrean): una orden con entregas conserva su
+  // historial, la cantidad no puede bajar de lo ya entregado y no se quita un renglón que ya tiene entregas.
+  const { data: existentes, error: errorExistentes } = await supabase
+    .from("items_orden_produccion")
+    .select("id, modelo_id, talla_id, cantidad_planeada")
     .eq("lote_id", loteId);
+  if (errorExistentes) return accionError(errorExistentes.message);
 
-  if (!etapasCount) {
-    const { error: errorEliminar } = await supabase.from("items_orden_produccion").delete().eq("lote_id", loteId);
-    if (errorEliminar) return accionError(errorEliminar.message);
+  const clave = (modeloId: string, tallaId: string) => `${modeloId}|${tallaId}`;
+  const porClave = new Map((existentes ?? []).map((i) => [clave(i.modelo_id, i.talla_id), i]));
+  const nuevos = new Map<string, number>();
+  for (const item of v.items) nuevos.set(clave(item.modeloId, item.tallaId), (nuevos.get(clave(item.modeloId, item.tallaId)) ?? 0) + item.cantidadPlaneada);
 
-    const { error: errorItems } = await supabase.from("items_orden_produccion").insert(
-      datos.items.map((item) => ({
-        lote_id: loteId,
-        modelo_id: item.modeloId,
-        talla_id: item.tallaId,
-        cantidad_planeada: item.cantidadPlaneada,
-      }))
-    );
-    if (errorItems) return accionError(errorItems.message);
+  for (const [k, cantidad] of nuevos) {
+    const actual = porClave.get(k);
+    if (actual) {
+      if (actual.cantidad_planeada !== cantidad) {
+        const { error } = await supabase.from("items_orden_produccion").update({ cantidad_planeada: cantidad }).eq("id", actual.id);
+        if (error) return accionError(error.message);
+      }
+    } else {
+      const [modeloId, tallaId] = k.split("|");
+      const { error } = await supabase.from("items_orden_produccion").insert({ lote_id: loteId, modelo_id: modeloId, talla_id: tallaId, cantidad_planeada: cantidad });
+      if (error) return accionError(error.message);
+    }
   }
+  for (const [k, item] of porClave) {
+    if (nuevos.has(k)) continue;
+    const { error } = await supabase.from("items_orden_produccion").delete().eq("id", item.id);
+    if (error) return accionError(error.message);
+  }
+
+  // Precios por pieza (montos): solo quien tiene el permiso de pagos de maquila. Los pagos ya generados conservan su monto.
+  if (tienePermiso(perfil, "produccion.pagos_maquila") && v.precios) {
+    const modelosOrden = new Set(v.items.map((i) => i.modeloId));
+    if (v.tipoProduccion === "maquila") {
+      const filas = v.precios.filter((p) => modelosOrden.has(p.modeloId)).map((p) => ({ lote_id: loteId, modelo_id: p.modeloId, precio_por_pieza: p.precioPorPieza }));
+      if (filas.length) {
+        const { error } = await supabase.from("precios_maquila_orden").upsert(filas);
+        if (error) return accionError(error.message);
+      }
+    }
+    const { data: guardados } = await supabase.from("precios_maquila_orden").select("modelo_id").eq("lote_id", loteId);
+    const sobran = (guardados ?? []).map((g) => g.modelo_id).filter((id) => !modelosOrden.has(id) || v.tipoProduccion !== "maquila");
+    if (sobran.length) await supabase.from("precios_maquila_orden").delete().eq("lote_id", loteId).in("modelo_id", sobran);
+  }
+
+  // Cambiar cantidades puede completar o reabrir la orden.
+  const { error: errorEstado } = await supabase.rpc("fn_recalcular_estado_orden", { p_lote_id: loteId });
+  if (errorEstado) return accionError(errorEstado.message);
 
   revalidatePath("/produccion");
   revalidatePath(`/produccion/${loteId}`);
+  revalidatePath("/pedidos");
   return accionOk(undefined);
 }
 
-// El trigger de BD que sincroniza pedidos<->lotes_produccion solo se dispara
-// al insertar un avance; cancelar un lote no dispara nada, así que el pedido
-// se recalcula aquí manualmente para no dejarlo "atorado" (o marcado como
-// listo sin haber producido nada).
+// El pedido sigue a sus órdenes (listo cuando todas terminaron, en producción mientras alguna avanza); la regla
+// vive en la base de datos y se vuelve a calcular al cancelar una orden.
 async function reevaluarEstatusPedido(supabase: Awaited<ReturnType<typeof createClient>>, pedidoId: string) {
-  const { data: lotes } = await supabase.from("lotes_produccion").select("estatus").eq("pedido_id", pedidoId);
-  if (!lotes || !lotes.length) return;
-
-  const { data: pedido } = await supabase.from("pedidos").select("estatus").eq("id", pedidoId).single();
-  if (!pedido || pedido.estatus === "cancelado" || pedido.estatus === "entregado") return;
-
-  const todosFinalizados = lotes.every((lote) => lote.estatus === "terminada" || lote.estatus === "cancelada");
-  const hayTerminada = lotes.some((lote) => lote.estatus === "terminada");
-
-  if (todosFinalizados && hayTerminada && pedido.estatus !== "listo") {
-    await supabase.from("pedidos").update({ estatus: "listo" }).eq("id", pedidoId);
-  } else if (todosFinalizados && !hayTerminada && pedido.estatus !== "confirmado") {
-    // Todos los lotes del pedido se cancelaron y ninguno llegó a terminarse:
-    // no hay producción activa, el pedido vuelve a "confirmado" para que
-    // quede visible que necesita una nueva orden de producción.
-    await supabase.from("pedidos").update({ estatus: "confirmado" }).eq("id", pedidoId);
-  }
+  await supabase.rpc("fn_reevaluar_pedido", { p_pedido_id: pedidoId });
 }
 
-// Cancelar una orden no borra su historial (items, etapas, avances quedan
+// Cancelar una orden no borra su historial (items y entregas quedan
 // como registro), pero el consumo REAL ya registrado sobre unidades
 // específicas (rollos/bolsas) sí debe revertirse: esos materiales no se
 // van a usar después de todo. El trigger fn_descontar_unidad_material solo
@@ -231,6 +255,14 @@ export async function cancelarOrdenProduccion(loteId: string): Promise<AccionRes
   if (lote.estatus === "cancelada") {
     return accionError("Esta orden ya está cancelada.");
   }
+  const { count: entregasVigentes } = await supabase
+    .from("entregas_produccion")
+    .select("id", { count: "exact", head: true })
+    .eq("lote_id", loteId)
+    .eq("estatus", "registrada");
+  if (entregasVigentes) {
+    return accionError("Esta orden ya tiene entregas registradas. Cancela primero sus entregas (se revierte el inventario) y luego la orden.");
+  }
 
   const reversion = await revertirConsumoUnidadesLote(supabase, loteId);
   if (!reversion.ok) return reversion;
@@ -253,150 +285,6 @@ export async function cancelarOrdenProduccion(loteId: string): Promise<AccionRes
   return accionOk(undefined);
 }
 
-export async function agregarEtapaLote(input: AgregarEtapaLoteInput): Promise<AccionResultado> {
-  await requerirPerfil(["admin", "supervisor"]);
-  const datos = agregarEtapaLoteSchema.parse(input);
-  const supabase = await createClient();
-
-  const { data: items } = await supabase
-    .from("items_orden_produccion")
-    .select("id")
-    .eq("lote_id", datos.loteId);
-
-  if (!items?.length) return accionError("La orden no tiene productos configurados.");
-
-  const { data: existentes } = await supabase
-    .from("lote_etapas")
-    .select("orden_secuencia")
-    .eq("lote_id", datos.loteId)
-    .order("orden_secuencia", { ascending: false })
-    .limit(1);
-
-  const siguienteOrden = (existentes?.[0]?.orden_secuencia ?? 0) + 1;
-
-  const { error } = await supabase.from("lote_etapas").insert(
-    items.map((item) => ({
-      lote_id: datos.loteId,
-      item_orden_id: item.id,
-      etapa_id: datos.etapaId,
-      orden_secuencia: siguienteOrden,
-    }))
-  );
-
-  if (error) return accionError(error.message);
-  revalidatePath(`/produccion/${datos.loteId}/etapas`);
-  revalidatePath(`/produccion/${datos.loteId}`);
-  return accionOk(undefined);
-}
-
-export async function quitarEtapaLote(loteId: string, ordenSecuencia: number): Promise<AccionResultado> {
-  await requerirPerfil(["admin", "supervisor"]);
-  const supabase = await createClient();
-
-  const { data: filas } = await supabase
-    .from("lote_etapas")
-    .select("cantidad_completada")
-    .eq("lote_id", loteId)
-    .eq("orden_secuencia", ordenSecuencia);
-
-  if (filas?.some((f) => f.cantidad_completada > 0)) {
-    return accionError("No se puede quitar una etapa que ya tiene avance registrado.");
-  }
-
-  const { error } = await supabase
-    .from("lote_etapas")
-    .delete()
-    .eq("lote_id", loteId)
-    .eq("orden_secuencia", ordenSecuencia);
-
-  if (error) return accionError(error.message);
-  revalidatePath(`/produccion/${loteId}/etapas`);
-  revalidatePath(`/produccion/${loteId}`);
-  return accionOk(undefined);
-}
-
-// Sub-procesos opcionales dentro de un proceso (ej. Confección con Manga,
-// Delantero, Trasero, Cuello). Un proceso puede tener varios productos (uno
-// por item_orden_id de la orden), así que agregar un sub-proceso significa
-// agregar una fila hija por cada producto que ya tiene ese proceso.
-export async function agregarSubprocesosLote(input: AgregarSubprocesosLoteInput): Promise<AccionResultado> {
-  await requerirPerfil(["admin", "supervisor"]);
-  const datos = agregarSubprocesosLoteSchema.parse(input);
-  const nombres = [...new Set(datos.nombres.map((n) => n.trim()).filter(Boolean))];
-  if (!nombres.length) return accionError("Agrega al menos un sub-proceso.");
-
-  const supabase = await createClient();
-
-  const { data: padres, error: errorPadres } = await supabase
-    .from("lote_etapas")
-    .select("id, lote_id, item_orden_id, cantidad_completada")
-    .eq("lote_id", datos.loteId)
-    .eq("orden_secuencia", datos.ordenSecuencia);
-
-  if (errorPadres) return accionError(errorPadres.message);
-  if (!padres?.length) return accionError("Proceso no encontrado.");
-  if (padres.some((p) => p.cantidad_completada > 0)) {
-    return accionError("No se pueden agregar sub-procesos a un proceso que ya tiene avance registrado.");
-  }
-
-  const filas = padres.flatMap((padre) =>
-    nombres.map((nombre) => ({
-      lote_id: padre.lote_id,
-      item_orden_id: padre.item_orden_id,
-      parent_lote_etapa_id: padre.id,
-      nombre_subproceso: nombre,
-    }))
-  );
-
-  const { error } = await supabase.from("lote_etapas").insert(filas);
-  if (error) {
-    if (error.message.includes("lote_etapas_padre_nombre_subproceso_key")) {
-      return accionError("Ya existe un sub-proceso con ese nombre en este proceso.");
-    }
-    return accionError(error.message);
-  }
-
-  revalidatePath(`/produccion/${datos.loteId}/etapas`);
-  revalidatePath(`/produccion/${datos.loteId}`);
-  return accionOk(undefined);
-}
-
-export async function quitarSubprocesoLote(input: QuitarSubprocesoLoteInput): Promise<AccionResultado> {
-  await requerirPerfil(["admin", "supervisor"]);
-  const datos = quitarSubprocesoLoteSchema.parse(input);
-  const supabase = await createClient();
-
-  const { data: padres } = await supabase
-    .from("lote_etapas")
-    .select("id")
-    .eq("lote_id", datos.loteId)
-    .eq("orden_secuencia", datos.ordenSecuencia);
-
-  const idsPadres = (padres ?? []).map((p) => p.id);
-  if (!idsPadres.length) return accionError("Proceso no encontrado.");
-
-  const { data: hijas } = await supabase
-    .from("lote_etapas")
-    .select("cantidad_completada")
-    .in("parent_lote_etapa_id", idsPadres)
-    .eq("nombre_subproceso", datos.nombreSubproceso);
-
-  if (hijas?.some((h) => h.cantidad_completada > 0)) {
-    return accionError("No se puede quitar un sub-proceso que ya tiene avance registrado.");
-  }
-
-  const { error } = await supabase
-    .from("lote_etapas")
-    .delete()
-    .in("parent_lote_etapa_id", idsPadres)
-    .eq("nombre_subproceso", datos.nombreSubproceso);
-
-  if (error) return accionError(error.message);
-  revalidatePath(`/produccion/${datos.loteId}/etapas`);
-  revalidatePath(`/produccion/${datos.loteId}`);
-  return accionOk(undefined);
-}
-
 export async function crearIncidencia(input: IncidenciaInput): Promise<AccionResultado> {
   const perfil = await requerirPerfil();
   const datos = incidenciaSchema.parse(input);
@@ -404,7 +292,6 @@ export async function crearIncidencia(input: IncidenciaInput): Promise<AccionRes
 
   const { error } = await supabase.from("incidencias_produccion").insert({
     lote_id: datos.loteId,
-    lote_etapa_id: datos.loteEtapaId || null,
     reportado_por: perfil.id,
     descripcion: datos.descripcion,
     gravedad: datos.gravedad,

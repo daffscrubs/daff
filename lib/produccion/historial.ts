@@ -1,10 +1,10 @@
 import type { Database } from "@/types/database.types";
-import type { RegistroReporte } from "@/components/produccion/ReporteProductividadTable";
+import type { EntregaConItems } from "@/lib/produccion/entregas";
 
 type Lote = Database["public"]["Tables"]["lotes_produccion"]["Row"];
 type Consumo = Database["public"]["Tables"]["consumo_material_orden"]["Row"];
 type Material = Database["public"]["Tables"]["materiales"]["Row"];
-type Entrega = Database["public"]["Tables"]["entregas"]["Row"];
+type EntregaPedido = Database["public"]["Tables"]["entregas"]["Row"];
 
 export interface EventoHistorial {
   /** Timestamp real (con hora) o fecha "YYYY-MM-DD" cuando `soloFecha` es true. */
@@ -17,31 +17,31 @@ export interface EventoHistorial {
 
 export function construirHistorialOrden({
   lote,
-  registrosReporte,
+  entregasProduccion,
+  descripcionEntrega,
   consumos,
   materiales,
   entregas,
 }: {
-  lote: Pick<Lote, "created_at" | "fecha_fin_real">;
-  registrosReporte: RegistroReporte[];
+  lote: Pick<Lote, "created_at" | "fecha_fin_real" | "cerrada_con_faltantes" | "fecha_cierre" | "motivo_cierre">;
+  entregasProduccion: EntregaConItems[];
+  /** Texto de lo entregado ("12 Filipina CH, 8 Filipina M") y de quién la hizo. */
+  descripcionEntrega: (entrega: EntregaConItems) => { piezas: string; quien: string };
   consumos: Consumo[];
   materiales: Pick<Material, "id" | "nombre" | "unidad_medida">[];
-  entregas: Entrega[];
+  /** Entregas del PEDIDO al cliente (no confundir con las entregas de producción). */
+  entregas: EntregaPedido[];
 }): EventoHistorial[] {
   const eventos: EventoHistorial[] = [];
 
   eventos.push({ fecha: lote.created_at, titulo: "Orden creada" });
 
-  // Cada captura de avance (o ajuste) es un evento propio, con su hora real
-  // (created_at), en vez de agruparse en un solo "etapa iniciada" por proceso.
-  for (const r of registrosReporte) {
-    const accion = r.origen === "ajuste_supervisor" ? "ajustó" : "registró";
-    const signo = r.cantidad > 0 ? "+" : "";
-    eventos.push({
-      fecha: r.created_at,
-      titulo: `${r.colaborador} ${accion} ${signo}${r.cantidad} en ${r.etapa}`,
-      detalle: r.producto !== "—" ? r.producto : undefined,
-    });
+  for (const e of entregasProduccion) {
+    const { piezas, quien } = descripcionEntrega(e);
+    eventos.push({ fecha: e.created_at, titulo: `Entrega registrada: ${piezas}`, detalle: quien });
+    if (e.estatus === "cancelada" && e.fecha_cancelacion) {
+      eventos.push({ fecha: e.fecha_cancelacion, titulo: `Entrega cancelada: ${piezas}`, detalle: e.motivo_cancelacion ?? undefined });
+    }
   }
 
   for (const consumo of consumos) {
@@ -60,14 +60,16 @@ export function construirHistorialOrden({
     }
   }
 
-  if (lote.fecha_fin_real) {
+  if (lote.cerrada_con_faltantes && lote.fecha_cierre) {
+    eventos.push({ fecha: lote.fecha_cierre, titulo: "Orden cerrada con faltantes", detalle: lote.motivo_cierre ?? undefined });
+  } else if (lote.fecha_fin_real) {
     eventos.push({ fecha: lote.fecha_fin_real, soloFecha: true, titulo: "Orden completada" });
   }
 
   for (const entrega of entregas) {
-    eventos.push({ fecha: entrega.fecha_programada, soloFecha: true, titulo: "Entrega programada" });
+    eventos.push({ fecha: entrega.fecha_programada, soloFecha: true, titulo: "Entrega del pedido al cliente programada" });
     if (entrega.fecha_real) {
-      eventos.push({ fecha: entrega.fecha_real, titulo: "Entrega realizada" });
+      eventos.push({ fecha: entrega.fecha_real, titulo: "Entrega del pedido al cliente realizada" });
     }
   }
 

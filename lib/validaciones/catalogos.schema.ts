@@ -14,11 +14,6 @@ export const tallaSchema = z.object({
   orden: z.coerce.number().int().min(0),
 });
 
-export const etapaSchema = z.object({
-  nombre: z.string().min(2, "Requerido"),
-  descripcion: z.string().optional(),
-});
-
 export const plantillaSchema = z.object({
   nombre: z.string().min(2, "Requerido"),
   clienteId: z.string().uuid().optional().nullable(),
@@ -33,6 +28,5 @@ export const plantillaItemSchema = z.object({
 
 export type ModeloInput = z.infer<typeof modeloSchema>;
 export type TallaInput = z.infer<typeof tallaSchema>;
-export type EtapaInput = z.infer<typeof etapaSchema>;
 export type PlantillaInput = z.infer<typeof plantillaSchema>;
 export type PlantillaItemInput = z.infer<typeof plantillaItemSchema>;

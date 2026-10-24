@@ -1,6 +1,7 @@
 node_modules/
 .next/
 .env.local
+.env.pruebas.local
 .env
 .DS_Store
 *.tsbuildinfo

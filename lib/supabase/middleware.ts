@@ -60,7 +60,7 @@ export async function updateSession(request: NextRequest) {
   const esRutaAdmin = RUTAS_ADMIN.some((r) => pathname.startsWith(r));
   if (esRutaAdmin && rol === "colaborador") {
     const url = request.nextUrl.clone();
-    url.pathname = "/mi-dia";
+    url.pathname = "/bordado";
     return NextResponse.redirect(url);
   }
 

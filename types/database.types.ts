@@ -196,39 +196,6 @@ export type Database = {
         }
         Relationships: []
       }
-      colaborador_etapas: {
-        Row: {
-          etapa_id: string
-          id: string
-          perfil_id: string
-        }
-        Insert: {
-          etapa_id: string
-          id?: string
-          perfil_id: string
-        }
-        Update: {
-          etapa_id?: string
-          id?: string
-          perfil_id?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: "colaborador_etapas_etapa_id_fkey"
-            columns: ["etapa_id"]
-            isOneToOne: false
-            referencedRelation: "etapas_proceso"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "colaborador_etapas_perfil_id_fkey"
-            columns: ["perfil_id"]
-            isOneToOne: false
-            referencedRelation: "perfiles"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
       compra_items: {
         Row: {
           cantidad: number
@@ -491,27 +458,6 @@ export type Database = {
           },
         ]
       }
-      etapas_proceso: {
-        Row: {
-          activo: boolean
-          descripcion: string | null
-          id: string
-          nombre: string
-        }
-        Insert: {
-          activo?: boolean
-          descripcion?: string | null
-          id?: string
-          nombre: string
-        }
-        Update: {
-          activo?: boolean
-          descripcion?: string | null
-          id?: string
-          nombre?: string
-        }
-        Relationships: []
-      }
       gastos: {
         Row: {
           categoria: string
@@ -560,7 +506,6 @@ export type Database = {
           foto_url: string | null
           gravedad: string
           id: string
-          lote_etapa_id: string | null
           lote_id: string
           reportado_por: string | null
           resuelto: boolean
@@ -571,7 +516,6 @@ export type Database = {
           foto_url?: string | null
           gravedad?: string
           id?: string
-          lote_etapa_id?: string | null
           lote_id: string
           reportado_por?: string | null
           resuelto?: boolean
@@ -582,19 +526,11 @@ export type Database = {
           foto_url?: string | null
           gravedad?: string
           id?: string
-          lote_etapa_id?: string | null
           lote_id?: string
           reportado_por?: string | null
           resuelto?: boolean
         }
         Relationships: [
-          {
-            foreignKeyName: "incidencias_produccion_lote_etapa_id_fkey"
-            columns: ["lote_etapa_id"]
-            isOneToOne: false
-            referencedRelation: "lote_etapas"
-            referencedColumns: ["id"]
-          },
           {
             foreignKeyName: "incidencias_produccion_lote_id_fkey"
             columns: ["lote_id"]
@@ -730,112 +666,69 @@ export type Database = {
           },
         ]
       }
-      lote_etapas: {
-        Row: {
-          cantidad_completada: number
-          estatus: string
-          etapa_id: string | null
-          id: string
-          item_orden_id: string
-          lote_id: string
-          nombre_subproceso: string | null
-          orden_secuencia: number | null
-          parent_lote_etapa_id: string | null
-        }
-        Insert: {
-          cantidad_completada?: number
-          estatus?: string
-          etapa_id?: string | null
-          id?: string
-          item_orden_id: string
-          lote_id: string
-          nombre_subproceso?: string | null
-          orden_secuencia?: number | null
-          parent_lote_etapa_id?: string | null
-        }
-        Update: {
-          cantidad_completada?: number
-          estatus?: string
-          etapa_id?: string | null
-          id?: string
-          item_orden_id?: string
-          lote_id?: string
-          nombre_subproceso?: string | null
-          orden_secuencia?: number | null
-          parent_lote_etapa_id?: string | null
-        }
-        Relationships: [
-          {
-            foreignKeyName: "lote_etapas_etapa_id_fkey"
-            columns: ["etapa_id"]
-            isOneToOne: false
-            referencedRelation: "etapas_proceso"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "lote_etapas_item_orden_id_fkey"
-            columns: ["item_orden_id"]
-            isOneToOne: false
-            referencedRelation: "items_orden_produccion"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "lote_etapas_lote_id_fkey"
-            columns: ["lote_id"]
-            isOneToOne: false
-            referencedRelation: "lotes_produccion"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "lote_etapas_parent_lote_etapa_id_fkey"
-            columns: ["parent_lote_etapa_id"]
-            isOneToOne: false
-            referencedRelation: "lote_etapas"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
       lotes_produccion: {
         Row: {
+          cerrada_con_faltantes: boolean
           creado_por: string | null
           created_at: string
           estatus: Database["public"]["Enums"]["estatus_orden"]
+          fecha_cierre: string | null
           fecha_fin_estimada: string | null
           fecha_fin_real: string | null
           fecha_inicio: string | null
           folio: string
           id: string
+          maquilero_id: string | null
+          motivo_cierre: string | null
           notas: string | null
           pedido_id: string | null
+          tipo_produccion: string
           ubicacion_destino_id: string | null
         }
         Insert: {
+          cerrada_con_faltantes?: boolean
           creado_por?: string | null
           created_at?: string
           estatus?: Database["public"]["Enums"]["estatus_orden"]
+          fecha_cierre?: string | null
           fecha_fin_estimada?: string | null
           fecha_fin_real?: string | null
           fecha_inicio?: string | null
           folio: string
           id?: string
+          maquilero_id?: string | null
+          motivo_cierre?: string | null
           notas?: string | null
           pedido_id?: string | null
+          tipo_produccion?: string
           ubicacion_destino_id?: string | null
         }
         Update: {
+          cerrada_con_faltantes?: boolean
           creado_por?: string | null
           created_at?: string
           estatus?: Database["public"]["Enums"]["estatus_orden"]
+          fecha_cierre?: string | null
           fecha_fin_estimada?: string | null
           fecha_fin_real?: string | null
           fecha_inicio?: string | null
           folio?: string
           id?: string
+          maquilero_id?: string | null
+          motivo_cierre?: string | null
           notas?: string | null
           pedido_id?: string | null
+          tipo_produccion?: string
           ubicacion_destino_id?: string | null
         }
         Relationships: [
+          {
+            foreignKeyName: "lotes_produccion_maquilero_id_fkey"
+            columns: ["maquilero_id"]
+            isOneToOne: false
+            referencedRelation: "maquileros"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "lotes_produccion_creado_por_fkey"
             columns: ["creado_por"]
@@ -897,6 +790,281 @@ export type Database = {
           unidad_medida?: string
         }
         Relationships: []
+      }
+      entrega_produccion_items: {
+        Row: {
+          cantidad: number
+          entrega_id: string
+          id: string
+          item_orden_id: string
+        }
+        Insert: {
+          cantidad: number
+          entrega_id: string
+          id?: string
+          item_orden_id: string
+        }
+        Update: {
+          cantidad?: number
+          entrega_id?: string
+          id?: string
+          item_orden_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "entrega_produccion_items_entrega_id_fkey"
+            columns: ["entrega_id"]
+            isOneToOne: false
+            referencedRelation: "entregas_produccion"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "entrega_produccion_items_item_orden_id_fkey"
+            columns: ["item_orden_id"]
+            isOneToOne: false
+            referencedRelation: "items_orden_produccion"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      entregas_produccion: {
+        Row: {
+          cancelada_por: string | null
+          created_at: string
+          entregado_por: string | null
+          estatus: string
+          fecha: string
+          fecha_cancelacion: string | null
+          fecha_pago: string | null
+          id: string
+          lote_id: string
+          maquilero_id: string | null
+          motivo_cancelacion: string | null
+          notas: string | null
+          recibido_por: string
+          registrado_por: string | null
+          tipo_produccion: string
+          ubicacion_id: string
+        }
+        Insert: {
+          cancelada_por?: string | null
+          created_at?: string
+          entregado_por?: string | null
+          estatus?: string
+          fecha: string
+          fecha_cancelacion?: string | null
+          fecha_pago?: string | null
+          id?: string
+          lote_id: string
+          maquilero_id?: string | null
+          motivo_cancelacion?: string | null
+          notas?: string | null
+          recibido_por: string
+          registrado_por?: string | null
+          tipo_produccion: string
+          ubicacion_id: string
+        }
+        Update: {
+          cancelada_por?: string | null
+          created_at?: string
+          entregado_por?: string | null
+          estatus?: string
+          fecha?: string
+          fecha_cancelacion?: string | null
+          fecha_pago?: string | null
+          id?: string
+          lote_id?: string
+          maquilero_id?: string | null
+          motivo_cancelacion?: string | null
+          notas?: string | null
+          recibido_por?: string
+          registrado_por?: string | null
+          tipo_produccion?: string
+          ubicacion_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "entregas_produccion_lote_id_fkey"
+            columns: ["lote_id"]
+            isOneToOne: false
+            referencedRelation: "lotes_produccion"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "entregas_produccion_maquilero_id_fkey"
+            columns: ["maquilero_id"]
+            isOneToOne: false
+            referencedRelation: "maquileros"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "entregas_produccion_entregado_por_fkey"
+            columns: ["entregado_por"]
+            isOneToOne: false
+            referencedRelation: "perfiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "entregas_produccion_recibido_por_fkey"
+            columns: ["recibido_por"]
+            isOneToOne: false
+            referencedRelation: "perfiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "entregas_produccion_ubicacion_id_fkey"
+            columns: ["ubicacion_id"]
+            isOneToOne: false
+            referencedRelation: "ubicaciones"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      maquileros: {
+        Row: {
+          activo: boolean
+          created_at: string
+          id: string
+          nombre: string
+          notas: string | null
+          telefono: string | null
+        }
+        Insert: {
+          activo?: boolean
+          created_at?: string
+          id?: string
+          nombre: string
+          notas?: string | null
+          telefono?: string | null
+        }
+        Update: {
+          activo?: boolean
+          created_at?: string
+          id?: string
+          nombre?: string
+          notas?: string | null
+          telefono?: string | null
+        }
+        Relationships: [
+
+        ]
+      }
+      maquileros_datos_bancarios: {
+        Row: {
+          banco: string | null
+          clabe: string | null
+          maquilero_id: string
+        }
+        Insert: {
+          banco?: string | null
+          clabe?: string | null
+          maquilero_id: string
+        }
+        Update: {
+          banco?: string | null
+          clabe?: string | null
+          maquilero_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "maquileros_datos_bancarios_maquilero_id_fkey"
+            columns: ["maquilero_id"]
+            isOneToOne: true
+            referencedRelation: "maquileros"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      pagos_maquila: {
+        Row: {
+          created_at: string
+          entrega_id: string
+          estatus: string
+          fecha_pago_real: string | null
+          fecha_programada: string
+          id: string
+          maquilero_id: string
+          monto: number
+          pagado_por: string | null
+        }
+        Insert: {
+          created_at?: string
+          entrega_id: string
+          estatus?: string
+          fecha_pago_real?: string | null
+          fecha_programada: string
+          id?: string
+          maquilero_id: string
+          monto: number
+          pagado_por?: string | null
+        }
+        Update: {
+          created_at?: string
+          entrega_id?: string
+          estatus?: string
+          fecha_pago_real?: string | null
+          fecha_programada?: string
+          id?: string
+          maquilero_id?: string
+          monto?: number
+          pagado_por?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "pagos_maquila_entrega_id_fkey"
+            columns: ["entrega_id"]
+            isOneToOne: true
+            referencedRelation: "entregas_produccion"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "pagos_maquila_maquilero_id_fkey"
+            columns: ["maquilero_id"]
+            isOneToOne: false
+            referencedRelation: "maquileros"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "pagos_maquila_pagado_por_fkey"
+            columns: ["pagado_por"]
+            isOneToOne: false
+            referencedRelation: "perfiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      precios_maquila_orden: {
+        Row: {
+          lote_id: string
+          modelo_id: string
+          precio_por_pieza: number
+        }
+        Insert: {
+          lote_id: string
+          modelo_id: string
+          precio_por_pieza: number
+        }
+        Update: {
+          lote_id?: string
+          modelo_id?: string
+          precio_por_pieza?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "precios_maquila_orden_lote_id_fkey"
+            columns: ["lote_id"]
+            isOneToOne: false
+            referencedRelation: "lotes_produccion"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "precios_maquila_orden_modelo_id_fkey"
+            columns: ["modelo_id"]
+            isOneToOne: false
+            referencedRelation: "modelos"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       modelo_tallas: {
         Row: {
@@ -1415,77 +1583,6 @@ export type Database = {
           },
         ]
       }
-      registros_avance_colaborador: {
-        Row: {
-          cantidad: number
-          colaborador_id: string
-          created_at: string
-          fecha: string
-          foto_url: string | null
-          id: string
-          lote_etapa_id: string
-          lote_id: string
-          observaciones: string | null
-          origen: Database["public"]["Enums"]["origen_avance"]
-          registrado_por: string
-        }
-        Insert: {
-          cantidad: number
-          colaborador_id: string
-          created_at?: string
-          fecha?: string
-          foto_url?: string | null
-          id?: string
-          lote_etapa_id: string
-          lote_id: string
-          observaciones?: string | null
-          origen?: Database["public"]["Enums"]["origen_avance"]
-          registrado_por: string
-        }
-        Update: {
-          cantidad?: number
-          colaborador_id?: string
-          created_at?: string
-          fecha?: string
-          foto_url?: string | null
-          id?: string
-          lote_etapa_id?: string
-          lote_id?: string
-          observaciones?: string | null
-          origen?: Database["public"]["Enums"]["origen_avance"]
-          registrado_por?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: "registros_avance_colaborador_colaborador_id_fkey"
-            columns: ["colaborador_id"]
-            isOneToOne: false
-            referencedRelation: "perfiles"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "registros_avance_colaborador_lote_etapa_id_fkey"
-            columns: ["lote_etapa_id"]
-            isOneToOne: false
-            referencedRelation: "lote_etapas"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "registros_avance_colaborador_lote_id_fkey"
-            columns: ["lote_id"]
-            isOneToOne: false
-            referencedRelation: "lotes_produccion"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "registros_avance_colaborador_registrado_por_fkey"
-            columns: ["registrado_por"]
-            isOneToOne: false
-            referencedRelation: "perfiles"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
       stock_productos: {
         Row: {
           cantidad_actual: number
@@ -1949,6 +2046,50 @@ export type Database = {
         }
         Returns: number
       }
+      fn_cancelar_entrega_produccion: {
+        Args: { p_entrega_id: string; p_motivo: string }
+        Returns: undefined
+      }
+      fn_cerrar_orden_produccion: {
+        Args: { p_lote_id: string; p_motivo: string }
+        Returns: undefined
+      }
+      fn_entregado_item: {
+        Args: { p_item_id: string }
+        Returns: number
+      }
+      fn_marcar_pago_maquila: {
+        Args: { p_fecha?: string; p_pagado: boolean; p_pago_id: string }
+        Returns: undefined
+      }
+      fn_reabrir_orden_produccion: {
+        Args: { p_lote_id: string }
+        Returns: undefined
+      }
+      fn_recalcular_estado_orden: {
+        Args: { p_lote_id: string }
+        Returns: undefined
+      }
+      fn_registrar_entrega_produccion: {
+        Args: {
+          p_entregado_por: string | null
+          p_fecha: string
+          p_fecha_pago: string | null
+          p_items: Json
+          p_lote_id: string
+          p_notas: string | null
+          p_recibido_por: string
+        }
+        Returns: string
+      }
+      fn_reevaluar_pedido: {
+        Args: { p_pedido_id: string }
+        Returns: undefined
+      }
+      fn_reprogramar_pago_maquila: {
+        Args: { p_fecha: string; p_pago_id: string }
+        Returns: undefined
+      }
       fn_efectivo_esperado: {
         Args: { p_sesion_id: string }
         Returns: number
@@ -2065,7 +2206,6 @@ export type Database = {
       estatus_venta: "completada" | "cancelada"
       estatus_venta_historica: "pagada" | "deuda_pendiente" | "impaga" | "reembolsada" | "cancelada"
       metodo_pago: "efectivo" | "transferencia" | "tarjeta"
-      origen_avance: "colaborador" | "ajuste_supervisor"
       rol_usuario: "admin" | "ventas" | "supervisor" | "colaborador"
       tipo_movimiento: "entrada" | "salida" | "ajuste"
       tipo_movimiento_caja: "ingreso" | "retiro"
@@ -2219,7 +2359,6 @@ export const Constants = {
       estatus_venta: ["completada", "cancelada"],
       estatus_venta_historica: ["pagada", "deuda_pendiente", "impaga", "reembolsada", "cancelada"],
       metodo_pago: ["efectivo", "transferencia", "tarjeta"],
-      origen_avance: ["colaborador", "ajuste_supervisor"],
       rol_usuario: ["admin", "ventas", "supervisor", "colaborador"],
       tipo_movimiento: ["entrada", "salida", "ajuste"],
       tipo_movimiento_caja: ["ingreso", "retiro"],
@@ -2231,7 +2370,6 @@ export const Constants = {
 export type RolUsuario = Database["public"]["Enums"]["rol_usuario"]
 export type EstatusPedido = Database["public"]["Enums"]["estatus_pedido"]
 export type EstatusOrden = Database["public"]["Enums"]["estatus_orden"]
-export type OrigenAvance = Database["public"]["Enums"]["origen_avance"]
 export type TipoMovimiento = Database["public"]["Enums"]["tipo_movimiento"]
 export type EstatusEntrega = Database["public"]["Enums"]["estatus_entrega"]
 export type EstatusUnidadMaterial = Database["public"]["Enums"]["estatus_unidad_material"]

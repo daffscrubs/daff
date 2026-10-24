@@ -1,6 +1,11 @@
 import Link from "next/link";
-import { ClipboardList, Factory, AlertTriangle } from "lucide-react";
+import { ClipboardList, Factory, AlertTriangle, HandCoins } from "lucide-react";
 import { createClient } from "@/lib/supabase/server";
+import { leerTodo } from "@/lib/supabase/leer-todo";
+import { requerirPerfil } from "@/lib/supabase/auth-helpers";
+import { tienePermiso } from "@/lib/permisos";
+import { formatearMoneda } from "@/lib/dinero";
+import { hoyMexico } from "@/lib/fechas";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import {
@@ -12,28 +17,16 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { MetricasFinancieras } from "@/components/dashboard/MetricasFinancieras";
-import { ActividadDiariaColaboradores } from "@/components/dashboard/ActividadDiariaColaboradores";
-import { PiezasPorColaboradorSemana } from "@/components/dashboard/PiezasPorColaboradorSemana";
 import { totalesPorPedido } from "@/lib/pedidos/totales";
-import { construirRegistrosReporte } from "@/lib/produccion/registro-reporte";
-import { piezasPorColaboradorSemana } from "@/lib/dashboard/piezasPorColaborador";
 import { stockPorUnidadesPorMaterial, stockEfectivo } from "@/lib/materiales/stock";
 
 export default async function DashboardPage() {
   const supabase = await createClient();
 
-  // Las dos tandas de consultas de antes no dependían una de otra (ninguna
-  // columna de la primera se usaba para armar la segunda) — estaban
-  // serializadas sin necesidad, duplicando el tiempo de espera. Se combinan
-  // en un solo Promise.all para que las ~15 consultas salgan en paralelo de
-  // una vez. También se quitó la consulta de "avances" (fecha, cantidad)
-  // que era un segundo escaneo completo de registros_avance_colaborador:
-  // esos mismos datos ya vienen en registrosAvance de abajo, así que se
-  // derivan en JS (mismo filtro origen='colaborador', mismo resultado) en
-  // vez de pedirlos dos veces a la base. Los `select("*")` que solo se
-  // usaban parcialmente (materiales, items_pedido, items_orden_produccion,
-  // lote_etapas) se acotaron a las columnas que realmente se leen más abajo
-  // — mismos datos mostrados, menos bytes que viajan.
+  const perfil = await requerirPerfil();
+  const puedeVerPagos = tienePermiso(perfil, "produccion.pagos_maquila");
+
+  // Las consultas no dependen una de otra: salen todas en paralelo. Las columnas se acotan a lo que se usa.
   const [
     { count: pedidosActivos },
     { count: lotesEnProceso },
@@ -42,15 +35,10 @@ export default async function DashboardPage() {
     { data: itemsPedido },
     { data: compras },
     { data: gastos },
-    { data: registrosAvance },
-    { data: etapasCatalogo },
-    { data: loteEtapas },
-    { data: items },
-    { data: lotes },
-    { data: modelos },
-    { data: tallas },
-    { data: colaboradores },
+    { data: entregadas },
     { data: unidadesMaterial },
+    { data: pagosPagados },
+    { data: pagosPendientes },
   ] = await Promise.all([
     supabase
       .from("pedidos")
@@ -65,33 +53,19 @@ export default async function DashboardPage() {
     supabase.from("items_pedido").select("pedido_id, cantidad, precio_unitario"),
     supabase.from("compras").select("fecha, total"),
     supabase.from("gastos").select("fecha, monto"),
-    supabase
-      .from("registros_avance_colaborador")
-      .select(
-        "id, fecha, created_at, cantidad, origen, observaciones, foto_url, colaborador_id, lote_id, lote_etapa_id, perfiles!registros_avance_colaborador_colaborador_id_fkey(nombre_completo)"
-      )
-      .order("created_at", { ascending: false }),
-    supabase.from("etapas_proceso").select("*"),
-    supabase.from("lote_etapas").select("id, item_orden_id, etapa_id, parent_lote_etapa_id, nombre_subproceso"),
-    supabase.from("items_orden_produccion").select("id, modelo_id, talla_id"),
-    supabase.from("lotes_produccion").select("id, folio"),
-    supabase.from("modelos").select("id, nombre"),
-    supabase.from("tallas").select("id, codigo"),
-    supabase.from("perfiles").select("id, nombre_completo").eq("rol", "colaborador").eq("activo", true).order("nombre_completo"),
+    leerTodo((d, h) =>
+      supabase
+        .from("entrega_produccion_items")
+        .select("id, cantidad, entregas_produccion!inner(fecha, estatus)")
+        .eq("entregas_produccion.estatus", "registrada")
+        .order("id")
+        .range(d, h)
+    ),
     supabase.from("unidades_material").select("material_id, cantidad_actual, estatus"),
+    // Montos de maquila: solo los ve quien tiene el permiso (la base de datos devuelve vacío al resto).
+    supabase.from("pagos_maquila").select("monto, fecha_pago_real").eq("estatus", "pagado"),
+    supabase.from("pagos_maquila").select("monto, fecha_programada").eq("estatus", "pendiente"),
   ]);
-
-  const actividadColaboradores = construirRegistrosReporte({
-    registros: registrosAvance ?? [],
-    etapasCatalogo: etapasCatalogo ?? [],
-    loteEtapas: loteEtapas ?? [],
-    items: items ?? [],
-    lotes: lotes ?? [],
-    modelos: modelos ?? [],
-    tallas: tallas ?? [],
-  });
-
-  const piezasSemana = piezasPorColaboradorSemana(actividadColaboradores);
 
   // Un material por unidad nunca recibe movimientos_inventario -- su
   // stock_actual de bulto queda congelado en 0 desde que se activa el
@@ -109,17 +83,30 @@ export default async function DashboardPage() {
     total: totalesPedidos[p.id] ?? 0,
   }));
   const comprasParaMetricas = (compras ?? []).map((c) => ({ fecha: c.fecha, monto: c.total }));
-  const gastosParaMetricas = (gastos ?? []).map((g) => ({ fecha: g.fecha, monto: g.monto }));
-  // Antes era una consulta aparte a registros_avance_colaborador; ahora se
-  // deriva de registrosAvance (mismo filtro, mismos datos) para no pedirle
-  // dos veces la misma tabla a la base.
-  const avancesParaMetricas = (registrosAvance ?? [])
-    .filter((r) => r.origen === "colaborador")
-    .map((r) => ({ fecha: r.fecha, monto: r.cantidad }));
+  // Los pagos a maquileros cuentan como gasto cuando se marcan como pagados (en la fecha en que se pagaron).
+  const gastosParaMetricas = [
+    ...(gastos ?? []).map((g) => ({ fecha: g.fecha, monto: g.monto })),
+    ...(pagosPagados ?? []).filter((p) => p.fecha_pago_real).map((p) => ({ fecha: p.fecha_pago_real as string, monto: Number(p.monto) })),
+  ];
+  const entregasParaMetricas = entregadas.map((e) => ({ fecha: e.entregas_produccion.fecha, monto: e.cantidad }));
+  const porPagarMaquila = (pagosPendientes ?? []).reduce((acc, p) => acc + Number(p.monto), 0);
+  const hoyISO = hoyMexico();
+  const vencidoMaquila = (pagosPendientes ?? []).filter((p) => p.fecha_programada < hoyISO).reduce((acc, p) => acc + Number(p.monto), 0);
 
   const kpis = [
     { href: "/pedidos", label: "Pedidos activos", valor: pedidosActivos ?? 0, icon: ClipboardList, color: "text-blue-600 bg-blue-100 dark:bg-blue-950" },
     { href: "/produccion", label: "Órdenes en producción", valor: lotesEnProceso ?? 0, icon: Factory, color: "text-amber-600 bg-amber-100 dark:bg-amber-950" },
+    ...(puedeVerPagos
+      ? [
+          {
+            href: "/produccion/pagos",
+            label: vencidoMaquila > 0 ? `Por pagar a maquileros · ${formatearMoneda(vencidoMaquila)} vencido` : "Por pagar a maquileros",
+            valor: formatearMoneda(porPagarMaquila),
+            icon: HandCoins,
+            color: "text-violet-600 bg-violet-100 dark:bg-violet-950",
+          },
+        ]
+      : []),
   ];
 
   return (
@@ -133,12 +120,10 @@ export default async function DashboardPage() {
         pedidos={pedidosParaMetricas}
         compras={comprasParaMetricas}
         gastos={gastosParaMetricas}
-        avances={avancesParaMetricas}
+        entregas={entregasParaMetricas}
       />
 
-      <PiezasPorColaboradorSemana datos={piezasSemana} />
-
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3">
         {kpis.map((kpi) => (
           <Link key={kpi.href} href={kpi.href}>
             <Card className="transition-shadow hover:shadow-md">
@@ -193,11 +178,6 @@ export default async function DashboardPage() {
           </TableBody>
         </Table>
       </div>
-
-      <ActividadDiariaColaboradores
-        registros={actividadColaboradores}
-        colaboradores={(colaboradores ?? []).map((c) => ({ id: c.id, nombre: c.nombre_completo }))}
-      />
     </div>
   );
 }

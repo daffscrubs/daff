@@ -56,7 +56,7 @@ export async function eliminarUsuario(id: string): Promise<AccionResultado> {
   const { error } = await admin.auth.admin.deleteUser(id);
   if (error) {
     return accionError(
-      "No se puede eliminar: este usuario tiene actividad registrada (pedidos, producción, avances, etc). Desactívalo en su lugar."
+      "No se puede eliminar: este usuario tiene actividad registrada (pedidos, producción, entregas, etc). Desactívalo en su lugar."
     );
   }
 

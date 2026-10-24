@@ -4,12 +4,10 @@ import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import { requerirPerfil } from "@/lib/supabase/auth-helpers";
 import {
-  etapaSchema,
   modeloSchema,
   plantillaItemSchema,
   plantillaSchema,
   tallaSchema,
-  type EtapaInput,
   type ModeloInput,
   type PlantillaInput,
   type PlantillaItemInput,
@@ -136,29 +134,6 @@ export async function eliminarTalla(id: string): Promise<AccionResultado> {
   const { error } = await supabase.from("tallas").delete().eq("id", id);
   if (error) return accionError("No se puede eliminar: la talla ya está en uso.");
   revalidatePath("/catalogos/tallas");
-  return accionOk(undefined);
-}
-
-// ---------- Etapas de proceso ----------
-export async function crearEtapa(input: EtapaInput): Promise<AccionResultado> {
-  await requerirPerfil(["admin"]);
-  const datos = etapaSchema.parse(input);
-  const supabase = await createClient();
-  const { error } = await supabase.from("etapas_proceso").insert({
-    nombre: datos.nombre,
-    descripcion: datos.descripcion || null,
-  });
-  if (error) return accionError(error.message);
-  revalidatePath("/catalogos/etapas-proceso");
-  return accionOk(undefined);
-}
-
-export async function alternarEtapaActiva(id: string, activo: boolean): Promise<AccionResultado> {
-  await requerirPerfil(["admin"]);
-  const supabase = await createClient();
-  const { error } = await supabase.from("etapas_proceso").update({ activo }).eq("id", id);
-  if (error) return accionError(error.message);
-  revalidatePath("/catalogos/etapas-proceso");
   return accionOk(undefined);
 }
 

@@ -12,7 +12,7 @@ export const ESTATUS_PEDIDO_LABEL: Record<EstatusPedido, string> = {
 export const ESTATUS_ORDEN_LABEL: Record<EstatusOrden, string> = {
   planeada: "Planeada",
   en_proceso: "En proceso",
-  terminada: "Terminada",
+  terminada: "Completa",
   cancelada: "Cancelada",
 };
 
