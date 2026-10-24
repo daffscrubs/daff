@@ -672,6 +672,7 @@ export type Database = {
           creado_por: string | null
           created_at: string
           estatus: Database["public"]["Enums"]["estatus_orden"]
+          fecha_asignacion: string | null
           fecha_cierre: string | null
           fecha_fin_estimada: string | null
           fecha_fin_real: string | null
@@ -690,6 +691,7 @@ export type Database = {
           creado_por?: string | null
           created_at?: string
           estatus?: Database["public"]["Enums"]["estatus_orden"]
+          fecha_asignacion?: string | null
           fecha_cierre?: string | null
           fecha_fin_estimada?: string | null
           fecha_fin_real?: string | null
@@ -708,6 +710,7 @@ export type Database = {
           creado_por?: string | null
           created_at?: string
           estatus?: Database["public"]["Enums"]["estatus_orden"]
+          fecha_asignacion?: string | null
           fecha_cierre?: string | null
           fecha_fin_estimada?: string | null
           fecha_fin_real?: string | null

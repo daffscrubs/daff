@@ -16,7 +16,6 @@ import {
 } from "@/components/ui/select";
 import { ComboboxField } from "@/components/ui/combobox-field";
 import { BuscadorProductos } from "@/components/produccion/BuscadorProductos";
-import { CamposTipoProduccion, type MaquileroOpcion } from "@/components/produccion/CamposTipoProduccion";
 import {
   Table,
   TableBody,
@@ -26,7 +25,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import type { Database } from "@/types/database.types";
-import type { InsumoOrdenInput, ItemOrdenInput, TipoProduccion } from "@/lib/validaciones/produccion.schema";
+import type { InsumoOrdenInput, ItemOrdenInput } from "@/lib/validaciones/produccion.schema";
 
 type Pedido = Database["public"]["Tables"]["pedidos"]["Row"];
 type ItemPedido = Database["public"]["Tables"]["items_pedido"]["Row"];
@@ -46,8 +45,6 @@ export function FormLote({
   materiales,
   existencias,
   ubicaciones,
-  maquileros,
-  puedeVerPrecios,
 }: {
   folioSugerido: string;
   pedidos: Pedido[];
@@ -59,9 +56,6 @@ export function FormLote({
   /** Piezas en inventario por modelo (suma de todas sus tallas). */
   existencias: Record<string, number>;
   ubicaciones: Ubicacion[];
-  maquileros: MaquileroOpcion[];
-  /** Tiene el permiso de pagos de maquila: puede capturar el precio por pieza. */
-  puedeVerPrecios: boolean;
 }) {
   const [folio, setFolio] = useState(folioSugerido);
   const [pedidoId, setPedidoId] = useState("");
@@ -69,9 +63,6 @@ export function FormLote({
   const [ubicacionDestinoId, setUbicacionDestinoId] = useState("");
   const [items, setItems] = useState<ItemOrdenInput[]>([]);
   const [insumos, setInsumos] = useState<InsumoOrdenInput[]>([]);
-  const [tipo, setTipo] = useState<TipoProduccion>("interna");
-  const [maquileroId, setMaquileroId] = useState("");
-  const [precios, setPrecios] = useState<Record<string, string>>({});
   const [pendiente, startTransition] = useTransition();
   const router = useRouter();
 
@@ -86,7 +77,6 @@ export function FormLote({
     existencias: existencias[m.id] ?? 0,
   }));
   const nombreModelo = (id: string) => modelos.find((m) => m.id === id)?.nombre ?? "—";
-  const modelosOrden = [...new Set(items.map((i) => i.modeloId))].map((id) => ({ id, nombre: nombreModelo(id) }));
 
   function tallasDeModelo(modeloId: string) {
     const asignadas = modeloTallas.filter((mt) => mt.modelo_id === modeloId).map((mt) => mt.talla_id);
@@ -145,19 +135,7 @@ export function FormLote({
       toast.error("Elige dónde entrarán las piezas terminadas");
       return;
     }
-    if (tipo === "maquila" && !maquileroId) {
-      toast.error("Elige el maquilero de esta orden");
-      return;
-    }
     const insumosValidos = insumos.filter((i) => i.materialId);
-    const preciosCapturados =
-      tipo === "maquila" && puedeVerPrecios
-        ? modelosOrden.filter((m) => (precios[m.id] ?? "").trim() !== "").map((m) => ({ modeloId: m.id, precioPorPieza: Number(precios[m.id].replace(/[$,\s]/g, "")) }))
-        : undefined;
-    if (preciosCapturados?.some((p) => !Number.isFinite(p.precioPorPieza) || p.precioPorPieza < 0)) {
-      toast.error("Revisa los precios por pieza: deben ser números mayores o iguales a cero");
-      return;
-    }
     startTransition(async () => {
       const res = await crearOrdenProduccion({
         folio,
@@ -166,9 +144,6 @@ export function FormLote({
         ubicacionDestinoId,
         items,
         insumos: insumosValidos,
-        tipoProduccion: tipo,
-        maquileroId: tipo === "maquila" ? maquileroId : null,
-        precios: preciosCapturados,
       });
       if (!res.ok) {
         toast.error(res.error);
@@ -234,18 +209,6 @@ export function FormLote({
           Cada vez que registres una entrega, las piezas entregadas entran al inventario de esta ubicación.
         </p>
       </div>
-
-      <CamposTipoProduccion
-        tipo={tipo}
-        onTipo={setTipo}
-        maquileroId={maquileroId}
-        onMaquilero={setMaquileroId}
-        maquileros={maquileros}
-        modelosOrden={modelosOrden}
-        precios={precios}
-        onPrecio={(modeloId, valor) => setPrecios((prev) => ({ ...prev, [modeloId]: valor }))}
-        puedeVerPrecios={puedeVerPrecios}
-      />
 
       <div className="space-y-3">
         <div className="flex items-center justify-between">

@@ -91,7 +91,7 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
       fechaFinEstimada: lote.fecha_fin_estimada,
       notas: lote.notas,
       items: itemsPDF,
-      quienLaHace: lote.tipo_produccion === "maquila" ? `Maquila · ${lote.maquileros?.nombre ?? "—"}` : "Interna",
+      quienLaHace: lote.tipo_produccion === "maquila" ? `Maquila · ${lote.maquileros?.nombre ?? "—"}` : lote.tipo_produccion === "interna" ? "Interna" : "Sin asignar",
       insumos: insumosPDF,
       cronologia,
       entregas: entregasPDF,

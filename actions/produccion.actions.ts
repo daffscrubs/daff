@@ -4,15 +4,17 @@ import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import { requerirPerfil } from "@/lib/supabase/auth-helpers";
 import {
+  asignarOrdenSchema,
   editarOrdenProduccionSchema,
   incidenciaSchema,
   ordenProduccionSchema,
+  type AsignarOrdenInput,
   type EditarOrdenProduccionInput,
   type IncidenciaInput,
   type OrdenProduccionInput,
 } from "@/lib/validaciones/produccion.schema";
 import { tienePermiso } from "@/lib/permisos";
-import { fechaISOLocal } from "@/lib/fechas";
+import { fechaISOLocal, hoyMexico } from "@/lib/fechas";
 import { accionError, accionOk, type AccionResultado } from "@/lib/tipos/accion";
 
 async function sugerirFolioOrden(supabase: Awaited<ReturnType<typeof createClient>>) {
@@ -25,6 +27,40 @@ async function sugerirFolioOrden(supabase: Awaited<ReturnType<typeof createClien
 
   const consecutivo = String((count ?? 0) + 1).padStart(4, "0");
   return `OP-${anio}-${consecutivo}`;
+}
+
+type Cliente = Awaited<ReturnType<typeof createClient>>;
+
+// Los precios por pieza son montos: solo los guarda quien tiene el permiso de pagos de maquila. Se guardan solo para
+// los modelos que están en la orden y solo si es de maquila; si la orden deja de ser de maquila, se borran.
+async function guardarPrecios(
+  supabase: Cliente,
+  loteId: string,
+  modelosOrden: Set<string>,
+  tipo: string,
+  precios: { modeloId: string; precioPorPieza: number }[] | undefined
+): Promise<string | null> {
+  if (tipo === "maquila" && precios?.length) {
+    const filas = precios.filter((p) => modelosOrden.has(p.modeloId)).map((p) => ({ lote_id: loteId, modelo_id: p.modeloId, precio_por_pieza: p.precioPorPieza }));
+    if (filas.length) {
+      const { error } = await supabase.from("precios_maquila_orden").upsert(filas);
+      if (error) return error.message;
+    }
+  }
+  const { data: guardados } = await supabase.from("precios_maquila_orden").select("modelo_id").eq("lote_id", loteId);
+  const sobran = (guardados ?? []).map((g) => g.modelo_id).filter((id) => !modelosOrden.has(id) || tipo !== "maquila");
+  if (sobran.length) {
+    const { error } = await supabase.from("precios_maquila_orden").delete().eq("lote_id", loteId).in("modelo_id", sobran);
+    if (error) return error.message;
+  }
+  return null;
+}
+
+// Cuándo se asignó la orden (se mandó a maquila o se tomó para el taller): se conserva mientras no cambie la asignación.
+function fechaAsignacion(anterior: { tipo_produccion: string; maquilero_id: string | null; fecha_asignacion: string | null }, tipo: string, maquileroId: string | null) {
+  if (tipo === "sin_asignar") return null;
+  if (anterior.tipo_produccion === tipo && anterior.maquilero_id === maquileroId && anterior.fecha_asignacion) return anterior.fecha_asignacion;
+  return hoyMexico();
 }
 
 export async function sugerirFolioOrdenAction(): Promise<AccionResultado<string>> {
@@ -50,6 +86,7 @@ export async function crearOrdenProduccion(input: OrdenProduccionInput): Promise
       ubicacion_destino_id: datos.ubicacionDestinoId,
       tipo_produccion: datos.tipoProduccion,
       maquilero_id: datos.tipoProduccion === "maquila" ? datos.maquileroId : null,
+      fecha_asignacion: datos.tipoProduccion === "sin_asignar" ? null : hoyMexico(),
       creado_por: perfil.id,
     })
     .select("id")
@@ -76,13 +113,9 @@ export async function crearOrdenProduccion(input: OrdenProduccionInput): Promise
     return accionError(errorItems.message);
   }
 
-  // Los precios por pieza son montos: solo los guarda quien tiene el permiso de pagos de maquila.
-  if (datos.tipoProduccion === "maquila" && tienePermiso(perfil, "produccion.pagos_maquila") && datos.precios?.length) {
-    const modelosOrden = new Set(datos.items.map((i) => i.modeloId));
-    const { error: errorPrecios } = await supabase.from("precios_maquila_orden").insert(
-      datos.precios.filter((p) => modelosOrden.has(p.modeloId)).map((p) => ({ lote_id: lote.id, modelo_id: p.modeloId, precio_por_pieza: p.precioPorPieza }))
-    );
-    if (errorPrecios) return accionError(`La orden se creó, pero no se guardaron los precios: ${errorPrecios.message}`);
+  if (tienePermiso(perfil, "produccion.pagos_maquila") && datos.tipoProduccion === "maquila" && datos.precios?.length) {
+    const errorPrecios = await guardarPrecios(supabase, lote.id, new Set(datos.items.map((i) => i.modeloId)), datos.tipoProduccion, datos.precios);
+    if (errorPrecios) return accionError(`La orden se creó, pero no se guardaron los precios: ${errorPrecios}`);
   }
 
   if (datos.insumos.length) {
@@ -109,7 +142,7 @@ export async function actualizarOrdenProduccion(loteId: string, input: EditarOrd
 
   const { data: lote, error: errorLote } = await supabase
     .from("lotes_produccion")
-    .select("estatus")
+    .select("estatus, tipo_produccion, maquilero_id, fecha_asignacion")
     .eq("id", loteId)
     .single();
   if (errorLote) return accionError(errorLote.message);
@@ -118,13 +151,15 @@ export async function actualizarOrdenProduccion(loteId: string, input: EditarOrd
   }
 
   // El tipo y el maquilero solo cambian mientras no haya entregas: la base de datos lo exige y avisa.
+  const maquileroNuevo = v.tipoProduccion === "maquila" ? (v.maquileroId ?? null) : null;
   const { error: errorFecha } = await supabase
     .from("lotes_produccion")
     .update({
       fecha_fin_estimada: v.fechaFinEstimada || null,
       ubicacion_destino_id: v.ubicacionDestinoId || null,
       tipo_produccion: v.tipoProduccion,
-      maquilero_id: v.tipoProduccion === "maquila" ? v.maquileroId : null,
+      maquilero_id: maquileroNuevo,
+      fecha_asignacion: fechaAsignacion(lote, v.tipoProduccion, maquileroNuevo),
     })
     .eq("id", loteId);
   if (errorFecha) return accionError(errorFecha.message);
@@ -162,18 +197,9 @@ export async function actualizarOrdenProduccion(loteId: string, input: EditarOrd
   }
 
   // Precios por pieza (montos): solo quien tiene el permiso de pagos de maquila. Los pagos ya generados conservan su monto.
-  if (tienePermiso(perfil, "produccion.pagos_maquila") && v.precios) {
-    const modelosOrden = new Set(v.items.map((i) => i.modeloId));
-    if (v.tipoProduccion === "maquila") {
-      const filas = v.precios.filter((p) => modelosOrden.has(p.modeloId)).map((p) => ({ lote_id: loteId, modelo_id: p.modeloId, precio_por_pieza: p.precioPorPieza }));
-      if (filas.length) {
-        const { error } = await supabase.from("precios_maquila_orden").upsert(filas);
-        if (error) return accionError(error.message);
-      }
-    }
-    const { data: guardados } = await supabase.from("precios_maquila_orden").select("modelo_id").eq("lote_id", loteId);
-    const sobran = (guardados ?? []).map((g) => g.modelo_id).filter((id) => !modelosOrden.has(id) || v.tipoProduccion !== "maquila");
-    if (sobran.length) await supabase.from("precios_maquila_orden").delete().eq("lote_id", loteId).in("modelo_id", sobran);
+  if (tienePermiso(perfil, "produccion.pagos_maquila") && (v.precios || v.tipoProduccion !== "maquila")) {
+    const errorPrecios = await guardarPrecios(supabase, loteId, new Set(v.items.map((i) => i.modeloId)), v.tipoProduccion, v.precios);
+    if (errorPrecios) return accionError(errorPrecios);
   }
 
   // Cambiar cantidades puede completar o reabrir la orden.
@@ -183,6 +209,42 @@ export async function actualizarOrdenProduccion(loteId: string, input: EditarOrd
   revalidatePath("/produccion");
   revalidatePath(`/produccion/${loteId}`);
   revalidatePath("/pedidos");
+  return accionOk(undefined);
+}
+
+// Decide quién hará la orden (taller o maquilero) o la devuelve a "sin asignar". Se puede cambiar mientras la orden
+// no tenga entregas: la base de datos lo exige y avisa.
+export async function asignarOrdenProduccion(loteId: string, input: AsignarOrdenInput): Promise<AccionResultado> {
+  const perfil = await requerirPerfil(["admin", "supervisor"]);
+  const validado = asignarOrdenSchema.safeParse(input);
+  if (!validado.success) return accionError(validado.error.issues[0]?.message ?? "Datos inválidos");
+  const v = validado.data;
+  const supabase = await createClient();
+
+  const { data: lote, error: errorLote } = await supabase
+    .from("lotes_produccion")
+    .select("estatus, tipo_produccion, maquilero_id, fecha_asignacion")
+    .eq("id", loteId)
+    .single();
+  if (errorLote) return accionError(errorLote.message);
+  if (lote.estatus === "cancelada") return accionError("No se puede modificar una orden cancelada.");
+
+  const maquileroNuevo = v.tipoProduccion === "maquila" ? (v.maquileroId ?? null) : null;
+  const { error } = await supabase
+    .from("lotes_produccion")
+    .update({ tipo_produccion: v.tipoProduccion, maquilero_id: maquileroNuevo, fecha_asignacion: fechaAsignacion(lote, v.tipoProduccion, maquileroNuevo) })
+    .eq("id", loteId);
+  if (error) return accionError(error.message);
+
+  if (tienePermiso(perfil, "produccion.pagos_maquila") && (v.precios || v.tipoProduccion !== "maquila")) {
+    const { data: items } = await supabase.from("items_orden_produccion").select("modelo_id").eq("lote_id", loteId);
+    const errorPrecios = await guardarPrecios(supabase, loteId, new Set((items ?? []).map((i) => i.modelo_id)), v.tipoProduccion, v.precios);
+    if (errorPrecios) return accionError(errorPrecios);
+  }
+
+  revalidatePath("/produccion");
+  revalidatePath(`/produccion/${loteId}`);
+  revalidatePath("/produccion/maquileros", "layout");
   return accionOk(undefined);
 }
 

@@ -1,6 +1,7 @@
 import { z } from "zod";
 
-export const TIPOS_PRODUCCION = ["interna", "maquila"] as const;
+// Una orden nueva queda "sin asignar": el corte puede esperar y se decide después si va a maquila o al taller.
+export const TIPOS_PRODUCCION = ["sin_asignar", "interna", "maquila"] as const;
 export type TipoProduccion = (typeof TIPOS_PRODUCCION)[number];
 
 export const itemOrdenSchema = z.object({
@@ -21,7 +22,7 @@ export const precioModeloSchema = z.object({
 });
 
 const produccionCamposSchema = z.object({
-  tipoProduccion: z.enum(TIPOS_PRODUCCION).default("interna"),
+  tipoProduccion: z.enum(TIPOS_PRODUCCION).default("sin_asignar"),
   maquileroId: z.string().uuid().optional().nullable(),
   /** Solo lo guarda quien tiene el permiso de pagos de maquila; para el resto se ignora. */
   precios: z.array(precioModeloSchema).optional(),
@@ -52,6 +53,8 @@ export const editarOrdenProduccionSchema = produccionCamposSchema
   })
   .superRefine(exigirMaquilero);
 
+export const asignarOrdenSchema = produccionCamposSchema.superRefine(exigirMaquilero);
+
 export const incidenciaSchema = z.object({
   loteId: z.string().uuid(),
   descripcion: z.string().min(3, "Describe la incidencia"),
@@ -64,4 +67,5 @@ export type InsumoOrdenInput = z.infer<typeof insumoOrdenSchema>;
 export type PrecioModeloInput = z.infer<typeof precioModeloSchema>;
 export type OrdenProduccionInput = z.input<typeof ordenProduccionSchema>;
 export type EditarOrdenProduccionInput = z.input<typeof editarOrdenProduccionSchema>;
+export type AsignarOrdenInput = z.input<typeof asignarOrdenSchema>;
 export type IncidenciaInput = z.infer<typeof incidenciaSchema>;
