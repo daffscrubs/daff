@@ -1,10 +1,10 @@
 "use client";
 
-import { useMemo, useRef, useState, useSyncExternalStore, useTransition } from "react";
+import { useDeferredValue, useEffect, useMemo, useRef, useState, useSyncExternalStore, useTransition } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
-import { ArrowDown, ArrowUp, Calculator, Check, CornerDownLeft, Landmark, Minus, Percent, Plus, Printer, ScanBarcode, Search, ShoppingBag, Trash2, User, UserPlus, Users, X, type LucideIcon } from "lucide-react";
+import { ArrowDown, ArrowUp, Calculator, Clock, Check, CornerDownLeft, Landmark, Minus, Percent, Plus, Printer, ScanBarcode, Search, ShoppingBag, Trash2, User, UserPlus, Users, X, type LucideIcon } from "lucide-react";
 import { crearCliente } from "@/actions/clientes.actions";
 import { registrarVenta } from "@/actions/ventas.actions";
 import { Button } from "@/components/ui/button";
@@ -102,6 +102,47 @@ interface DatosManual {
   iva: number;
   ieps: number;
 }
+// Productos que se vendieron hace poco en este equipo: se vuelven a agregar con un toque, sin buscarlos.
+// Igual que la ubicación, se lee del navegador con useSyncExternalStore (el servidor no tiene localStorage) y, si el
+// navegador no deja guardar, se recuerdan en memoria durante la sesión.
+const CLAVE_RECIENTES = "pos-recientes";
+const MAX_RECIENTES = 12;
+let recientesMemoria: string | null = null;
+const oyentesRecientes = new Set<() => void>();
+const suscribirRecientes = (aviso: () => void) => {
+  oyentesRecientes.add(aviso);
+  return () => void oyentesRecientes.delete(aviso);
+};
+function leerRecientes(): string {
+  if (recientesMemoria) return recientesMemoria;
+  try {
+    return localStorage.getItem(CLAVE_RECIENTES) ?? "[]";
+  } catch {
+    return "[]";
+  }
+}
+function guardarReciente(clave: string) {
+  let lista: string[] = [];
+  try {
+    const previa = JSON.parse(leerRecientes());
+    if (Array.isArray(previa)) lista = previa.filter((x): x is string => typeof x === "string");
+  } catch {
+    /* lista dañada: se empieza de nuevo */
+  }
+  const siguiente = JSON.stringify([clave, ...lista.filter((x) => x !== clave)].slice(0, MAX_RECIENTES));
+  recientesMemoria = siguiente;
+  try {
+    localStorage.setItem(CLAVE_RECIENTES, siguiente);
+  } catch {
+    /* sin almacenamiento: queda en memoria */
+  }
+  oyentesRecientes.forEach((aviso) => aviso());
+}
+
+// Con mouse conviene regresar el cursor a la búsqueda después de agregar; en una tablet eso abriría el teclado en pantalla.
+const hayPuntero = () => typeof window !== "undefined" && window.matchMedia("(pointer: fine)").matches;
+const esCampoDeTexto = (el: EventTarget | null) => el instanceof HTMLElement && (el.tagName === "INPUT" || el.tagName === "TEXTAREA" || el.isContentEditable);
+
 interface LineaCarrito {
   variante: VarianteVenta;
   cantidad: number;
@@ -177,9 +218,12 @@ interface GrupoProducto {
   variantes: VarianteVenta[];
 }
 
-// Un producto con todas sus tallas: se agrega tocando la talla (como se vende en el mostrador).
+// Un producto con todas sus tallas. Si solo tiene una presentación, TODA la tarjeta es el botón: tocarla lo agrega.
+// Si tiene varias tallas, se toca la talla que se va a vender.
 function TarjetaProducto({
   grupo,
+  indice,
+  seleccionada,
   stockEn,
   enCarrito,
   puedeSinExistencias,
@@ -187,6 +231,8 @@ function TarjetaProducto({
   alAgregar,
 }: {
   grupo: GrupoProducto;
+  indice: number;
+  seleccionada: boolean;
   stockEn: (v: VarianteVenta) => number;
   enCarrito: (v: VarianteVenta) => number;
   puedeSinExistencias: boolean;
@@ -197,18 +243,74 @@ function TarjetaProducto({
   const minimo = Math.min(...precios);
   const variaPrecio = precios.length > 0 && Math.max(...precios) !== minimo;
   const total = grupo.variantes.reduce((acc, v) => acc + Math.max(0, stockEn(v)), 0);
+  const precioTexto = precios.length ? `${variaPrecio ? "Desde " : ""}${formatearMoneda(minimo)}` : null;
+  const foto = (
+    <span className={cn("flex size-14 shrink-0 items-center justify-center rounded-xl text-lg font-semibold", colorDe(grupo.categoria ?? grupo.nombre))}>{inicialesDe(grupo.nombre)}</span>
+  );
+
+  if (grupo.variantes.length === 1) {
+    const v = grupo.variantes[0];
+    const existencias = stockEn(v);
+    const agotado = !puedeSinExistencias && existencias <= 0;
+    const sinPrecio = !v.precio || v.precio <= 0;
+    const cantidad = enCarrito(v);
+    const vendible = caja && !sinPrecio && !agotado;
+    return (
+      <button
+        type="button"
+        data-grupo-idx={indice}
+        disabled={!vendible}
+        onClick={() => alAgregar(v)}
+        aria-label={`Agregar ${grupo.nombre}${v.talla ? ` talla ${v.talla}` : ""}`}
+        className={cn(
+          "group relative flex w-full gap-4 rounded-2xl border bg-card p-4 text-left shadow-sm transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
+          vendible ? "cursor-pointer hover:border-primary/50 hover:shadow-md active:scale-[0.99]" : "cursor-not-allowed bg-muted/40 opacity-70",
+          cantidad > 0 && "border-primary bg-primary/5",
+          seleccionada && "ring-2 ring-primary"
+        )}
+      >
+        {foto}
+        <div className="min-w-0 flex-1">
+          <p className="line-clamp-2 font-semibold leading-snug">{grupo.nombre}</p>
+          <p className="mt-0.5 truncate text-xs text-muted-foreground">
+            {[v.talla ? `Talla ${v.talla}` : null, grupo.categoria].filter(Boolean).join(" · ") || "Sin categoría"}
+          </p>
+          <span
+            className={cn(
+              "mt-2 inline-block rounded-full px-2 py-0.5 text-xs font-medium",
+              existencias > 0 ? "bg-emerald-100 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300" : "bg-red-100 text-red-700 dark:bg-red-950 dark:text-red-300"
+            )}
+          >
+            {existencias > 0 ? `${existencias} disp.` : "Agotado"}
+          </span>
+        </div>
+        <div className="flex shrink-0 flex-col items-end justify-between">
+          <p className="text-base font-semibold tabular-nums">{precioTexto ?? <span className="text-sm font-normal text-muted-foreground">Sin precio</span>}</p>
+          {vendible && (
+            <span className="flex size-8 items-center justify-center rounded-full bg-primary text-primary-foreground opacity-80 transition-opacity group-hover:opacity-100">
+              <Plus className="size-4" />
+            </span>
+          )}
+        </div>
+        {cantidad > 0 && (
+          <span className="absolute -right-2 -top-2 flex size-6 items-center justify-center rounded-full bg-primary text-xs font-semibold text-primary-foreground shadow">{cantidad}</span>
+        )}
+      </button>
+    );
+  }
+
   return (
-    <div className="flex gap-4 rounded-2xl border bg-card p-4 shadow-sm transition-shadow hover:shadow-md">
-      <span className={cn("flex size-14 shrink-0 items-center justify-center rounded-xl text-lg font-semibold", colorDe(grupo.categoria ?? grupo.nombre))}>{inicialesDe(grupo.nombre)}</span>
+    <div data-grupo-idx={indice} className={cn("flex gap-4 rounded-2xl border bg-card p-4 shadow-sm transition-shadow hover:shadow-md", seleccionada && "ring-2 ring-primary")}>
+      {foto}
       <div className="min-w-0 flex-1 space-y-3">
         <div className="flex items-start justify-between gap-3">
           <div className="min-w-0">
             <p className="line-clamp-2 font-semibold leading-snug">{grupo.nombre}</p>
             <p className="mt-0.5 truncate text-xs text-muted-foreground">
-              {grupo.categoria ?? "Sin categoría"} · {total > 0 ? `${total} en existencia` : "Sin existencias"}
+              {grupo.categoria ?? "Sin categoría"} · {total > 0 ? `${total} en existencia` : "Sin existencias"} · toca la talla
             </p>
           </div>
-          <p className="shrink-0 text-right text-base font-semibold tabular-nums">{precios.length ? `${variaPrecio ? "Desde " : ""}${formatearMoneda(minimo)}` : <span className="text-sm font-normal text-muted-foreground">Sin precio</span>}</p>
+          <p className="shrink-0 text-right text-base font-semibold tabular-nums">{precioTexto ?? <span className="text-sm font-normal text-muted-foreground">Sin precio</span>}</p>
         </div>
         <div className="flex flex-wrap gap-2">
           {grupo.variantes.map((v) => {
@@ -224,8 +326,8 @@ function TarjetaProducto({
                 onClick={() => alAgregar(v)}
                 title={`${v.talla ?? grupo.nombre}${v.precio ? ` · ${formatearMoneda(v.precio)}` : ""} · ${existencias > 0 ? `${existencias} disponibles` : "sin existencias"}`}
                 className={cn(
-                  "relative flex min-w-16 flex-col items-center rounded-xl border px-3 py-1.5 text-sm leading-tight transition-colors",
-                  agotado || sinPrecio ? "cursor-not-allowed border-dashed bg-muted/40 text-muted-foreground/70" : "hover:border-primary hover:bg-primary/5",
+                  "relative flex min-h-14 min-w-20 flex-col items-center justify-center rounded-xl border px-4 py-2 text-base leading-tight transition-all",
+                  agotado || sinPrecio ? "cursor-not-allowed border-dashed bg-muted/40 text-muted-foreground/70" : "hover:border-primary hover:bg-primary/5 active:scale-95",
                   !caja && "cursor-not-allowed opacity-60",
                   cantidad > 0 && "border-primary bg-primary/10"
                 )}
@@ -275,6 +377,9 @@ export function PuntoDeVenta({
     ? (ubicacionGuardada as string)
     : (cajasAbiertas[0]?.ubicacionId ?? ubicaciones[0]?.id ?? "");
   const [busqueda, setBusqueda] = useState("");
+  // Escribir no se atora aunque haya miles de tallas: el filtrado de la lista va un paso atrás del teclado.
+  const busquedaDiferida = useDeferredValue(busqueda);
+  const [sel, setSel] = useState(0);
   const [categoria, setCategoria] = useState("todas");
 
   const [ventas, setVentasEstado] = useState<VentaAbierta[]>(() => [ventaVacia("v1", "Venta 1")]);
@@ -329,9 +434,19 @@ export function PuntoDeVenta({
   const buscando = busqueda.trim() !== "" || categoria !== "todas";
   const cantidadEnCarrito = (v: VarianteVenta) => carrito[claveDe(v)]?.cantidad ?? 0;
   const resultados = useMemo(() => {
-    const q = normalizarTexto(busqueda.trim());
+    const q = normalizarTexto(busquedaDiferida.trim());
     return indice.filter((x) => (categoria === "todas" || x.v.categoria === categoria) && (!q || x.texto.includes(q))).map((x) => x.v);
-  }, [indice, busqueda, categoria]);
+  }, [indice, busquedaDiferida, categoria]);
+  const porClave = useMemo(() => new Map(catalogo.map((v) => [claveDe(v), v])), [catalogo]);
+  const recientesCrudo = useSyncExternalStore(suscribirRecientes, leerRecientes, () => "[]");
+  const recientes = useMemo(() => {
+    try {
+      const lista = JSON.parse(recientesCrudo);
+      return (Array.isArray(lista) ? lista : []).map((c) => (typeof c === "string" ? porClave.get(c) : undefined)).filter((v): v is VarianteVenta => !!v);
+    } catch {
+      return [];
+    }
+  }, [recientesCrudo, porClave]);
 
   // Un destello breve en la línea que acaba de cambiar, para ver que el producto sí entró.
   function resaltar(clave: string) {
@@ -367,6 +482,12 @@ export function PuntoDeVenta({
     }
     setCarrito((prev) => ({ ...prev, [claveDe(v)]: { variante: v, cantidad: actual + 1 } }));
     resaltar(claveDe(v));
+    guardarReciente(claveDe(v));
+    enfocarBusqueda();
+  }
+
+  function enfocarBusqueda() {
+    if (hayPuntero()) inputBusqueda.current?.focus({ preventScroll: true });
   }
 
   function cambiarCantidad(clave: string, cantidad: number) {
@@ -449,13 +570,20 @@ export function PuntoDeVenta({
     if (!q) return;
     // Un lector de código de barras "teclea" el código y manda Enter: coincidencia exacta de código o SKU.
     const exacto = catalogo.find((v) => v.codigoBarras === q || (v.sku && v.sku.toLowerCase() === q.toLowerCase()));
-    const elegido = exacto ?? (resultados.length === 1 ? resultados[0] : null);
+    let elegido: VarianteVenta | null = exacto ?? null;
     if (!elegido) {
-      toast.info(resultados.length ? "Elige el producto de la lista." : "No se encontró ese código ni ese producto.");
+      // Sin código exacto: Enter agrega el producto resaltado si no tiene varias tallas (con tallas hay que elegir una).
+      const resaltado = grupos[Math.min(sel, grupos.length - 1)];
+      if (resultados.length === 1) elegido = resultados[0];
+      else if (resaltado && resaltado.variantes.length === 1) elegido = resaltado.variantes[0];
+    }
+    if (!elegido) {
+      toast.info(grupos.length ? "Ese producto tiene varias tallas: toca la talla que vas a vender." : "No se encontró ese código ni ese producto.");
       return;
     }
     agregar(elegido);
     setBusqueda("");
+    setSel(0);
   }
 
   function nuevaPestana() {
@@ -497,6 +625,33 @@ export function PuntoDeVenta({
   const descuentoInvalido = Number.isNaN(descuentoLeido) || descuentoCentavos >= subtotalCentavos + (subtotalCentavos ? 0 : 1);
   const totalCentavos = subtotalCentavos - (descuentoInvalido ? 0 : descuentoCentavos);
   const puedeCobrar = !!caja && lineas.length > 0 && !descuentoInvalido && totalCentavos > 0;
+
+  // Atajos: F2 o "/" llevan a la búsqueda; F9 abre el cobro. Se ignoran con un diálogo abierto.
+  const cobrarRef = useRef<() => void>(() => {});
+  useEffect(() => {
+    cobrarRef.current = () => {
+      if (puedeCobrar) setCobroAbierto(true);
+    };
+  });
+  useEffect(() => {
+    function alTeclear(e: KeyboardEvent) {
+      if (document.querySelector('[role="dialog"]')) return;
+      if (e.key === "F2" || (e.key === "/" && !esCampoDeTexto(e.target) && !e.metaKey && !e.ctrlKey)) {
+        e.preventDefault();
+        inputBusqueda.current?.focus();
+        inputBusqueda.current?.select();
+      } else if (e.key === "F9") {
+        e.preventDefault();
+        cobrarRef.current();
+      }
+    }
+    window.addEventListener("keydown", alTeclear);
+    return () => window.removeEventListener("keydown", alTeclear);
+  }, []);
+  // La tarjeta resaltada con las flechas siempre se ve, aunque la lista sea larga.
+  useEffect(() => {
+    document.querySelector(`[data-grupo-idx="${sel}"]`)?.scrollIntoView({ block: "nearest" });
+  }, [sel]);
 
   function nuevaVenta() {
     editarActiva((v) => ventaVacia(v.id, v.nombre));
@@ -552,11 +707,22 @@ export function PuntoDeVenta({
             ref={inputBusqueda}
             autoFocus
             value={busqueda}
-            onChange={(e) => setBusqueda(e.target.value)}
+            onChange={(e) => {
+              setBusqueda(e.target.value);
+              setSel(0);
+            }}
             onKeyDown={(e) => {
               if (e.key === "Enter") {
                 e.preventDefault();
                 alEnter();
+              } else if (e.key === "ArrowDown" || e.key === "ArrowUp") {
+                if (!grupos.length) return;
+                e.preventDefault();
+                const limite = Math.min(grupos.length, MAX_RESULTADOS) - 1;
+                setSel((actual) => Math.max(0, Math.min(limite, actual + (e.key === "ArrowDown" ? 1 : -1))));
+              } else if (e.key === "Escape" && busqueda) {
+                setBusqueda("");
+                setSel(0);
               }
             }}
             placeholder="Buscar productos"
@@ -568,13 +734,20 @@ export function PuntoDeVenta({
             <ScanBarcode className="size-6" />
           </span>
         </div>
+        <p className="-mt-3 hidden text-xs text-muted-foreground lg:block">
+          <kbd className="rounded border bg-muted px-1">↑</kbd> <kbd className="rounded border bg-muted px-1">↓</kbd> moverte · <kbd className="rounded border bg-muted px-1">Enter</kbd> agrega el resaltado ·{" "}
+          <kbd className="rounded border bg-muted px-1">F2</kbd> o <kbd className="rounded border bg-muted px-1">/</kbd> buscar · <kbd className="rounded border bg-muted px-1">F9</kbd> cobrar
+        </p>
 
         <div className="-mt-1 flex gap-2 overflow-x-auto pb-1" role="group" aria-label="Categorías">
           {["todas", ...categorias].map((c) => (
             <button
               key={c}
               type="button"
-              onClick={() => setCategoria(c)}
+              onClick={() => {
+                setCategoria(c);
+                setSel(0);
+              }}
               aria-pressed={categoria === c}
               className={cn(
                 "shrink-0 rounded-full border px-4 py-1.5 text-sm transition-colors",
@@ -608,10 +781,12 @@ export function PuntoDeVenta({
               {resultados.length !== grupos.length && ` · ${resultados.length.toLocaleString("es-MX")} tallas`}
             </p>
             <div className="grid grid-cols-1 gap-3 2xl:grid-cols-2">
-              {grupos.slice(0, MAX_RESULTADOS).map((g) => (
+              {grupos.slice(0, MAX_RESULTADOS).map((g, i) => (
                 <TarjetaProducto
                   key={g.modeloId}
                   grupo={g}
+                  indice={i}
+                  seleccionada={i === sel}
                   stockEn={stockEn}
                   enCarrito={cantidadEnCarrito}
                   puedeSinExistencias={puedeVenderSinExistencias}
@@ -633,6 +808,49 @@ export function PuntoDeVenta({
             )}
           </div>
         ) : (
+          <div className="space-y-6">
+            {recientes.length > 0 && (
+              <div className="space-y-2">
+                <h2 className="flex items-center gap-2 text-sm font-medium text-muted-foreground">
+                  <Clock className="size-4" />
+                  Vendidos recientemente · toca para agregar
+                </h2>
+                <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 2xl:grid-cols-3">
+                  {recientes.map((v) => {
+                    const existencias = stockEn(v);
+                    const agotado = !puedeVenderSinExistencias && existencias <= 0;
+                    const vendible = !!caja && !agotado && !!v.precio && v.precio > 0;
+                    const cantidad = cantidadEnCarrito(v);
+                    return (
+                      <button
+                        key={claveDe(v)}
+                        type="button"
+                        disabled={!vendible}
+                        onClick={() => agregar(v)}
+                        className={cn(
+                          "relative flex items-center gap-3 rounded-xl border bg-card p-3 text-left shadow-sm transition-all",
+                          vendible ? "hover:border-primary/50 hover:shadow-md active:scale-[0.98]" : "cursor-not-allowed opacity-60",
+                          cantidad > 0 && "border-primary bg-primary/5"
+                        )}
+                      >
+                        <span className={cn("flex size-10 shrink-0 items-center justify-center rounded-lg text-sm font-semibold", colorDe(v.categoria ?? v.nombre))}>{inicialesDe(v.nombre)}</span>
+                        <span className="min-w-0 flex-1">
+                          <span className="line-clamp-1 text-sm font-medium">{v.nombre}</span>
+                          <span className="block text-xs text-muted-foreground">
+                            {v.talla ? `Talla ${v.talla} · ` : ""}
+                            {agotado ? "Agotado" : `${existencias} disp.`}
+                          </span>
+                        </span>
+                        <span className="text-sm font-semibold tabular-nums">{v.precio ? formatearMoneda(v.precio) : "—"}</span>
+                        {cantidad > 0 && (
+                          <span className="absolute -right-1.5 -top-1.5 flex size-5 items-center justify-center rounded-full bg-primary text-[11px] font-semibold text-primary-foreground">{cantidad}</span>
+                        )}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
             {puedeEntradaManual && (
               <Atajo
@@ -668,6 +886,7 @@ export function PuntoDeVenta({
                 href={`/caja?ubicacion=${ubicacionId}`}
               />
             )}
+          </div>
           </div>
         )}
       </section>
@@ -1350,6 +1569,8 @@ function Cobro({
   const [montos, setMontos] = useState<Record<Metodo, string>>({ efectivo: String(aPesos(totalCentavos)), transferencia: "", tarjeta: "" });
   const [recibido, setRecibido] = useState("");
   const [referencia, setReferencia] = useState("");
+  // Lo normal es un solo método: botones grandes. Dividir el pago entre varios es la excepción.
+  const [mixto, setMixto] = useState(false);
   const [procesando, startTransition] = useTransition();
 
   if (venta) {
@@ -1376,7 +1597,7 @@ function Cobro({
             <Printer className="size-4" />
             Imprimir ticket
           </Button>
-          <Button className="flex-1" onClick={alNuevaVenta}>
+          <Button className="flex-1" onClick={alNuevaVenta} autoFocus>
             Nueva venta
           </Button>
         </div>
@@ -1413,8 +1634,52 @@ function Cobro({
     });
   }
 
+  const unico = METODOS.find((m) => centavos[m.valor] === totalCentavos)?.valor ?? null;
+  const bloqueRecibido = efectivoCentavos > 0 && (
+    <div className="space-y-2">
+      <div className="flex items-center gap-2">
+        <Label htmlFor="recibido-efectivo" className="w-28 shrink-0 text-sm font-medium">
+          Recibido
+        </Label>
+        <Input
+          id="recibido-efectivo"
+          autoFocus
+          inputMode="decimal"
+          placeholder={String(aPesos(efectivoCentavos))}
+          aria-label="Efectivo recibido"
+          className={cn("h-11 text-lg", !recibidoValido && "border-destructive")}
+          value={recibido}
+          onChange={(e) => setRecibido(e.target.value)}
+        />
+      </div>
+      <div className="flex flex-wrap gap-1.5 pl-[7.5rem]">
+        {[20, 50, 100, 200, 500, 1000].map((b) => (
+          <Button key={b} type="button" variant="outline" size="sm" onClick={() => setRecibido(String(b))}>
+            ${b}
+          </Button>
+        ))}
+        <Button type="button" variant="outline" size="sm" onClick={() => setRecibido(String(aPesos(efectivoCentavos)))}>
+          Exacto
+        </Button>
+      </div>
+      {!recibidoValido && <p className="pl-[7.5rem] text-xs text-destructive">El efectivo recibido no cubre lo que se cobra en efectivo.</p>}
+      {cambio > 0 && (
+        <div className="flex items-baseline justify-between rounded-lg bg-emerald-50 px-4 py-3 text-emerald-800 dark:bg-emerald-950/40 dark:text-emerald-200">
+          <span className="font-medium">Cambio</span>
+          <span className="text-3xl font-bold tabular-nums">{formatearMoneda(aPesos(cambio))}</span>
+        </div>
+      )}
+    </div>
+  );
+
   return (
-    <div className="space-y-4">
+    <form
+      className="space-y-4"
+      onSubmit={(e) => {
+        e.preventDefault();
+        if (puedeConfirmar && !procesando) confirmar();
+      }}
+    >
       <DialogHeader>
         <DialogTitle>Cobrar venta</DialogTitle>
       </DialogHeader>
@@ -1423,84 +1688,97 @@ function Cobro({
         <p className="text-4xl font-bold">{formatearMoneda(aPesos(totalCentavos))}</p>
       </div>
 
-      <div className="space-y-2">
-        {METODOS.map((m) => (
-          <div key={m.valor} className={cn("rounded-lg border p-3", centavos[m.valor] > 0 && "border-primary bg-primary/5")}>
-            <div className="flex items-center gap-2">
-              <Label className="w-28 shrink-0 text-sm font-medium">{m.etiqueta}</Label>
-              <Input
-                inputMode="decimal"
-                placeholder="0.00"
-                aria-label={`Monto en ${m.etiqueta.toLowerCase()}`}
-                className={cn("h-9", Number.isNaN(centavos[m.valor]) && "border-destructive")}
-                value={montos[m.valor]}
-                onChange={(e) => setMontos((prev) => ({ ...prev, [m.valor]: e.target.value }))}
-              />
-              <Button type="button" variant="outline" size="sm" onClick={() => soloCon(m.valor)}>
-                Todo
-              </Button>
-              <Button type="button" variant="ghost" size="sm" disabled={restante <= 0} onClick={() => completarCon(m.valor)}>
-                Resto
-              </Button>
-            </div>
-            {m.valor === "efectivo" && efectivoCentavos > 0 && (
-              <div className="mt-3 space-y-2 pl-0.5">
+      {!mixto ? (
+        <div className="space-y-3">
+          <div className="grid grid-cols-3 gap-2" role="group" aria-label="Método de pago">
+            {METODOS.map((m) => (
+              <button
+                key={m.valor}
+                type="button"
+                aria-pressed={unico === m.valor}
+                onClick={() => {
+                  soloCon(m.valor);
+                  setRecibido("");
+                }}
+                className={cn(
+                  "flex h-14 flex-col items-center justify-center rounded-xl border text-sm font-semibold transition-all active:scale-95",
+                  unico === m.valor ? "border-primary bg-primary text-primary-foreground shadow" : "hover:border-primary/50 hover:bg-muted"
+                )}
+              >
+                {m.etiqueta}
+              </button>
+            ))}
+          </div>
+          {unico === "efectivo" && bloqueRecibido}
+          {(unico === "tarjeta" || unico === "transferencia") && (
+            <Input autoFocus placeholder="Referencia o últimos dígitos (opcional)" className="h-10" value={referencia} onChange={(e) => setReferencia(e.target.value)} />
+          )}
+          <button type="button" className="text-sm text-primary hover:underline" onClick={() => setMixto(true)}>
+            Dividir el pago entre varios métodos
+          </button>
+        </div>
+      ) : (
+        <>
+          <div className="space-y-2">
+            {METODOS.map((m) => (
+              <div key={m.valor} className={cn("rounded-lg border p-3", centavos[m.valor] > 0 && "border-primary bg-primary/5")}>
                 <div className="flex items-center gap-2">
-                  <Label className="w-28 shrink-0 text-xs text-muted-foreground">Recibido</Label>
+                  <Label className="w-28 shrink-0 text-sm font-medium">{m.etiqueta}</Label>
                   <Input
                     inputMode="decimal"
-                    placeholder={String(aPesos(efectivoCentavos))}
-                    aria-label="Efectivo recibido"
-                    className={cn("h-9", !recibidoValido && "border-destructive")}
-                    value={recibido}
-                    onChange={(e) => setRecibido(e.target.value)}
+                    placeholder="0.00"
+                    aria-label={`Monto en ${m.etiqueta.toLowerCase()}`}
+                    className={cn("h-9", Number.isNaN(centavos[m.valor]) && "border-destructive")}
+                    value={montos[m.valor]}
+                    onChange={(e) => setMontos((prev) => ({ ...prev, [m.valor]: e.target.value }))}
                   />
-                </div>
-                <div className="flex flex-wrap gap-1.5 pl-[7.5rem]">
-                  {[20, 50, 100, 200, 500, 1000].map((b) => (
-                    <Button key={b} type="button" variant="outline" size="xs" onClick={() => setRecibido(String(b))}>
-                      ${b}
-                    </Button>
-                  ))}
-                  <Button type="button" variant="outline" size="xs" onClick={() => setRecibido(String(aPesos(efectivoCentavos)))}>
-                    Exacto
+                  <Button type="button" variant="outline" size="sm" onClick={() => soloCon(m.valor)}>
+                    Todo
+                  </Button>
+                  <Button type="button" variant="ghost" size="sm" disabled={restante <= 0} onClick={() => completarCon(m.valor)}>
+                    Resto
                   </Button>
                 </div>
-                {!recibidoValido && <p className="pl-[7.5rem] text-xs text-destructive">El efectivo recibido no cubre lo que se cobra en efectivo.</p>}
               </div>
+            ))}
+            {efectivoCentavos > 0 && <div className="rounded-lg border p-3">{bloqueRecibido}</div>}
+            {(centavos.transferencia > 0 || centavos.tarjeta > 0) && (
+              <Input placeholder="Referencia o últimos dígitos (opcional)" className="h-9" value={referencia} onChange={(e) => setReferencia(e.target.value)} />
             )}
           </div>
-        ))}
-        {(centavos.transferencia > 0 || centavos.tarjeta > 0) && (
-          <Input placeholder="Referencia o últimos dígitos (opcional)" className="h-9" value={referencia} onChange={(e) => setReferencia(e.target.value)} />
-        )}
-      </div>
 
-      <div className="space-y-1 rounded-lg border p-3 text-sm">
-        <div className="flex justify-between">
-          <span className="text-muted-foreground">Pagado</span>
-          <span>{formatearMoneda(aPesos(suma))}</span>
-        </div>
-        <div className={cn("flex justify-between font-medium", restante > 0 && "text-amber-600", restante < 0 && "text-destructive")}>
-          <span>{restante < 0 ? "Se pasa por" : "Falta por cobrar"}</span>
-          <span>{formatearMoneda(aPesos(Math.abs(restante)))}</span>
-        </div>
-        {cambio > 0 && (
-          <div className="flex justify-between border-t pt-1 text-base font-semibold">
-            <span>Cambio</span>
-            <span>{formatearMoneda(aPesos(cambio))}</span>
+          <div className="space-y-1 rounded-lg border p-3 text-sm">
+            <div className="flex justify-between">
+              <span className="text-muted-foreground">Pagado</span>
+              <span>{formatearMoneda(aPesos(suma))}</span>
+            </div>
+            <div className={cn("flex justify-between font-medium", restante > 0 && "text-amber-600", restante < 0 && "text-destructive")}>
+              <span>{restante < 0 ? "Se pasa por" : "Falta por cobrar"}</span>
+              <span>{formatearMoneda(aPesos(Math.abs(restante)))}</span>
+            </div>
           </div>
-        )}
-      </div>
+          <button
+            type="button"
+            className="text-sm text-primary hover:underline"
+            onClick={() => {
+              soloCon("efectivo");
+              setRecibido("");
+              setMixto(false);
+            }}
+          >
+            Volver a un solo método
+          </button>
+        </>
+      )}
 
       <div className="flex gap-2">
         <Button type="button" variant="outline" className="flex-1" onClick={alCancelar} disabled={procesando}>
           Volver
         </Button>
-        <Button type="button" className="h-11 flex-[2] text-base" disabled={!puedeConfirmar || procesando} onClick={confirmar}>
+        <Button type="submit" className="h-12 flex-[2] text-base" disabled={!puedeConfirmar || procesando}>
           {procesando ? "Registrando..." : "Confirmar venta"}
         </Button>
       </div>
-    </div>
+    </form>
   );
 }
