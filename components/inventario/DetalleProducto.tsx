@@ -1,17 +1,17 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useEffect, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
+import { ArrowLeft, ArrowRightLeft, Plus, Trash2 } from "lucide-react";
 import { obtenerDetalleModelo } from "@/actions/detalle.actions";
-import { actualizarCostoModelo, eliminarModelo, guardarTallasModelo } from "@/actions/catalogos.actions";
-import { crearMovimientoStockProducto, traspasarStockProducto } from "@/actions/stockProductos.actions";
+import { eliminarModelo, guardarProducto } from "@/actions/catalogos.actions";
+import { traspasarStockProducto } from "@/actions/stockProductos.actions";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { ArrowRightLeft } from "lucide-react";
-import { formatearMoneda } from "@/lib/dinero";
+import { Textarea } from "@/components/ui/textarea";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -23,161 +23,209 @@ import {
   AlertDialogTitle,
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table";
-import type { TipoMovimiento } from "@/types/database.types";
+import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { formatearMoneda } from "@/lib/dinero";
+import { TALLA_SIN_TALLAS } from "@/lib/inventario/etiquetas";
 
 export type DetalleModelo = Awaited<ReturnType<typeof obtenerDetalleModelo>>;
 
+// Lo que se edita en pantalla. Todo son textos para que escribir sea fluido; se convierten a
+// número hasta el momento de guardar.
+interface Fila {
+  tallaId: string;
+  precio: string;
+  costo: string;
+  codigoBarras: string;
+  sku: string;
+  existencias: Record<string, string>; // por ubicación
+}
+
+interface Borrador {
+  nombre: string;
+  descripcion: string;
+  categoria: string;
+  filas: Fila[];
+}
+
+const aTexto = (n: number | null | undefined) => (n != null ? String(n) : "");
+const aNumero = (t: string) => (t.trim() === "" ? 0 : Number(t));
+
 export function DetalleProducto({ detalle }: { detalle: DetalleModelo }) {
   const router = useRouter();
-  const [costo, setCosto] = useState(detalle.modelo?.costo_unitario != null ? String(detalle.modelo.costo_unitario) : "");
-  const [precioVenta, setPrecioVenta] = useState(detalle.modelo?.precio_venta != null ? String(detalle.modelo.precio_venta) : "");
-  const [categoria, setCategoria] = useState(detalle.modelo?.categoria ?? "");
-  const [tallaIds, setTallaIds] = useState<string[]>(detalle.tallaIdsAsignadas);
-  const [preciosPorTalla, setPreciosPorTalla] = useState<Record<string, string>>(
-    Object.fromEntries(
-      Object.entries(detalle.preciosPorTalla).map(([tallaId, precio]) => [tallaId, precio != null ? String(precio) : ""])
-    )
-  );
-  const codigosIniciales = () =>
-    Object.fromEntries(
-      Object.entries(detalle.codigosPorTalla).map(([tallaId, c]) => [
-        tallaId,
-        { codigoBarras: c.codigoBarras ?? "", sku: c.sku ?? "" },
-      ])
-    );
-  const [codigosPorTalla, setCodigosPorTalla] = useState<Record<string, { codigoBarras: string; sku: string }>>(codigosIniciales);
-  const [pendiente, startTransition] = useTransition();
-  const [guardandoTallas, startTransitionTallas] = useTransition();
-  const [eliminando, startTransitionEliminar] = useTransition();
-  const [editandoPrecio, setEditandoPrecio] = useState(false);
+  const modelo = detalle.modelo;
+  const ubicaciones = detalle.ubicaciones.filter((u) => u.activa);
+  const varias = ubicaciones.length > 1;
 
-  const [tallaAjuste, setTallaAjuste] = useState<{ id: string; codigo: string } | null>(null);
-  const [tipoAjuste, setTipoAjuste] = useState<TipoMovimiento>("entrada");
-  const [cantidadAjuste, setCantidadAjuste] = useState("");
-  const [motivoAjuste, setMotivoAjuste] = useState("");
-  const [ubicacionAjusteId, setUbicacionAjusteId] = useState("");
-  const [ajustando, startTransitionAjuste] = useTransition();
+  function armarBorrador(): Borrador {
+    const conStock = new Set(detalle.existencias.map((e) => e.talla_id));
+    const asignadas = new Map(detalle.variantes.map((v) => [v.tallaId, v]));
+    const filas = detalle.tallas
+      .filter((t) => asignadas.has(t.id) || conStock.has(t.id))
+      .map<Fila>((t) => {
+        const v = asignadas.get(t.id);
+        return {
+          tallaId: t.id,
+          precio: aTexto(v?.precioVenta ?? modelo?.precio_venta),
+          costo: aTexto(v?.costoUnitario ?? modelo?.costo_unitario),
+          codigoBarras: v?.codigoBarras ?? "",
+          sku: v?.sku ?? "",
+          existencias: Object.fromEntries(
+            ubicaciones.map((u) => [
+              u.id,
+              String(detalle.existencias.find((e) => e.talla_id === t.id && e.ubicacion_id === u.id)?.cantidad_actual ?? 0),
+            ])
+          ),
+        };
+      });
+    return { nombre: modelo?.nombre ?? "", descripcion: modelo?.descripcion ?? "", categoria: modelo?.categoria ?? "", filas };
+  }
 
-  const [tallaTraspaso, setTallaTraspaso] = useState<{ id: string; codigo: string } | null>(null);
-  const [origenTraspasoId, setOrigenTraspasoId] = useState("");
-  const [destinoTraspasoId, setDestinoTraspasoId] = useState("");
+  // "base" es lo último guardado; "borrador" lo que hay en pantalla. Tras guardar, la base se
+  // iguala al borrador (sin esperar a que lleguen los datos nuevos del servidor).
+  const [base, setBase] = useState<Borrador>(armarBorrador);
+  const [borrador, setBorrador] = useState<Borrador>(base);
+  const [ubicacionVista, setUbicacionVista] = useState(ubicaciones[0]?.id ?? "");
+  const [masDatos, setMasDatos] = useState<string | null>(null);
+  const [guardando, startGuardar] = useTransition();
+  const [eliminando, startEliminar] = useTransition();
+
+  const [traspasoTalla, setTraspasoTalla] = useState<string | null>(null);
+  const [origenId, setOrigenId] = useState("");
+  const [destinoId, setDestinoId] = useState("");
   const [cantidadTraspaso, setCantidadTraspaso] = useState("");
   const [motivoTraspaso, setMotivoTraspaso] = useState("");
-  const [traspasando, startTransitionTraspaso] = useTransition();
+  const [traspasando, startTraspaso] = useTransition();
 
-  const modelo = detalle.modelo;
+  const hayCambios = JSON.stringify(borrador) !== JSON.stringify(base);
+
+  useEffect(() => {
+    if (!hayCambios) return;
+    const avisar = (e: BeforeUnloadEvent) => e.preventDefault();
+    window.addEventListener("beforeunload", avisar);
+    return () => window.removeEventListener("beforeunload", avisar);
+  }, [hayCambios]);
+
+  useEffect(() => {
+    const atajo = (e: KeyboardEvent) => {
+      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "s") {
+        e.preventDefault();
+        document.getElementById("guardar-producto")?.click();
+      }
+    };
+    window.addEventListener("keydown", atajo);
+    return () => window.removeEventListener("keydown", atajo);
+  }, []);
+
   if (!modelo) return null;
 
-  const ubicacionesActivas = detalle.ubicaciones.filter((u) => u.activa);
+  const nombreTalla = (id: string) => {
+    const codigo = detalle.tallas.find((t) => t.id === id)?.codigo ?? "—";
+    return codigo.toUpperCase() === TALLA_SIN_TALLAS ? "Única" : codigo;
+  };
   const nombreUbicacion = (id: string) => detalle.ubicaciones.find((u) => u.id === id)?.nombre ?? "—";
-  const stockDe = (tallaId: string, ubicacionId: string) =>
+  const existenciaGuardada = (tallaId: string, ubicacionId: string) =>
     detalle.existencias.find((e) => e.talla_id === tallaId && e.ubicacion_id === ubicacionId)?.cantidad_actual ?? 0;
-  const totalUbicacion = (ubicacionId: string) =>
-    detalle.existencias.filter((e) => e.ubicacion_id === ubicacionId).reduce((acc, e) => acc + e.cantidad_actual, 0);
-  // Tallas que ya tienen algún registro de existencias (en cualquier ubicación),
-  // en el orden del catálogo de tallas.
-  const tallasConStock = detalle.tallas.filter((t) => detalle.existencias.some((e) => e.talla_id === t.id));
+  const totalGuardadoTalla = (tallaId: string) =>
+    detalle.existencias.filter((e) => e.talla_id === tallaId).reduce((acc, e) => acc + e.cantidad_actual, 0);
+  const totalFila = (f: Fila) => ubicaciones.reduce((acc, u) => acc + aNumero(f.existencias[u.id] ?? ""), 0);
 
-  function guardarCosto() {
-    startTransition(async () => {
-      const res = await actualizarCostoModelo(modelo!.id, Number(costo) || 0, Number(precioVenta) || 0, categoria);
-      if (!res.ok) {
-        toast.error(res.error);
-        return;
-      }
-      toast.success("Costo y precio actualizados");
-      setEditandoPrecio(false);
-      router.refresh();
+  const existenciasTotal = borrador.filas.reduce((acc, f) => acc + totalFila(f), 0);
+  const valorInventario = borrador.filas.reduce((acc, f) => acc + totalFila(f) * (Number(f.costo) || 0), 0);
+  const precios = borrador.filas.map((f) => Number(f.precio)).filter((p) => precioValido(p));
+  const rangoPrecio = precios.length
+    ? Math.min(...precios) === Math.max(...precios)
+      ? formatearMoneda(precios[0])
+      : `${formatearMoneda(Math.min(...precios))} - ${formatearMoneda(Math.max(...precios))}`
+    : "—";
+
+  const tallasFaltantes = detalle.tallas.filter((t) => !borrador.filas.some((f) => f.tallaId === t.id));
+  const filaEditando = borrador.filas.find((f) => f.tallaId === masDatos) ?? null;
+
+  function cambiarGeneral(parche: Partial<Omit<Borrador, "filas">>) {
+    setBorrador((b) => ({ ...b, ...parche }));
+  }
+
+  function cambiarFila(tallaId: string, parche: Partial<Omit<Fila, "existencias">>) {
+    setBorrador((b) => ({ ...b, filas: b.filas.map((f) => (f.tallaId === tallaId ? { ...f, ...parche } : f)) }));
+  }
+
+  function cambiarExistencia(tallaId: string, ubicacionId: string, valor: string) {
+    setBorrador((b) => ({
+      ...b,
+      filas: b.filas.map((f) => (f.tallaId === tallaId ? { ...f, existencias: { ...f.existencias, [ubicacionId]: valor } } : f)),
+    }));
+  }
+
+  function agregarTalla(tallaId: string) {
+    setBorrador((b) => {
+      const orden = new Map(detalle.tallas.map((t, i) => [t.id, i]));
+      const nueva: Fila = {
+        tallaId,
+        precio: aTexto(modelo!.precio_venta),
+        costo: aTexto(modelo!.costo_unitario),
+        codigoBarras: "",
+        sku: "",
+        existencias: Object.fromEntries(ubicaciones.map((u) => [u.id, "0"])),
+      };
+      return { ...b, filas: [...b.filas, nueva].sort((a, c) => (orden.get(a.tallaId) ?? 0) - (orden.get(c.tallaId) ?? 0)) };
     });
   }
 
-  function cancelarEdicionPrecio() {
-    setCosto(modelo!.costo_unitario != null ? String(modelo!.costo_unitario) : "");
-    setPrecioVenta(modelo!.precio_venta != null ? String(modelo!.precio_venta) : "");
-    setCategoria(modelo!.categoria ?? "");
-    setTallaIds(detalle.tallaIdsAsignadas);
-    setCodigosPorTalla(codigosIniciales());
-    setPreciosPorTalla(
-      Object.fromEntries(
-        Object.entries(detalle.preciosPorTalla).map(([tallaId, precio]) => [tallaId, precio != null ? String(precio) : ""])
-      )
-    );
-    setEditandoPrecio(false);
+  function quitarTalla(tallaId: string) {
+    setBorrador((b) => ({ ...b, filas: b.filas.filter((f) => f.tallaId !== tallaId) }));
   }
 
-  function alternarTalla(id: string) {
-    setTallaIds((prev) => (prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]));
-  }
-
-  function actualizarPrecioTalla(id: string, valor: string) {
-    setPreciosPorTalla((prev) => ({ ...prev, [id]: valor }));
-  }
-
-  function actualizarCodigoTalla(id: string, campo: "codigoBarras" | "sku", valor: string) {
-    setCodigosPorTalla((prev) => ({ ...prev, [id]: { ...(prev[id] ?? { codigoBarras: "", sku: "" }), [campo]: valor } }));
-  }
-
-  function guardarTallas() {
-    startTransitionTallas(async () => {
-      const res = await guardarTallasModelo(
-        modelo!.id,
-        tallaIds.map((tallaId) => ({
-          tallaId,
-          precioVenta: preciosPorTalla[tallaId] ? Number(preciosPorTalla[tallaId]) : undefined,
-          codigoBarras: codigosPorTalla[tallaId]?.codigoBarras,
-          sku: codigosPorTalla[tallaId]?.sku,
-        }))
-      );
-      if (!res.ok) {
-        toast.error(res.error);
-        return;
-      }
-      toast.success("Tallas actualizadas");
-      setEditandoPrecio(false);
-      router.refresh();
-    });
-  }
-
-  // Precio a mostrar cuando hay precios distintos por talla: si varían,
-  // muestra el rango (ej. "$625.00 - $640.00") en vez de un solo precio
-  // (que podría no reflejar ninguna talla real si el precio general del
-  // modelo se dejó en blanco).
-  function precioVentaMostrar(): string {
-    if (!detalle.tallaIdsAsignadas.length) {
-      return modelo!.precio_venta != null ? formatearMoneda(modelo!.precio_venta) : "—";
+  function guardar() {
+    const nombre = borrador.nombre.trim();
+    if (nombre.length < 2) {
+      toast.error("El nombre del producto es obligatorio");
+      return;
     }
-    const precios = detalle.tallaIdsAsignadas
-      .map((id) => detalle.preciosPorTalla[id] ?? modelo!.precio_venta)
-      .filter((p): p is number => p != null);
-    if (!precios.length) return "—";
-    const min = Math.min(...precios);
-    const max = Math.max(...precios);
-    return min === max ? formatearMoneda(min) : `${formatearMoneda(min)} - ${formatearMoneda(max)}`;
+    for (const f of borrador.filas) {
+      const etiqueta = `Talla ${nombreTalla(f.tallaId)}`;
+      if (f.precio.trim() !== "" && !(Number(f.precio) >= 0)) return void toast.error(`${etiqueta}: el precio no es válido`);
+      if (f.costo.trim() !== "" && !(Number(f.costo) >= 0)) return void toast.error(`${etiqueta}: el costo no es válido`);
+      for (const u of ubicaciones) {
+        const n = aNumero(f.existencias[u.id] ?? "");
+        if (!Number.isInteger(n) || n < 0) return void toast.error(`${etiqueta}: las existencias en ${u.nombre} deben ser un número entero, 0 o mayor`);
+      }
+    }
+
+    // Solo viajan las existencias que cambiaron respecto a lo guardado.
+    const existencias = borrador.filas.flatMap((f) =>
+      ubicaciones
+        .filter((u) => aNumero(f.existencias[u.id] ?? "") !== existenciaGuardada(f.tallaId, u.id))
+        .map((u) => ({ tallaId: f.tallaId, ubicacionId: u.id, cantidad: aNumero(f.existencias[u.id] ?? "") }))
+    );
+
+    startGuardar(async () => {
+      const res = await guardarProducto({
+        modeloId: modelo!.id,
+        nombre,
+        descripcion: borrador.descripcion,
+        categoria: borrador.categoria,
+        variantes: borrador.filas.map((f) => ({
+          tallaId: f.tallaId,
+          precioVenta: f.precio.trim() === "" ? null : Number(f.precio),
+          costoUnitario: f.costo.trim() === "" ? null : Number(f.costo),
+          codigoBarras: f.codigoBarras,
+          sku: f.sku,
+        })),
+        existencias,
+      });
+      if (!res.ok) {
+        toast.error(res.error);
+        return;
+      }
+      toast.success("Producto guardado");
+      setBase(borrador);
+      router.refresh();
+    });
   }
 
   function eliminar() {
-    startTransitionEliminar(async () => {
+    startEliminar(async () => {
       const res = await eliminarModelo(modelo!.id);
       if (!res.ok) {
         toast.error(res.error);
@@ -188,64 +236,29 @@ export function DetalleProducto({ detalle }: { detalle: DetalleModelo }) {
     });
   }
 
-  function abrirAjuste(tallaId: string, codigo: string) {
-    setTallaAjuste({ id: tallaId, codigo });
-    setUbicacionAjusteId(ubicacionesActivas[0]?.id ?? "");
-    setTipoAjuste("entrada");
-    setCantidadAjuste("");
-    setMotivoAjuste("");
-  }
-
-  function registrarAjuste(e: React.FormEvent) {
-    e.preventDefault();
-    if (!tallaAjuste) return;
-    if (!ubicacionAjusteId) {
-      toast.error("Selecciona una ubicación");
-      return;
-    }
-    startTransitionAjuste(async () => {
-      const res = await crearMovimientoStockProducto({
-        modeloId: modelo!.id,
-        tallaId: tallaAjuste.id,
-        ubicacionId: ubicacionAjusteId,
-        tipo: tipoAjuste,
-        cantidad: Number(cantidadAjuste),
-        motivo: motivoAjuste,
-      });
-      if (!res.ok) {
-        toast.error(res.error);
-        return;
-      }
-      toast.success("Movimiento registrado");
-      setTallaAjuste(null);
-      router.refresh();
-    });
-  }
-
-  function abrirTraspaso(tallaId: string, codigo: string) {
+  function abrirTraspaso(tallaId: string) {
     // Origen sugerido: la ubicación con más piezas de esa talla; destino: otra.
-    const conMasStock = [...ubicacionesActivas].sort((a, b) => stockDe(tallaId, b.id) - stockDe(tallaId, a.id))[0];
-    const otra = ubicacionesActivas.find((u) => u.id !== conMasStock?.id);
-    setTallaTraspaso({ id: tallaId, codigo });
-    setOrigenTraspasoId(conMasStock?.id ?? "");
-    setDestinoTraspasoId(otra?.id ?? "");
+    const conMasStock = [...ubicaciones].sort((a, b) => existenciaGuardada(tallaId, b.id) - existenciaGuardada(tallaId, a.id))[0];
+    setTraspasoTalla(tallaId);
+    setOrigenId(conMasStock?.id ?? "");
+    setDestinoId(ubicaciones.find((u) => u.id !== conMasStock?.id)?.id ?? "");
     setCantidadTraspaso("");
     setMotivoTraspaso("");
   }
 
   function registrarTraspaso(e: React.FormEvent) {
     e.preventDefault();
-    if (!tallaTraspaso) return;
-    if (!origenTraspasoId || !destinoTraspasoId) {
+    if (!traspasoTalla) return;
+    if (!origenId || !destinoId) {
       toast.error("Selecciona el origen y el destino");
       return;
     }
-    startTransitionTraspaso(async () => {
+    startTraspaso(async () => {
       const res = await traspasarStockProducto({
         modeloId: modelo!.id,
-        tallaId: tallaTraspaso.id,
-        origenId: origenTraspasoId,
-        destinoId: destinoTraspasoId,
+        tallaId: traspasoTalla,
+        origenId,
+        destinoId,
         cantidad: Number(cantidadTraspaso),
         motivo: motivoTraspaso,
       });
@@ -254,28 +267,25 @@ export function DetalleProducto({ detalle }: { detalle: DetalleModelo }) {
         return;
       }
       toast.success("Traspaso registrado");
-      setTallaTraspaso(null);
+      setTraspasoTalla(null);
+      setMasDatos(null);
+      // La página se vuelve a montar con las existencias nuevas (ver la `key` en la página).
       router.refresh();
     });
   }
 
-  const nombreTalla = (id: string) => detalle.tallas.find((t) => t.id === id)?.codigo ?? "—";
-
-  const valorInventario = modelo.costo_unitario ? detalle.existenciasTotal * modelo.costo_unitario : null;
+  const opcionesUbicacion = ubicaciones.map((u) => ({ value: u.id, label: u.nombre }));
 
   return (
-    <div className="space-y-6">
-      <div className="flex items-start justify-between">
-        <div>
-          <h1 className="text-2xl font-semibold">{modelo.nombre}</h1>
-          <p className="text-muted-foreground">{modelo.descripcion || "Sin descripción"}</p>
+    <div className="space-y-6 pb-20">
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div className="flex min-w-0 items-center gap-3">
+          <Button variant="outline" size="icon" onClick={() => router.push("/inventario")} aria-label="Volver al inventario">
+            <ArrowLeft className="size-4" />
+          </Button>
+          <h1 className="truncate text-2xl font-semibold">{base.nombre}</h1>
         </div>
         <div className="flex items-center gap-2">
-          {!editandoPrecio && (
-            <Button variant="outline" onClick={() => setEditandoPrecio(true)}>
-              Editar
-            </Button>
-          )}
           <AlertDialog>
             <AlertDialogTrigger render={<Button variant="outline" disabled={eliminando} />}>Eliminar</AlertDialogTrigger>
             <AlertDialogContent>
@@ -291,358 +301,356 @@ export function DetalleProducto({ detalle }: { detalle: DetalleModelo }) {
               </AlertDialogFooter>
             </AlertDialogContent>
           </AlertDialog>
+          <Button id="guardar-producto" onClick={guardar} disabled={!hayCambios || guardando}>
+            {guardando ? "Guardando..." : "Guardar"}
+          </Button>
         </div>
       </div>
 
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
-        <div className="rounded-lg border p-4">
+        <div className="rounded-lg border bg-card p-4">
           <p className="text-xs text-muted-foreground">Existencias totales</p>
-          <p className="text-2xl font-semibold">{detalle.existenciasTotal}</p>
+          <p className="text-2xl font-semibold">{existenciasTotal}</p>
         </div>
-        <div className="rounded-lg border p-4">
-          <p className="text-xs text-muted-foreground">Valor en inventario</p>
-          <p className="text-2xl font-semibold">{valorInventario != null ? formatearMoneda(valorInventario) : "—"}</p>
+        <div className="rounded-lg border bg-card p-4">
+          <p className="text-xs text-muted-foreground">Valor en inventario (a costo)</p>
+          <p className="text-2xl font-semibold">{valorInventario > 0 ? formatearMoneda(valorInventario) : "—"}</p>
         </div>
-        <div className="rounded-lg border p-4">
+        <div className="rounded-lg border bg-card p-4">
           <p className="text-xs text-muted-foreground">Precio de venta</p>
-          <p className="text-2xl font-semibold">{precioVentaMostrar()}</p>
+          <p className="text-2xl font-semibold">{rangoPrecio}</p>
         </div>
       </div>
 
-      {ubicacionesActivas.length > 1 && (
-        <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
-          {ubicacionesActivas.map((u) => (
-            <div key={u.id} className="rounded-lg border p-4">
-              <p className="text-xs text-muted-foreground">Existencias en {u.nombre}</p>
-              <p className="text-2xl font-semibold">{totalUbicacion(u.id)}</p>
+      <section className="space-y-4 rounded-xl border bg-card p-5">
+        <h2 className="text-lg font-semibold">Datos del producto</h2>
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+          <div className="space-y-2">
+            <Label htmlFor="nombreProducto">Nombre del producto</Label>
+            <Input id="nombreProducto" value={borrador.nombre} onChange={(e) => cambiarGeneral({ nombre: e.target.value })} />
+          </div>
+          <div className="space-y-2">
+            <Label htmlFor="categoriaProducto">Categoría</Label>
+            <Input
+              id="categoriaProducto"
+              placeholder="Filipina, pantalón, bata..."
+              value={borrador.categoria}
+              onChange={(e) => cambiarGeneral({ categoria: e.target.value })}
+            />
+          </div>
+        </div>
+        <div className="space-y-2">
+          <Label htmlFor="descripcionProducto">Descripción</Label>
+          <Textarea
+            id="descripcionProducto"
+            rows={2}
+            value={borrador.descripcion}
+            onChange={(e) => cambiarGeneral({ descripcion: e.target.value })}
+          />
+        </div>
+      </section>
+
+      <section className="space-y-4 rounded-xl border bg-card p-5">
+        <div>
+          <h2 className="text-lg font-semibold">Variantes</h2>
+          <p className="text-sm text-muted-foreground">
+            Cada talla con sus existencias, costo y precio. Cambia lo que necesites y guarda al final.
+          </p>
+        </div>
+
+        <div className="overflow-x-auto rounded-lg border">
+          <table className="w-full min-w-[640px] text-sm">
+            <thead className="bg-muted/40 text-left text-xs text-muted-foreground">
+              <tr>
+                <th className="px-4 py-3 font-medium">Variante</th>
+                <th className="px-2 py-3 font-medium">
+                  <div className="flex items-center gap-2">
+                    Existencias
+                    {varias && (
+                      <Select items={opcionesUbicacion} value={ubicacionVista} onValueChange={(v) => setUbicacionVista(v ?? "")}>
+                        <SelectTrigger className="h-7 w-40 text-xs">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {opcionesUbicacion.map((o) => (
+                            <SelectItem key={o.value} value={o.value}>
+                              {o.label}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    )}
+                  </div>
+                </th>
+                {varias && <th className="px-2 py-3 font-medium">Total</th>}
+                <th className="px-2 py-3 font-medium">Costo</th>
+                <th className="px-2 py-3 font-medium">Precio público</th>
+                <th className="px-2 py-3" />
+              </tr>
+            </thead>
+            <tbody>
+              {borrador.filas.map((f) => {
+                const guardadaEnBase = totalGuardadoTalla(f.tallaId) !== 0;
+                return (
+                  <tr key={f.tallaId} className="border-t">
+                    <td className="px-4 py-2.5 font-medium">{nombreTalla(f.tallaId)}</td>
+                    <td className="px-2 py-2">
+                      <Input
+                        type="number"
+                        inputMode="numeric"
+                        min={0}
+                        step={1}
+                        className="w-28"
+                        aria-label={`Existencias de la talla ${nombreTalla(f.tallaId)}`}
+                        value={f.existencias[ubicacionVista] ?? ""}
+                        onFocus={(e) => e.target.select()}
+                        onChange={(e) => cambiarExistencia(f.tallaId, ubicacionVista, e.target.value)}
+                      />
+                    </td>
+                    {varias && <td className="px-2 py-2 text-muted-foreground">{totalFila(f)}</td>}
+                    <td className="px-2 py-2">
+                      <Input
+                        type="number"
+                        inputMode="decimal"
+                        min={0}
+                        step="0.01"
+                        className="w-28"
+                        aria-label={`Costo de la talla ${nombreTalla(f.tallaId)}`}
+                        value={f.costo}
+                        onFocus={(e) => e.target.select()}
+                        onChange={(e) => cambiarFila(f.tallaId, { costo: e.target.value })}
+                      />
+                    </td>
+                    <td className="px-2 py-2">
+                      <Input
+                        type="number"
+                        inputMode="decimal"
+                        min={0}
+                        step="0.01"
+                        className="w-28"
+                        aria-label={`Precio de la talla ${nombreTalla(f.tallaId)}`}
+                        value={f.precio}
+                        onFocus={(e) => e.target.select()}
+                        onChange={(e) => cambiarFila(f.tallaId, { precio: e.target.value })}
+                      />
+                    </td>
+                    <td className="px-2 py-2">
+                      <div className="flex items-center justify-end gap-1.5">
+                        <Button variant="outline" size="sm" onClick={() => setMasDatos(f.tallaId)}>
+                          Más datos
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          disabled={guardadaEnBase || borrador.filas.length === 1}
+                          title={
+                            guardadaEnBase
+                              ? "Tiene existencias: déjalas en 0 y guarda antes de quitar la talla"
+                              : borrador.filas.length === 1
+                                ? "El producto necesita al menos una talla"
+                                : "Quitar esta talla"
+                          }
+                          aria-label={`Quitar la talla ${nombreTalla(f.tallaId)}`}
+                          onClick={() => quitarTalla(f.tallaId)}
+                        >
+                          <Trash2 className="size-4" />
+                        </Button>
+                      </div>
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+
+        {tallasFaltantes.length > 0 && (
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="text-sm text-muted-foreground">Agregar talla:</span>
+            {tallasFaltantes.map((t) => (
+              <Button key={t.id} variant="outline" size="sm" onClick={() => agregarTalla(t.id)}>
+                <Plus className="size-3.5" />
+                {nombreTalla(t.id)}
+              </Button>
+            ))}
+          </div>
+        )}
+      </section>
+
+      <section className="space-y-3 rounded-xl border bg-card p-5">
+        <h2 className="text-lg font-semibold">Historial</h2>
+        <ul className="space-y-2">
+          {detalle.movimientos.map((m) => {
+            const delta = m.tipo === "salida" ? -m.cantidad : m.cantidad;
+            return (
+              <li key={m.id} className="rounded-lg border p-2 text-sm">
+                <div className="flex items-center justify-between">
+                  <span className="capitalize">{m.tipo}</span>
+                  <Badge variant={delta < 0 ? "destructive" : "secondary"}>
+                    {delta > 0 ? "+" : ""}
+                    {delta} · {nombreTalla(m.talla_id)}
+                  </Badge>
+                </div>
+                <p className="mt-1 text-xs text-muted-foreground">
+                  {new Date(m.created_at).toLocaleString("es-MX")}
+                  {` · ${nombreUbicacion(m.ubicacion_id)}`}
+                  {m.lotes_produccion?.folio && ` · Orden ${m.lotes_produccion.folio}`}
+                  {m.motivo && ` · ${m.motivo}`}
+                </p>
+              </li>
+            );
+          })}
+          {!detalle.movimientos.length && <p className="text-sm text-muted-foreground">Sin movimientos todavía.</p>}
+        </ul>
+      </section>
+
+      {hayCambios && (
+        <div className="fixed inset-x-0 bottom-0 z-30 border-t bg-background/95 px-6 py-3 shadow-lg backdrop-blur">
+          <div className="mx-auto flex max-w-5xl items-center justify-between gap-3">
+            <p className="text-sm font-medium">Tienes cambios sin guardar</p>
+            <div className="flex gap-2">
+              <Button variant="ghost" disabled={guardando} onClick={() => setBorrador(base)}>
+                Descartar
+              </Button>
+              <Button disabled={guardando} onClick={guardar}>
+                {guardando ? "Guardando..." : "Guardar cambios"}
+              </Button>
             </div>
-          ))}
+          </div>
         </div>
       )}
 
-      <div className="space-y-4 rounded-lg border p-4">
-        <h2 className="text-lg font-semibold">Costo, precio y categoría</h2>
-        {editandoPrecio ? (
-          <>
-            <div className="space-y-2">
-              <Label htmlFor="categoriaModelo">Categoría</Label>
-              <Input
-                id="categoriaModelo"
-                placeholder="Filipina, pantalón, bata..."
-                value={categoria}
-                onChange={(e) => setCategoria(e.target.value)}
-              />
-            </div>
-            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-              <div className="space-y-2">
-                <Label htmlFor="costoModelo">Costo de producción</Label>
-                <Input
-                  id="costoModelo"
-                  type="number"
-                  min={0}
-                  step="0.01"
-                  value={costo}
-                  onChange={(e) => setCosto(e.target.value)}
-                />
+      <Dialog open={!!filaEditando} onOpenChange={(v) => !v && setMasDatos(null)}>
+        <DialogContent className="max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>
+              Editar {borrador.nombre} · {filaEditando ? nombreTalla(filaEditando.tallaId) : ""}
+            </DialogTitle>
+          </DialogHeader>
+          {filaEditando && (
+            <div className="space-y-5">
+              <div className="grid grid-cols-2 gap-3">
+                <div className="space-y-2">
+                  <Label htmlFor="skuVariante">SKU</Label>
+                  <Input
+                    id="skuVariante"
+                    placeholder="Opcional"
+                    value={filaEditando.sku}
+                    onChange={(e) => cambiarFila(filaEditando.tallaId, { sku: e.target.value })}
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="barrasVariante">Código de barras</Label>
+                  <Input
+                    id="barrasVariante"
+                    placeholder="Opcional"
+                    value={filaEditando.codigoBarras}
+                    onChange={(e) => cambiarFila(filaEditando.tallaId, { codigoBarras: e.target.value })}
+                  />
+                </div>
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div className="space-y-2">
+                  <Label htmlFor="costoVariante">Costo por unidad</Label>
+                  <Input
+                    id="costoVariante"
+                    type="number"
+                    inputMode="decimal"
+                    min={0}
+                    step="0.01"
+                    value={filaEditando.costo}
+                    onChange={(e) => cambiarFila(filaEditando.tallaId, { costo: e.target.value })}
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="precioVariante">Precio público</Label>
+                  <Input
+                    id="precioVariante"
+                    type="number"
+                    inputMode="decimal"
+                    min={0}
+                    step="0.01"
+                    value={filaEditando.precio}
+                    onChange={(e) => cambiarFila(filaEditando.tallaId, { precio: e.target.value })}
+                  />
+                </div>
               </div>
               <div className="space-y-2">
-                <Label htmlFor="precioVentaModelo">Precio de venta</Label>
-                <Input
-                  id="precioVentaModelo"
-                  type="number"
-                  min={0}
-                  step="0.01"
-                  value={precioVenta}
-                  onChange={(e) => setPrecioVenta(e.target.value)}
-                />
+                <Label>Existencias por ubicación</Label>
+                <div className="divide-y rounded-lg border">
+                  {ubicaciones.map((u) => (
+                    <div key={u.id} className="flex items-center justify-between gap-3 px-3 py-2">
+                      <span className="text-sm">{u.nombre}</span>
+                      <Input
+                        type="number"
+                        inputMode="numeric"
+                        min={0}
+                        step={1}
+                        className="w-28"
+                        aria-label={`Existencias en ${u.nombre}`}
+                        value={filaEditando.existencias[u.id] ?? ""}
+                        onFocus={(e) => e.target.select()}
+                        onChange={(e) => cambiarExistencia(filaEditando.tallaId, u.id, e.target.value)}
+                      />
+                    </div>
+                  ))}
+                </div>
               </div>
-            </div>
-            <div className="flex gap-2">
-              <Button onClick={guardarCosto} disabled={pendiente} size="sm">
-                {pendiente ? "Guardando..." : "Guardar costo y precio"}
-              </Button>
-              <Button onClick={cancelarEdicionPrecio} disabled={pendiente} size="sm" variant="ghost">
-                Cancelar
-              </Button>
-            </div>
-          </>
-        ) : (
-          <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
-            <div>
-              <p className="text-xs text-muted-foreground">Categoría</p>
-              <p className="text-sm">{modelo.categoria ?? "—"}</p>
-            </div>
-            <div>
-              <p className="text-xs text-muted-foreground">Costo de producción</p>
-              <p className="text-sm">{modelo.costo_unitario != null ? formatearMoneda(modelo.costo_unitario) : "—"}</p>
-            </div>
-            <div>
-              <p className="text-xs text-muted-foreground">Precio de venta</p>
-              <p className="text-sm">{precioVentaMostrar()}</p>
-              {precioVentaMostrar().includes(" - ") && (
-                <p className="text-xs text-muted-foreground">Varía según la talla</p>
+              {varias && (
+                <div className="space-y-1">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    disabled={hayCambios}
+                    onClick={() => abrirTraspaso(filaEditando.tallaId)}
+                  >
+                    <ArrowRightLeft className="size-3.5" />
+                    Traspasar entre ubicaciones
+                  </Button>
+                  {hayCambios && <p className="text-xs text-muted-foreground">Guarda los cambios para poder traspasar.</p>}
+                </div>
               )}
             </div>
-          </div>
-        )}
-      </div>
-
-      <div className="space-y-3 rounded-lg border p-4">
-        <h2 className="text-lg font-semibold">Tallas disponibles y precio por talla</h2>
-        {editandoPrecio ? (
-          <>
-            <p className="text-xs text-muted-foreground">
-              Si no eliges ninguna, se podrá usar cualquier talla del catálogo al crear pedidos u órdenes. Si dejas el
-              precio en blanco, se usa el precio de venta general del producto.
-            </p>
-            <div className="flex flex-wrap gap-3">
-              {detalle.tallas.map((talla) => {
-                const activa = tallaIds.includes(talla.id);
-                return (
-                  <div
-                    key={talla.id}
-                    className="flex items-center gap-2 rounded-lg border px-2.5 py-1.5 text-sm"
-                  >
-                    <label className="flex items-center gap-1.5">
-                      <input
-                        type="checkbox"
-                        checked={activa}
-                        onChange={() => alternarTalla(talla.id)}
-                        className="size-4"
-                      />
-                      {talla.codigo}
-                    </label>
-                    {activa && (
-                      <>
-                        <Input
-                          type="number"
-                          min={0}
-                          step="0.01"
-                          placeholder={modelo.precio_venta != null ? String(modelo.precio_venta) : "Precio"}
-                          className="h-7 w-24"
-                          value={preciosPorTalla[talla.id] ?? ""}
-                          onChange={(e) => actualizarPrecioTalla(talla.id, e.target.value)}
-                        />
-                        <Input
-                          placeholder="Código de barras"
-                          className="h-7 w-36"
-                          value={codigosPorTalla[talla.id]?.codigoBarras ?? ""}
-                          onChange={(e) => actualizarCodigoTalla(talla.id, "codigoBarras", e.target.value)}
-                        />
-                        <Input
-                          placeholder="SKU"
-                          className="h-7 w-36"
-                          value={codigosPorTalla[talla.id]?.sku ?? ""}
-                          onChange={(e) => actualizarCodigoTalla(talla.id, "sku", e.target.value)}
-                        />
-                      </>
-                    )}
-                  </div>
-                );
-              })}
-            </div>
-            <Button onClick={guardarTallas} disabled={guardandoTallas} size="sm" variant="outline">
-              {guardandoTallas ? "Guardando..." : "Guardar tallas"}
-            </Button>
-          </>
-        ) : detalle.tallaIdsAsignadas.length ? (
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>Talla</TableHead>
-                <TableHead>Precio</TableHead>
-                <TableHead>Código de barras</TableHead>
-                <TableHead>SKU</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {detalle.tallaIdsAsignadas.map((tallaId) => {
-                const precio = detalle.preciosPorTalla[tallaId];
-                const codigos = detalle.codigosPorTalla[tallaId];
-                return (
-                  <TableRow key={tallaId}>
-                    <TableCell className="font-medium">{nombreTalla(tallaId)}</TableCell>
-                    <TableCell>{precio != null ? formatearMoneda(precio) : "—"}</TableCell>
-                    <TableCell className="font-mono text-xs">{codigos?.codigoBarras ?? "—"}</TableCell>
-                    <TableCell className="font-mono text-xs">{codigos?.sku ?? "—"}</TableCell>
-                  </TableRow>
-                );
-              })}
-            </TableBody>
-          </Table>
-        ) : (
-          <p className="text-sm text-muted-foreground">
-            Sin restricción de tallas — se puede usar cualquier talla del catálogo.
-          </p>
-        )}
-      </div>
-
-      <div>
-        <h2 className="mb-3 text-lg font-semibold">Existencias por talla</h2>
-        <Table>
-          <TableHeader>
-            <TableRow>
-              <TableHead>Talla</TableHead>
-              {ubicacionesActivas.map((u) => (
-                <TableHead key={u.id}>{u.nombre}</TableHead>
-              ))}
-              <TableHead>Total</TableHead>
-              <TableHead />
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {tallasConStock.map((t) => (
-              <TableRow key={t.id}>
-                <TableCell className="font-medium">{t.codigo}</TableCell>
-                {ubicacionesActivas.map((u) => (
-                  <TableCell key={u.id}>{stockDe(t.id, u.id)}</TableCell>
-                ))}
-                <TableCell className="font-medium">
-                  {detalle.existencias.filter((e) => e.talla_id === t.id).reduce((acc, e) => acc + e.cantidad_actual, 0)}
-                </TableCell>
-                <TableCell className="space-x-2 text-right">
-                  {ubicacionesActivas.length > 1 && (
-                    <Button variant="outline" size="sm" onClick={() => abrirTraspaso(t.id, t.codigo)}>
-                      <ArrowRightLeft className="size-3.5" />
-                      Traspasar
-                    </Button>
-                  )}
-                  <Button variant="outline" size="sm" onClick={() => abrirAjuste(t.id, t.codigo)}>
-                    Ajustar stock
-                  </Button>
-                </TableCell>
-              </TableRow>
-            ))}
-            {!tallasConStock.length && (
-              <TableRow>
-                <TableCell colSpan={ubicacionesActivas.length + 3} className="text-center text-muted-foreground">
-                  Sin existencias todavía.
-                </TableCell>
-              </TableRow>
-            )}
-          </TableBody>
-        </Table>
-        {(() => {
-          const tallasSinStock = detalle.tallas
-            .filter((t) => !detalle.existencias.some((e) => e.talla_id === t.id))
-            .filter((t) => !detalle.tallaIdsAsignadas.length || detalle.tallaIdsAsignadas.includes(t.id));
-          if (!tallasSinStock.length) return null;
-          return (
-            <div className="mt-3 flex flex-wrap gap-2">
-              {tallasSinStock.map((t) => (
-                <Button key={t.id} variant="ghost" size="sm" onClick={() => abrirAjuste(t.id, t.codigo)}>
-                  + Registrar stock en talla {t.codigo}
-                </Button>
-              ))}
-            </div>
-          );
-        })()}
-      </div>
-
-      <Dialog open={!!tallaAjuste} onOpenChange={(v) => !v && setTallaAjuste(null)}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Ajustar stock · Talla {tallaAjuste?.codigo}</DialogTitle>
-          </DialogHeader>
-          <form className="space-y-4" onSubmit={registrarAjuste}>
-            <div className="space-y-2">
-              <Label>Ubicación</Label>
-              <Select
-                items={ubicacionesActivas.map((u) => ({ value: u.id, label: u.nombre }))}
-                value={ubicacionAjusteId}
-                onValueChange={(v) => setUbicacionAjusteId(v ?? "")}
-              >
-                <SelectTrigger className="w-full">
-                  <SelectValue placeholder="Selecciona una ubicación" />
-                </SelectTrigger>
-                <SelectContent>
-                  {ubicacionesActivas.map((u) => (
-                    <SelectItem key={u.id} value={u.id}>{u.nombre}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-            <div className="space-y-2">
-              <Label>Tipo</Label>
-              <Select
-                items={[
-                  { value: "entrada", label: "Entrada" },
-                  { value: "salida", label: "Salida" },
-                  { value: "ajuste", label: "Ajuste" },
-                ]}
-                value={tipoAjuste}
-                onValueChange={(v) => setTipoAjuste((v ?? "entrada") as TipoMovimiento)}
-              >
-                <SelectTrigger className="w-full">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="entrada">Entrada</SelectItem>
-                  <SelectItem value="salida">Salida</SelectItem>
-                  <SelectItem value="ajuste">Ajuste</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="cantidadAjuste">
-                Cantidad {tipoAjuste === "ajuste" && "(negativa para restar)"}
-              </Label>
-              <Input
-                id="cantidadAjuste"
-                type="number"
-                value={cantidadAjuste}
-                onChange={(e) => setCantidadAjuste(e.target.value)}
-                required
-              />
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="motivoAjuste">Motivo (opcional)</Label>
-              <Input id="motivoAjuste" value={motivoAjuste} onChange={(e) => setMotivoAjuste(e.target.value)} />
-            </div>
-            <Button type="submit" className="w-full" disabled={ajustando}>
-              {ajustando ? "Guardando..." : "Registrar movimiento"}
-            </Button>
-          </form>
+          )}
+          <DialogFooter>
+            <Button onClick={() => setMasDatos(null)}>Listo</Button>
+          </DialogFooter>
         </DialogContent>
       </Dialog>
 
-      <Dialog open={!!tallaTraspaso} onOpenChange={(v) => !v && setTallaTraspaso(null)}>
+      <Dialog open={!!traspasoTalla} onOpenChange={(v) => !v && setTraspasoTalla(null)}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Traspasar existencias · Talla {tallaTraspaso?.codigo}</DialogTitle>
+            <DialogTitle>Traspasar existencias · Talla {traspasoTalla ? nombreTalla(traspasoTalla) : ""}</DialogTitle>
           </DialogHeader>
           <form className="space-y-4" onSubmit={registrarTraspaso}>
             <div className="grid grid-cols-2 gap-3">
               <div className="space-y-2">
                 <Label>Desde</Label>
-                <Select
-                  items={ubicacionesActivas.map((u) => ({ value: u.id, label: u.nombre }))}
-                  value={origenTraspasoId}
-                  onValueChange={(v) => setOrigenTraspasoId(v ?? "")}
-                >
+                <Select items={opcionesUbicacion} value={origenId} onValueChange={(v) => setOrigenId(v ?? "")}>
                   <SelectTrigger className="w-full">
                     <SelectValue placeholder="Origen" />
                   </SelectTrigger>
                   <SelectContent>
-                    {ubicacionesActivas.map((u) => (
-                      <SelectItem key={u.id} value={u.id}>{u.nombre}</SelectItem>
+                    {opcionesUbicacion.map((o) => (
+                      <SelectItem key={o.value} value={o.value}>
+                        {o.label}
+                      </SelectItem>
                     ))}
                   </SelectContent>
                 </Select>
               </div>
               <div className="space-y-2">
                 <Label>Hacia</Label>
-                <Select
-                  items={ubicacionesActivas.map((u) => ({ value: u.id, label: u.nombre }))}
-                  value={destinoTraspasoId}
-                  onValueChange={(v) => setDestinoTraspasoId(v ?? "")}
-                >
+                <Select items={opcionesUbicacion} value={destinoId} onValueChange={(v) => setDestinoId(v ?? "")}>
                   <SelectTrigger className="w-full">
                     <SelectValue placeholder="Destino" />
                   </SelectTrigger>
                   <SelectContent>
-                    {ubicacionesActivas.map((u) => (
-                      <SelectItem key={u.id} value={u.id}>{u.nombre}</SelectItem>
+                    {opcionesUbicacion.map((o) => (
+                      <SelectItem key={o.value} value={o.value}>
+                        {o.label}
+                      </SelectItem>
                     ))}
                   </SelectContent>
                 </Select>
@@ -651,9 +659,10 @@ export function DetalleProducto({ detalle }: { detalle: DetalleModelo }) {
             <div className="space-y-2">
               <Label htmlFor="cantidadTraspaso">
                 Cantidad
-                {tallaTraspaso && origenTraspasoId && (
+                {traspasoTalla && origenId && (
                   <span className="font-normal text-muted-foreground">
-                    {" "}(disponibles en {nombreUbicacion(origenTraspasoId)}: {stockDe(tallaTraspaso.id, origenTraspasoId)})
+                    {" "}
+                    (disponibles en {nombreUbicacion(origenId)}: {existenciaGuardada(traspasoTalla, origenId)})
                   </span>
                 )}
               </Label>
@@ -676,30 +685,10 @@ export function DetalleProducto({ detalle }: { detalle: DetalleModelo }) {
           </form>
         </DialogContent>
       </Dialog>
-
-      <div>
-        <h2 className="mb-3 text-lg font-semibold">Historial</h2>
-        <ul className="space-y-2">
-          {detalle.movimientos.map((m) => (
-            <li key={m.id} className="rounded-lg border p-2 text-sm">
-              <div className="flex items-center justify-between">
-                <span className="capitalize">{m.tipo}</span>
-                <Badge variant={m.tipo === "salida" ? "destructive" : "secondary"}>
-                  {m.tipo === "salida" ? "-" : "+"}
-                  {m.cantidad} · {nombreTalla(m.talla_id)}
-                </Badge>
-              </div>
-              <p className="mt-1 text-xs text-muted-foreground">
-                {new Date(m.created_at).toLocaleString("es-MX")}
-                {` · ${nombreUbicacion(m.ubicacion_id)}`}
-                {m.lotes_produccion?.folio && ` · Orden ${m.lotes_produccion.folio}`}
-                {m.motivo && ` · ${m.motivo}`}
-              </p>
-            </li>
-          ))}
-          {!detalle.movimientos.length && <p className="text-sm text-muted-foreground">Sin movimientos todavía.</p>}
-        </ul>
-      </div>
     </div>
   );
+}
+
+function precioValido(n: number) {
+  return Number.isFinite(n) && n > 0;
 }

@@ -13,6 +13,7 @@ import {
   type PlantillaItemInput,
   type TallaInput,
 } from "@/lib/validaciones/catalogos.schema";
+import { guardarProductoSchema, type GuardarProductoInput } from "@/lib/validaciones/producto.schema";
 import { accionError, accionOk, type AccionResultado } from "@/lib/tipos/accion";
 
 // ---------- Modelos ----------
@@ -182,5 +183,86 @@ export async function eliminarPlantillaItem(id: string): Promise<AccionResultado
   const { error } = await supabase.from("plantilla_items").delete().eq("id", id);
   if (error) return accionError(error.message);
   revalidatePath("/catalogos/plantillas");
+  return accionOk(undefined);
+}
+
+// ---------- Edición completa de un producto ----------
+// Guarda en un solo paso los datos del producto, sus tallas (precio, costo, códigos) y las
+// existencias que el usuario cambió. Las existencias se capturan como "la cantidad que debe
+// haber"; aquí se calcula la diferencia contra lo que haya en ese momento y se registra como un
+// ajuste, para que el historial de movimientos siga completo.
+export async function guardarProducto(input: GuardarProductoInput): Promise<AccionResultado> {
+  const perfil = await requerirPerfil(["admin", "supervisor"]);
+  const parsed = guardarProductoSchema.safeParse(input);
+  if (!parsed.success) return accionError(parsed.error.issues[0]?.message ?? "Revisa los datos del producto");
+  const datos = parsed.data;
+  const supabase = await createClient();
+
+  const idsNuevos = new Set(datos.variantes.map((v) => v.tallaId));
+  if (idsNuevos.size !== datos.variantes.length) return accionError("Una talla está repetida");
+
+  const [{ data: actuales }, { data: stock }] = await Promise.all([
+    supabase.from("modelo_tallas").select("talla_id").eq("modelo_id", datos.modeloId),
+    supabase.from("stock_productos").select("talla_id, ubicacion_id, cantidad_actual").eq("modelo_id", datos.modeloId),
+  ]);
+
+  const quitadas = (actuales ?? []).map((t) => t.talla_id).filter((id) => !idsNuevos.has(id));
+  if (quitadas.some((id) => (stock ?? []).some((s) => s.talla_id === id && s.cantidad_actual !== 0))) {
+    return accionError("No se puede quitar una talla que todavía tiene existencias. Déjalas en 0 primero.");
+  }
+
+  const { error: errorModelo } = await supabase
+    .from("modelos")
+    .update({ nombre: datos.nombre, descripcion: datos.descripcion || null, categoria: datos.categoria || null })
+    .eq("id", datos.modeloId);
+  if (errorModelo) return accionError(errorModelo.message);
+
+  if (quitadas.length) {
+    const { error } = await supabase.from("modelo_tallas").delete().eq("modelo_id", datos.modeloId).in("talla_id", quitadas);
+    if (error) return accionError(error.message);
+  }
+
+  const { error: errorTallas } = await supabase.from("modelo_tallas").upsert(
+    datos.variantes.map((v) => ({
+      modelo_id: datos.modeloId,
+      talla_id: v.tallaId,
+      precio_venta: v.precioVenta,
+      costo_unitario: v.costoUnitario,
+      // Un texto vacío cuenta como "sin código".
+      codigo_barras: v.codigoBarras || null,
+      sku: v.sku || null,
+    })),
+    { onConflict: "modelo_id,talla_id" }
+  );
+  if (errorTallas) {
+    if (errorTallas.message.includes("modelo_tallas_codigo_barras_key")) return accionError("Ese código de barras ya está en otra talla o producto.");
+    if (errorTallas.message.includes("modelo_tallas_sku_key")) return accionError("Ese SKU ya está en otra talla o producto.");
+    return accionError(errorTallas.message);
+  }
+
+  const movimientos = datos.existencias.flatMap((e) => {
+    if (!idsNuevos.has(e.tallaId)) return [];
+    const actual = (stock ?? []).find((s) => s.talla_id === e.tallaId && s.ubicacion_id === e.ubicacionId)?.cantidad_actual ?? 0;
+    const diferencia = e.cantidad - actual;
+    if (diferencia === 0) return [];
+    return [
+      {
+        modelo_id: datos.modeloId,
+        talla_id: e.tallaId,
+        ubicacion_id: e.ubicacionId,
+        tipo: "ajuste" as const,
+        cantidad: diferencia,
+        motivo: "Ajuste al editar el producto",
+        registrado_por: perfil.id,
+      },
+    ];
+  });
+  if (movimientos.length) {
+    const { error } = await supabase.from("movimientos_stock_producto").insert(movimientos);
+    if (error) return accionError(error.message);
+  }
+
+  revalidatePath("/inventario");
+  revalidatePath(`/inventario/${datos.modeloId}`);
   return accionOk(undefined);
 }

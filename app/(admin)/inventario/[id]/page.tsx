@@ -1,7 +1,16 @@
 import { notFound } from "next/navigation";
-import Link from "next/link";
 import { obtenerDetalleModelo } from "@/actions/detalle.actions";
 import { DetalleProducto } from "@/components/inventario/DetalleProducto";
+
+function firma(d: Awaited<ReturnType<typeof obtenerDetalleModelo>>) {
+  return JSON.stringify([
+    d.modelo?.nombre,
+    d.modelo?.descripcion,
+    d.modelo?.categoria,
+    d.variantes,
+    d.existencias.map((e) => [e.talla_id, e.ubicacion_id, e.cantidad_actual]),
+  ]);
+}
 
 export default async function ProductoDetallePage({
   params,
@@ -14,11 +23,8 @@ export default async function ProductoDetallePage({
   if (!detalle.modelo) notFound();
 
   return (
-    <div className="space-y-6">
-      <Link href="/inventario" className="text-sm text-muted-foreground hover:underline">
-        ← Inventario
-      </Link>
-      <DetalleProducto detalle={detalle} />
-    </div>
+    // La key cambia cuando cambian los datos guardados (tras guardar o traspasar), para que la
+    // pantalla de edición arranque con lo que de verdad quedó en la base de datos.
+    <DetalleProducto key={firma(detalle)} detalle={detalle} />
   );
 }

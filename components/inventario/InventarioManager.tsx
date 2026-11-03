@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState, useTransition } from "react";
+import { useDeferredValue, useMemo, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { Search, Boxes, Shirt, Barcode } from "lucide-react";
 import { toast } from "sonner";
@@ -43,7 +43,7 @@ import type { Database } from "@/types/database.types";
 
 type Modelo = Database["public"]["Tables"]["modelos"]["Row"];
 type Talla = Database["public"]["Tables"]["tallas"]["Row"];
-type ModeloTalla = Pick<Database["public"]["Tables"]["modelo_tallas"]["Row"], "modelo_id" | "talla_id" | "precio_venta" | "codigo_barras" | "sku">;
+type ModeloTalla = Pick<Database["public"]["Tables"]["modelo_tallas"]["Row"], "modelo_id" | "talla_id" | "precio_venta" | "costo_unitario" | "codigo_barras" | "sku">;
 type StockProducto = Pick<Database["public"]["Tables"]["stock_productos"]["Row"], "modelo_id" | "talla_id" | "ubicacion_id" | "cantidad_actual">;
 type Ubicacion = Database["public"]["Tables"]["ubicaciones"]["Row"];
 
@@ -66,28 +66,61 @@ export function InventarioManager({
   stock: StockProducto[];
   ubicaciones: Ubicacion[];
 }) {
-  function precioVentaDe(modelo: Modelo): string {
-    const precios = modeloTallas
-      .filter((mt) => mt.modelo_id === modelo.id)
-      .map((mt) => mt.precio_venta ?? modelo.precio_venta)
-      .filter((p): p is number => p != null);
-    if (!precios.length) return modelo.precio_venta != null ? formatearMoneda(modelo.precio_venta) : "—";
-    const min = Math.min(...precios);
-    const max = Math.max(...precios);
+  const [ubicacionFiltro, setUbicacionFiltro] = useState("todas");
+  const [busqueda, setBusqueda] = useState("");
+  // Con cientos de productos y miles de filas de existencias, recalcular todo por cada tecla se
+  // sentía lento: la lista se filtra con la búsqueda diferida y los totales se calculan una sola vez.
+  const busquedaDiferida = useDeferredValue(busqueda);
+
+  const resumen = useMemo(() => {
+    const existencias = new Map<string, number>(); // modelo -> total (según el filtro de ubicación)
+    const porUbicacion = new Map<string, number>(); // modelo|ubicación -> total
+    const tallasConStock = new Map<string, Set<string>>();
+    for (const s of stock) {
+      porUbicacion.set(`${s.modelo_id}|${s.ubicacion_id}`, (porUbicacion.get(`${s.modelo_id}|${s.ubicacion_id}`) ?? 0) + s.cantidad_actual);
+      if (ubicacionFiltro === "todas" || s.ubicacion_id === ubicacionFiltro) {
+        existencias.set(s.modelo_id, (existencias.get(s.modelo_id) ?? 0) + s.cantidad_actual);
+      }
+      const set = tallasConStock.get(s.modelo_id) ?? new Set<string>();
+      set.add(s.talla_id);
+      tallasConStock.set(s.modelo_id, set);
+    }
+    const variantes = new Map<string, ModeloTalla[]>();
+    for (const mt of modeloTallas) {
+      const lista = variantes.get(mt.modelo_id) ?? [];
+      lista.push(mt);
+      variantes.set(mt.modelo_id, lista);
+    }
+    return { existencias, porUbicacion, tallasConStock, variantes };
+  }, [stock, modeloTallas, ubicacionFiltro]);
+
+  function rango(valores: number[]): string {
+    if (!valores.length) return "—";
+    const min = Math.min(...valores);
+    const max = Math.max(...valores);
     return min === max ? formatearMoneda(min) : `${formatearMoneda(min)} - ${formatearMoneda(max)}`;
+  }
+  function precioVentaDe(modelo: Modelo): string {
+    const vs = resumen.variantes.get(modelo.id) ?? [];
+    const precios = vs.map((mt) => mt.precio_venta ?? modelo.precio_venta).filter((p): p is number => p != null);
+    return precios.length ? rango(precios) : modelo.precio_venta != null ? formatearMoneda(modelo.precio_venta) : "—";
+  }
+  function costoDe(modelo: Modelo): string {
+    const vs = resumen.variantes.get(modelo.id) ?? [];
+    const costos = vs.map((mt) => mt.costo_unitario ?? modelo.costo_unitario).filter((p): p is number => p != null);
+    return costos.length ? rango(costos) : modelo.costo_unitario != null ? formatearMoneda(modelo.costo_unitario) : "—";
   }
   // Con una ubicación elegida en el filtro, solo cuenta lo que hay ahí; con
   // "Todas", la suma de todas las ubicaciones.
   function existenciasDe(modelo: Modelo, ubicacionId = ubicacionFiltro): number {
-    return stock
-      .filter((s) => s.modelo_id === modelo.id && (ubicacionId === "todas" || s.ubicacion_id === ubicacionId))
-      .reduce((acc, s) => acc + s.cantidad_actual, 0);
+    return ubicacionId === ubicacionFiltro
+      ? (resumen.existencias.get(modelo.id) ?? 0)
+      : (resumen.porUbicacion.get(`${modelo.id}|${ubicacionId}`) ?? 0);
   }
   // Tallas del producto: las asignadas en el catálogo o, si no tiene, las que
   // ya tienen un registro de existencias.
   function tallasDe(modelo: Modelo): number {
-    const asignadas = modeloTallas.filter((mt) => mt.modelo_id === modelo.id).length;
-    return asignadas || stock.filter((s) => s.modelo_id === modelo.id).length;
+    return (resumen.variantes.get(modelo.id) ?? []).length || (resumen.tallasConStock.get(modelo.id)?.size ?? 0);
   }
   const [abierto, setAbierto] = useState(false);
   const [nombre, setNombre] = useState("");
@@ -96,10 +129,8 @@ export function InventarioManager({
   const [costoUnitario, setCostoUnitario] = useState("");
   const [precioVenta, setPrecioVenta] = useState("");
   const [tallaIds, setTallaIds] = useState<string[]>([]);
-  const [busqueda, setBusqueda] = useState("");
   const [categoriaFiltro, setCategoriaFiltro] = useState("todas");
   const [orden, setOrden] = useState("nombre");
-  const [ubicacionFiltro, setUbicacionFiltro] = useState("todas");
   // La selección es independiente de la búsqueda: se puede seleccionar, cambiar el filtro y seguir seleccionando.
   const [seleccion, setSeleccion] = useState<Set<string>>(new Set());
   const [etiquetasAbierto, setEtiquetasAbierto] = useState(false);
@@ -120,31 +151,28 @@ export function InventarioManager({
     [ubicaciones]
   );
 
+  // Texto de búsqueda de cada producto (nombre, categoría, SKU y códigos de todas sus tallas), ya
+  // normalizado: se arma una vez y no en cada tecla.
+  const indiceBusqueda = useMemo(() => {
+    return new Map(
+      modelos.map((m) => {
+        const codigos = (resumen.variantes.get(m.id) ?? []).map((mt) => `${mt.codigo_barras ?? ""} ${mt.sku ?? ""}`).join(" ");
+        return [m.id, normalizarTexto(`${m.nombre} ${m.categoria ?? ""} ${codigos}`)] as const;
+      })
+    );
+  }, [modelos, resumen.variantes]);
+
   const filtrados = useMemo(() => {
-    const q = normalizarTexto(busqueda.trim());
-    const existencias = new Map<string, number>();
-    for (const s of stock) {
-      if (ubicacionFiltro !== "todas" && s.ubicacion_id !== ubicacionFiltro) continue;
-      existencias.set(s.modelo_id, (existencias.get(s.modelo_id) ?? 0) + s.cantidad_actual);
-    }
-
-    // Códigos de barras y SKU de todas las tallas de cada producto, para poder buscar por ellos.
-    const codigos = new Map<string, string>();
-    for (const mt of modeloTallas) {
-      if (mt.codigo_barras || mt.sku) {
-        codigos.set(mt.modelo_id, `${codigos.get(mt.modelo_id) ?? ""} ${mt.codigo_barras ?? ""} ${mt.sku ?? ""}`);
-      }
-    }
-
+    const q = normalizarTexto(busquedaDiferida.trim());
     const lista = modelos.filter((m) => {
       if (categoriaFiltro !== "todas" && m.categoria !== categoriaFiltro) return false;
       if (!q) return true;
-      return normalizarTexto(`${m.nombre} ${m.categoria ?? ""} ${codigos.get(m.id) ?? ""}`).includes(q);
+      return indiceBusqueda.get(m.id)?.includes(q) ?? false;
     });
-    if (orden === "stock_desc") lista.sort((a, b) => (existencias.get(b.id) ?? 0) - (existencias.get(a.id) ?? 0));
-    if (orden === "stock_asc") lista.sort((a, b) => (existencias.get(a.id) ?? 0) - (existencias.get(b.id) ?? 0));
+    if (orden === "stock_desc") lista.sort((a, b) => (resumen.existencias.get(b.id) ?? 0) - (resumen.existencias.get(a.id) ?? 0));
+    if (orden === "stock_asc") lista.sort((a, b) => (resumen.existencias.get(a.id) ?? 0) - (resumen.existencias.get(b.id) ?? 0));
     return lista;
-  }, [modelos, modeloTallas, stock, busqueda, categoriaFiltro, orden, ubicacionFiltro]);
+  }, [modelos, indiceBusqueda, resumen.existencias, busquedaDiferida, categoriaFiltro, orden]);
 
   const todosFiltradosSeleccionados = filtrados.length > 0 && filtrados.every((m) => seleccion.has(m.id));
   const algunoFiltradoSeleccionado = filtrados.some((m) => seleccion.has(m.id));
@@ -415,6 +443,7 @@ export function InventarioManager({
                 <TableRow
                   key={modelo.id}
                   className="cursor-pointer"
+                  onMouseEnter={() => router.prefetch(`/inventario/${modelo.id}`)}
                   onClick={() => router.push(`/inventario/${modelo.id}`)}
                 >
                   <TableCell className="w-10 pl-4" onClick={(e) => e.stopPropagation()}>
@@ -462,7 +491,7 @@ export function InventarioManager({
                   </TableCell>
                   <TableCell className="text-muted-foreground">{modelo.categoria ?? "—"}</TableCell>
                   <TableCell className="text-muted-foreground">
-                    {modelo.costo_unitario != null ? formatearMoneda(modelo.costo_unitario) : "—"}
+                    {costoDe(modelo)}
                   </TableCell>
                   <TableCell className="pr-4 text-muted-foreground">{precioVentaDe(modelo)}</TableCell>
                 </TableRow>
