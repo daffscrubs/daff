@@ -27,14 +27,14 @@ export async function updateSession(request: NextRequest) {
     }
   );
 
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  // Verifica el token sin ir a la red cuando se puede (ver getPerfilActual) y refresca la sesión si hace falta.
+  const { data: claimsData } = await supabase.auth.getClaims();
+  const userId = claimsData?.claims?.sub;
 
   const { pathname } = request.nextUrl;
   const esPantallaLogin = pathname.startsWith("/login");
 
-  if (!user) {
+  if (!userId) {
     if (esPantallaLogin) return supabaseResponse;
     const url = request.nextUrl.clone();
     url.pathname = "/login";
@@ -44,7 +44,7 @@ export async function updateSession(request: NextRequest) {
   const { data: perfil } = await supabase
     .from("perfiles")
     .select("rol, permisos")
-    .eq("id", user.id)
+    .eq("id", userId)
     .single();
 
   const rol = perfil?.rol;

@@ -1,24 +1,28 @@
+import { cache } from "react";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import type { RolUsuario } from "@/types/database.types";
 import { rutaInicial, tienePermiso } from "@/lib/permisos";
 
-export async function getPerfilActual() {
+// `cache` hace que el layout, la página y las acciones de una misma petición compartan una sola
+// lectura del perfil en vez de repetir la verificación del usuario y la consulta cada vez.
+// getClaims valida el token en el servidor sin ir a la red cuando el proyecto usa llaves
+// asimétricas (y cae a la consulta normal si no).
+export const getPerfilActual = cache(async () => {
   const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  const { data } = await supabase.auth.getClaims();
+  const userId = data?.claims?.sub;
 
-  if (!user) return null;
+  if (!userId) return null;
 
   const { data: perfil } = await supabase
     .from("perfiles")
     .select("*")
-    .eq("id", user.id)
+    .eq("id", userId)
     .single();
 
   return perfil;
-}
+});
 
 export async function requerirPerfil(rolesPermitidos?: RolUsuario[]) {
   const perfil = await getPerfilActual();

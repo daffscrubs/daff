@@ -1072,6 +1072,7 @@ export type Database = {
       modelo_tallas: {
         Row: {
           codigo_barras: string | null
+          costo_unitario: number | null
           id: string
           modelo_id: string
           precio_venta: number | null
@@ -1080,6 +1081,7 @@ export type Database = {
         }
         Insert: {
           codigo_barras?: string | null
+          costo_unitario?: number | null
           id?: string
           modelo_id: string
           precio_venta?: number | null
@@ -1088,6 +1090,7 @@ export type Database = {
         }
         Update: {
           codigo_barras?: string | null
+          costo_unitario?: number | null
           id?: string
           modelo_id?: string
           precio_venta?: number | null
